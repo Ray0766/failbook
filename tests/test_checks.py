@@ -322,3 +322,105 @@ def test_defined_names_in_any_script_resolve():
     assert X.resolve_range("状态列表", wb, "Lists") == ("Lists", 1, 1, 4, 1)
     assert X.resolve_range("[0]!状态列表", wb, "Lists") == ("Lists", 1, 1, 4, 1)
     assert X.resolve_range("lists!状态列表", wb, "Lists") == ("Lists", 1, 1, 4, 1)
+
+
+def test_cf_booleans_in_any_letter_case_are_not_names():
+    from failbook import xlsx as X
+
+    wb = openpyxl.Workbook()
+    wb.active.title = "Tracker"
+
+    def value_at(sheet, row, col):
+        return "Blocked" if (row, col) == (2, 4) else None
+
+    def ev(formula):
+        return X.eval_cf_formula(formula, "Tracker", (2, 4), (2, 4), value_at, wb)
+
+    # openpyxl's tokenizer marks only TRUE/FALSE as logical; Python's f"{flag}" writes True/False.
+    assert ev('OR($D2="Blocked",False)') is True and ev('AND($D2="Blocked",true)') is True
+    assert ev("False") is False and ev("tRuE") is True and ev("NOT(false)") is True
+    assert ev("Falsey") == "#NAME?"  # a longer name is still a name
+
+
+def test_only_light_low_saturation_reds_are_not_judged():
+    from failbook import xlsx as X
+
+    assert [X.is_red(c) for c in ["F2DCDB", "FFE5E5", "FADBD8"]] == [None, None, None]  # pale reds
+    assert [X.is_red(c) for c in ["5A5050", "4D4444", "8C7F7F"]] == [False, False, False]  # dark grey-browns
+
+
+def test_dropdown_list_on_a_sheet_in_another_letter_case_resolves():
+    from types import SimpleNamespace
+
+    from openpyxl.worksheet.datavalidation import DataValidation
+
+    from failbook.case import load_case
+
+    mod = load_case("xlsx-013").module
+    wb = openpyxl.Workbook()
+    wb.active.title = "Tracker"
+    lists = wb.create_sheet("Lists")
+    for i, status in enumerate(["Not started", "In progress", "Blocked", "Done"], start=1):
+        lists.cell(i, 1, status)
+    ctx = SimpleNamespace(wb=lambda: wb, values=lambda: SimpleNamespace(wb=wb))
+    options, why = mod._list_options(ctx, DataValidation(type="list", formula1="lists!$A$1:$A$4"))
+    assert options == ["Not started", "In progress", "Blocked", "Done"] and why is None
+    # A sheet the workbook does not have is "cannot tell", not an empty list.
+    options, why = mod._list_options(ctx, DataValidation(type="list", formula1="Lsts!$A$1:$A$4"))
+    assert options is None and "'Lsts' that the workbook does not have" in why
+
+
+# Each pair below was checked in LibreOffice 24.2 by exporting dates, positive, negative and zero numbers
+# and text "as shown" to CSV (the formats of xlsx-001 and xlsx-007 are 'yyyy-mm-dd' and '#,##0.00').
+@pytest.mark.parametrize("fmt", [
+    "yyyy-mm-dd", "YYYY-MM-DD", 'yyyy"-"mm"-"dd', "yyyy\\-mm\\-dd",  # spellings; LibreOffice saves the last
+    "yyyy-mm-dd;@", "yyyy\\-mm\\-dd;@",  # a text section that shows text as typed
+    "[$-409]yyyy-mm-dd", "[$-407]yyyy\\-mm\\-dd",  # a locale tag cannot change a date of digits only
+])
+def test_number_format_key_same_date_format(fmt):
+    from failbook import xlsx as X
+
+    assert X.number_format_key(fmt) == X.number_format_key("yyyy-mm-dd")
+
+
+@pytest.mark.parametrize("fmt", [
+    "yyyy-mm-dd h:mm:ss",  # shows 00:00:00
+    "yyyy/mm/dd", "dd-mm-yyyy", "General", "yyyy-mm-dd;",  # an empty negative section hides negatives
+    "yyyy-mm-dd;;;@", 'yyyy-mm-dd;"x"@',  # negatives and zeros hidden; text shown as xabc
+    "[$-F800]yyyy-mm-dd",  # the system long date: Saturday, March 2, 2024
+])
+def test_number_format_key_other_date_format(fmt):
+    from failbook import xlsx as X
+
+    assert X.number_format_key(fmt) != X.number_format_key("yyyy-mm-dd")
+
+
+@pytest.mark.parametrize("fmt", [
+    "#,##0.00", "#,##0.00;-#,##0.00", "#,##0.00;\\-#,##0.00",  # the negative section '-' and the first one
+    "#,##0.00;@", "#,##0.00;-#,##0.00;@", "#,##0.00;-#,##0.00;#,##0.00", "#,##0.00;-#,##0.00;#,##0.00;@",
+])
+def test_number_format_key_same_money_format(fmt):
+    from failbook import xlsx as X
+
+    assert X.number_format_key(fmt) == X.number_format_key("#,##0.00")
+
+
+@pytest.mark.parametrize("fmt", [
+    "0.00", "General", '"$"#,##0.00', "[$€-407]#,##0.00",  # digits grouping and currency
+    "[$-407]#,##0.00", "[$-409]#,##0.00",  # a locale tag sets the separators: [$-407] shows 1.766,34
+    "#,##0.00;", "#,##0.00;-#,##0.00;", "#,##0.00;-#,##0.00;#,##0.00;",  # empty sections hide values
+    "#,##0.00;(#,##0.00)", "#,##0.00;[Red]-#,##0.00", "#,##0.00_);(#,##0.00)", "[>100]#,##0.00;#,##0.00",
+])
+def test_number_format_key_other_money_format(fmt):
+    from failbook import xlsx as X
+
+    assert X.number_format_key(fmt) != X.number_format_key("#,##0.00")
+
+
+def test_number_format_key_locale_tag_kept_on_names_and_general():
+    from failbook import xlsx as X
+
+    assert X.number_format_key("[$-407]mmm") != X.number_format_key("mmm")  # Mär, not Mar
+    assert X.number_format_key("[$-409]General") != X.number_format_key("General")
+    assert X.number_format_key(None) == X.number_format_key("General") == X.number_format_key("general")
+    assert X.number_format_key("@") != X.number_format_key("General")  # the Text format is not a text section

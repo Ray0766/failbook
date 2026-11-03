@@ -152,32 +152,10 @@ def _summary_refs(ctx):
     return refs
 
 
-#: Characters a number format shows as themselves without quotes; written plainly, quoted or
-#: backslash-escaped they are the same format.
-_PLAIN_LITERALS = set("$-+/():!^&'~{}<>= ")
-
-
-def _format_key(fmt):
-    """A number format with differences of spelling removed: letter case outside quotes, and
-    whether a literal character is written plainly, in quotes or after a backslash. So
-    'yyyy-mm-dd', 'YYYY-MM-DD', 'yyyy"-"mm"-"dd' and 'yyyy\\-mm\\-dd' (as LibreOffice saves it)
-    are one format; 'yyyy-mm-dd h:mm:ss', '0.00' or a locale tag such as '[$-409]' make another."""
-    fmt = fmt or "General"
-    out, i = [], 0
-    while i < len(fmt):
-        ch = fmt[i]
-        if ch == "\\" and i + 1 < len(fmt):
-            out.append(("text", fmt[i + 1]))
-            i += 2
-        elif ch == '"':
-            end = fmt.find('"', i + 1)
-            end = len(fmt) if end < 0 else end
-            out.extend(("text", c) for c in fmt[i + 1:end])
-            i = end + 1
-        else:
-            out.append(("text", ch) if ch in _PLAIN_LITERALS else ("code", ch.lower()))
-            i += 1
-    return tuple(out)
+#: What X.number_format_key counts as one format, as the format messages say it.
+_SAME_FORMAT = ("(formats that show every value alike count as the same, for example ones that differ only in "
+                "letter case, quotes or backslash escapes, a text section that is only '@', a negative section that "
+                "is '-' and the first section, or a locale tag such as [$-409] on a date of digits only).")
 
 
 def _new_rows(ctx):
@@ -262,21 +240,20 @@ def new_rows_formatted(ctx):
     ws, given = ctx.ws(EXP), ctx.input_wb()[EXP]
     # In the file as given the existing expenses are rows 2 onwards, all formatted alike. Columns
     # they leave in General (Category, Description) are not compared.
-    general = _format_key("General")
+    general = X.number_format_key("General")
     wanted = {c: X.number_format(given, 2, c) for c in range(1, 5)}
-    wanted = {c: f for c, f in wanted.items() if _format_key(f) != general}
+    wanted = {c: f for c, f in wanted.items() if X.number_format_key(f) != general}
     names = {c: given.cell(1, c).value for c in wanted}
     wrong = []
     for r, e in rows:
         diff = [f"{names[c]} '{X.number_format(ws, r, c)}'" for c, f in wanted.items()
-                if _format_key(X.number_format(ws, r, c)) != _format_key(f)]
+                if X.number_format_key(X.number_format(ws, r, c)) != X.number_format_key(f)]
         if diff:
             wrong.append(f"row {r} ({e['description']}) has " + ", ".join(diff))
     given_text = ", ".join(f"{names[c]} '{f}'" for c, f in wanted.items())
     require(not wrong, f"{len(wrong)} of {len(rows)} new rows are not formatted like the existing rows: "
                        + "; ".join(wrong[:3]) + (f" (and {len(wrong) - 3} more)" if len(wrong) > 3 else "")
-                       + f". In {ctx.case.inputs[0]} as given, the existing rows have {given_text} "
-                       "(differences of letter case, quotes or backslash escapes are ignored).")
+                       + f". In {ctx.case.inputs[0]} as given, the existing rows have {given_text} {_SAME_FORMAT}")
 
 
 @rule(

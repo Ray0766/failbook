@@ -75,7 +75,7 @@ failbook run xlsx-011 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-011 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-011 --seeds 3`): [`reference.py`](reference.py), [`alt_categories_on_first_series.py`](alt_categories_on_first_series.py) and [`alt_named_range.py`](alt_named_range.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_header_in_values.py`](fail_header_in_values.py), [`fail_labels_wrong_column.py`](fail_labels_wrong_column.py), [`fail_offset_revenue_stale_costs.py`](fail_offset_revenue_stale_costs.py) and [`fail_series_names_swapped.py`](fail_series_names_swapped.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-011 --seeds 3`): [`reference.py`](reference.py), [`alt_categories_on_first_series.py`](alt_categories_on_first_series.py), [`alt_helper_sheet.py`](alt_helper_sheet.py) and [`alt_named_range.py`](alt_named_range.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_header_in_values.py`](fail_header_in_values.py), [`fail_helper_sheet_stops_at_october.py`](fail_helper_sheet_stops_at_october.py), [`fail_labels_wrong_column.py`](fail_labels_wrong_column.py), [`fail_offset_revenue_named_costs.py`](fail_offset_revenue_named_costs.py), [`fail_offset_revenue_stale_costs.py`](fail_offset_revenue_stale_costs.py), [`fail_offset_revenue_unnamed.py`](fail_offset_revenue_unnamed.py) and [`fail_series_names_swapped.py`](fail_series_names_swapped.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -83,7 +83,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 ## Limitations
 
-- The rule reads the series ranges, month labels and series names from the chart XML. A series that points at a defined name standing for a fixed range is resolved through the name; a name computed by a formula (OFFSET, INDEX) is not. Every part the checker can read is checked first: if any series or the labels are wrong the rule fails, and only when nothing is wrong but some part cannot be resolved does it report inconclusive rather than pass or fail.
+- The rule reads the series ranges, month labels and series names from the chart XML. A series that points at a defined name standing for a fixed range is resolved through the name; a name computed by a formula (OFFSET, INDEX) is not. A series over the Revenue or Costs column of Monthly is checked by its rows. A series over any other range (a helper sheet or column) counts as the Revenue or Costs line only when its cells, after recalculation, hold exactly that line's twelve January to December figures, so a helper range in another unit (thousands) does not count; month labels from another sheet or along a row must read Jan to Dec. Everything the checker can tie to a line or to the axis is checked first, and any error there fails the rule. Of a series it cannot resolve only the name is checked: when such series are the only ones that can draw a line, one of them must carry that line's name. Only when nothing is found wrong but some part cannot be resolved does the rule report inconclusive rather than pass or fail.
 - A line chart has one category axis, drawn from the first series that has category labels, so the month labels are checked there: a range, or a list typed into the chart, that reads Jan to Dec. Labels stored on later series are not drawn and not checked. LibreOffice 24.2 draws labels typed into the chart as 1, 2, 3, … and drops them when it saves the file; the rule checks the typed text in the file it is given, so a typed list passes and the same file after a LibreOffice save fails.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
@@ -149,6 +149,6 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 ### 限制
 
-- 规则从图表 XML 读取系列区域、月份标签和系列名称。指向固定区域的命名区域会被解析；由公式计算的名称（OFFSET、INDEX）无法解析。规则先检查所有能读懂的部分：只要有一条系列或月份标签有错就判失败；只有在没有发现错误、但有部分无法解析时，才判为"无法判定"，而不是通过或失败。
+- 规则从图表 XML 读取系列区域、月份标签和系列名称。指向固定区域的命名区域会被解析；由公式计算的名称（OFFSET、INDEX）无法解析。位于 Monthly 表 Revenue 或 Costs 列上的系列按行号检查；指向其他区域（辅助工作表或辅助列）的系列，只有在重算后其单元格恰好是该线 1 月到 12 月的十二个数值时，才算作 Revenue 或 Costs 线，因此换算成其他单位（如千）的辅助区域不算；来自其他工作表或按行排列的月份标签须读作 Jan 到 Dec。规则先检查所有能对应到某条线或分类轴的部分，其中任何错误都判失败。无法解析的系列只检查名称：若某条线只能由这类系列画出，其中必须有一条使用该线的名称。只有在没有发现错误、但有部分无法解析时，才判为"无法判定"，而不是通过或失败。
 - 折线图只有一条分类轴，取自第一条带分类标签的系列，因此月份标签只在那里检查：可以是单元格区域，也可以是直接写进图表的列表，内容须为 Jan 到 Dec。后面系列上存的标签不会显示，也不检查。LibreOffice 24.2 会把直接写进图表的标签显示为 1、2、3……，并在保存时把它们丢掉；规则检查的是所交文件中写入的文字，因此直接写入的列表能通过，而同一文件经 LibreOffice 保存后会判失败。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

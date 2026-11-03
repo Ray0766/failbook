@@ -205,12 +205,15 @@ def _findings(after, before=None):
     return [f for f in audit(after, before, recalc=False) if f.check != "recalculation-skipped"]
 
 
-def _ledger(path):
-    """A cash ledger with a running balance: D_r = D_(r-1) + C_r."""
-    items = [("Opening", 1000), ("Rent", -400), ("Invoice 17", 650), ("Fuel", -60), ("Invoice 18", 300),
-             ("Phone", -45), ("Bank fee", -5), ("Invoice 19", 820)]
+LEDGER = [("Opening", 1000), ("Rent", -400), ("Invoice 17", 650), ("Fuel", -60), ("Invoice 18", 300),
+          ("Phone", -45), ("Bank fee", -5), ("Invoice 19", 820)]
+
+
+def _ledger(path, items=None):
+    """A cash ledger with a running balance: D_r = D_(r-1) + C_r. ``items`` are (date, text, amount)."""
+    items = items or [(f"2024-03-{r:02d}", d, a) for r, (d, a) in enumerate(LEDGER, start=2)]
     rows = [["Date", "Description", "Amount", "Balance"]]
-    rows += [[f"2024-03-{r:02d}", d, a, "=C2" if r == 2 else f"=D{r - 1}+C{r}"] for r, (d, a) in enumerate(items, start=2)]
+    rows += [[day, d, a, "=C2" if r == 2 else f"=D{r - 1}+C{r}"] for r, (day, d, a) in enumerate(items, start=2)]
     return _book(path, rows, "Ledger")
 
 
@@ -334,6 +337,13 @@ def test_running_balance_refilled_after_an_inserted_row_is_clean(tmp_path):
             ws.cell(r, 4, f"=D{r - 1}+C{r}")
 
     assert _findings(_edit(before, tmp_path / "after.xlsx", insert), before) == []
+    # The same final state after deleting a transaction, or after inserting two at different places
+    # (two rows share a date there, so the dates alone do not say where each row came from).
+    items = [(f"2024-03-{r:02d}", d, a) for r, (d, a) in enumerate(LEDGER, start=2)]
+    deleted = _ledger(tmp_path / "deleted.xlsx", items[:4] + items[5:])
+    assert _findings(deleted, before) == []
+    two = items[:3] + [("2024-03-04", "Refund", 25)] + items[3:6] + [("2024-03-07", "Deposit", 90)] + items[6:]
+    assert _findings(_ledger(tmp_path / "two.xlsx", two), before) == []
     # An absolute row ($5) in the same layout does not follow the rows: still an error.
     rows = [["Item", "Base", "Qty", "Cost"]] + [[f"I{r}", 10 * r, r, f"=B$5*C{r}"] for r in range(2, 10)]
     anchored = _book(tmp_path / "anchored.xlsx", rows, "Calc")
@@ -359,6 +369,39 @@ def test_half_year_sums_below_a_total_are_not_omitted_data(tmp_path):
     # A part that does not split the total exactly is a question, not a verdict.
     first_half = _edit(before, tmp_path / "h1.xlsx", lambda w: w.active.__setitem__("B15", "=SUM(B2:B7)"))
     assert _levels(_findings(first_half, before), "range-omits-adjacent-cells") == ["warning"]
+    # The same split above the Year total, or with no total at all, is clean too.
+    above = _book(tmp_path / "above.xlsx", rows, "Sales", {"A14": "H1", "B14": "=SUM(B2:B7)", "A15": "H2",
+                                                            "B15": "=SUM(B8:B13)", "A16": "Year", "B16": "=SUM(B2:B13)"})
+    assert _findings(above, before) == []
+    plain = _book(tmp_path / "plain.xlsx", rows, "Sales")
+    alone = _book(tmp_path / "alone.xlsx", rows, "Sales", {"A14": "H1", "B14": "=SUM(B2:B7)", "A15": "H2", "B15": "=SUM(B8:B13)"})
+    assert _findings(alone, plain) == [] and _findings(alone) == []
+    # Two months added below the data and the halves left as they were: still an error.
+    grown = rows + [["2025-01", 300], ["2025-02", 310]]
+    stale = _book(tmp_path / "stale.xlsx", grown, "Sales", {"A16": "H1", "B16": "=SUM(B2:B7)", "A17": "H2", "B17": "=SUM(B8:B13)"})
+    assert _levels(_findings(stale, plain), "range-omits-adjacent-cells") == ["error", "error"]
+
+
+def test_partial_aggregate_left_behind_by_an_extended_total_is_an_error(tmp_path):
+    rows = [["Month", "Revenue"]] + [[f"2024-{r - 1:02d}", 100 + 10 * r] for r in range(2, 14)]
+    before = _book(tmp_path / "before.xlsx", rows, "Sales", {"A14": "Total", "B14": "=SUM(B2:B13)",
+                                                              "A15": "Average", "B15": "=AVERAGE(B2:B13)"})
+
+    def add_two_months(average):  # rows inserted above the total, as Excel would; the Total extended
+        def change(w):
+            ws = w.active
+            ws.insert_rows(14, 2)
+            ws["A14"], ws["B14"], ws["A15"], ws["B15"] = "2025-01", 300, "2025-02", 310
+            ws["B16"], ws["B17"] = "=SUM(B2:B15)", average
+        return change
+
+    stale = _edit(before, tmp_path / "stale.xlsx", add_two_months("=AVERAGE(B2:B13)"))
+    found = [f for f in _findings(stale, before) if f.check == "range-omits-adjacent-cells"]
+    assert [(f.level, f.where) for f in found] == [("error", "Sales!B17")]
+    assert "in the original file both ended at row 13" in found[0].message
+    # Without the original nothing shows that the shorter range is stale: a warning.
+    assert _levels(_findings(stale), "range-omits-adjacent-cells") == ["warning"]
+    assert _findings(_edit(before, tmp_path / "ok.xlsx", add_two_months("=AVERAGE(B2:B15)")), before) == []
 
 
 def test_chart_that_leaves_out_the_total_row_is_clean(tmp_path):
@@ -384,6 +427,184 @@ def test_chart_that_leaves_out_the_total_row_is_clean(tmp_path):
     # Jul and Aug typed above the total, chart not extended: the warning stops at the last month.
     found = _findings(chart_book(tmp_path / "short.xlsx", months + ["Jul", "Aug"], 7))
     assert [f.level for f in found] == ["warning"] and "data continues to row 9" in found[0].message
+
+
+# -- third review: wrong edits that had stopped failing, correct ones still flagged, slow scans ---
+def _invoice(path):
+    rows = [["Service", "Hours", "Rate", "VAT", "Amount"]]
+    rows += [[s, 1, rate, 0.2, f"=B{r}*C{r}*(1+D{r})"]
+             for r, (s, rate) in enumerate([("Audit", 120), ("Tax return", 95), ("Payroll", 80), ("Advice", 150)], start=2)]
+    return _book(path, rows, "Invoice")
+
+
+def test_moved_formulas_are_an_error_when_the_columns_they_read_repeat_values(tmp_path):
+    before = _invoice(tmp_path / "before.xlsx")
+
+    def insert(rewrite):
+        def change(w):  # a new first line; Hours (all 1) and VAT (all 0.2) read the same at either row
+            ws = w.active
+            ws.insert_rows(2)
+            ws["A2"], ws["B2"], ws["C2"], ws["D2"], ws["E2"] = "Bookkeeping", 1, 60, 0.2, "=B2*C2*(1+D2)"
+            for r in range(3, 7) if rewrite else ():
+                ws.cell(r, 5, f"=B{r}*C{r}*(1+D{r})")
+        return change
+
+    found = _findings(_edit(before, tmp_path / "wrong.xlsx", insert(False)), before)
+    assert [(f.level, f.check, f.where) for f in found] == [("error", "formula-moved-as-text", "Invoice!E3")]
+    assert _findings(_edit(before, tmp_path / "right.xlsx", insert(True)), before) == []
+
+
+def test_whole_column_formulas_after_an_inserted_column_are_read_once_per_range(tmp_path, monkeypatch):
+    rows = [["Customer", "Amount", "Date", "Customer total"]]
+    rows += [[f"C{r % 37}", r % 101, f"2024-01-{r % 28 + 1:02d}", f"=SUMIF(A:A,A{r},B:B)"] for r in range(2, 2002)]
+    before = _book(tmp_path / "before.xlsx", rows, "Orders")
+
+    def insert_notes(w):  # what Excel leaves: the formulas in column E keep reading A and B
+        ws = w.active
+        ws.insert_cols(4)
+        ws["D1"] = "Notes"
+
+    after = _edit(before, tmp_path / "after.xlsx", insert_notes)
+    reads = {"n": 0}
+    value = audit_mod._value
+
+    def counting(ws, row, col):
+        reads["n"] += 1
+        return value(ws, row, col)
+
+    monkeypatch.setattr(audit_mod, "_value", counting)
+    assert _findings(after, before) == []
+    # The quadratic scan read up to 2,000 cells for each of the 2,000 moved formulas.
+    assert reads["n"] < 200_000, reads["n"]
+
+
+def test_formula_only_sheet_renamed_and_given_a_note_is_a_rename(tmp_path):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Data"
+    ws.append(["Region", "Revenue"])
+    for i in range(8):
+        ws.append(["North" if i % 2 else "South", 100 + 7 * i])
+    calc = wb.create_sheet("Calc")
+    calc["A1"], calc["B1"] = "=Data!A1", "=Data!B1"
+    calc["A2"], calc["B2"] = '="North"', '=SUMIF(Data!A2:A9,"North",Data!B2:B9)'
+    calc["A3"], calc["B3"] = '="South"', '=SUMIF(Data!A2:A9,"South",Data!B2:B9)'
+    calc["A4"], calc["B4"] = '="Total"', "=SUM(B2:B3)"
+    wb.create_sheet("Report").append(["Grand total", "=Calc!B4"])
+    before = tmp_path / "before.xlsx"
+    wb.save(before)
+
+    def rename(note, update=True):
+        def change(w):
+            w["Calc"].title = "Calculations"
+            w["Report"]["B1"] = "=Calculations!B4" if update else "=Calc!B4"
+            if note:
+                w["Calculations"]["D1"] = "Source: Data sheet"
+        return change
+
+    for note in (False, True):
+        assert _findings(_edit(before, tmp_path / f"after{note}.xlsx", rename(note)), before) == []
+    found = _findings(_edit(before, tmp_path / "stale.xlsx", rename(True, update=False)), before)
+    assert [(f.level, f.check) for f in found] == [("error", "stale-sheet-reference")]
+
+
+def test_total_written_without_an_aggregate_ends_the_data_for_charts_and_highlighting(tmp_path):
+    from openpyxl.chart import BarChart, Reference
+    from openpyxl.formatting.rule import CellIsRule
+    from openpyxl.styles import PatternFill
+
+    def book(path, total, months=6):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Revenue"
+        ws.append(["Month", "Revenue"])
+        for i in range(months):
+            ws.append([f"M{i + 1}", 1000 + 75 * i])
+        ws.cell(months + 2, 1, "Total")
+        ws.cell(months + 2, 2, total)
+        chart = BarChart()
+        chart.add_data(Reference(ws, min_col=2, min_row=1, max_row=7), titles_from_data=True)
+        ws.add_chart(chart, "D2")
+        ws.conditional_formatting.add("A2:B7", CellIsRule(operator="greaterThan", formula=["1200"],
+                                                          fill=PatternFill("solid", fgColor="FFFF00")))
+        wb.save(path)
+        return path
+
+    assert _findings(book(tmp_path / "plus.xlsx", "=B2+B3+B4+B5+B6+B7")) == []
+    assert _findings(book(tmp_path / "sum.xlsx", "=SUM(B2:B7)")) == []  # the CF covers column A's 'Total' row
+    found = _findings(book(tmp_path / "short.xlsx", "=B2+B3+B4+B5+B6+B7+B8+B9", months=8))
+    assert [f.level for f in found] == ["warning", "warning"]
+    assert all("data continues to row 9" in f.message for f in found)
+
+
+def test_chart_sheet_counts_as_renamed_only_when_it_shows_the_same_chart(tmp_path):
+    from openpyxl.chart import BarChart, Reference
+
+    def book(path, sheets, rows=7):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Data"
+        ws.append(["Month", "Revenue", "Cost"])
+        for i in range(1, rows):
+            ws.append([f"M{i}", 100 * i, 70 * i])
+        for name, col in sheets:
+            chart = BarChart()
+            chart.add_data(Reference(ws, min_col=col, min_row=1, max_row=rows), titles_from_data=True)
+            wb.create_chartsheet(name).add_chart(chart)
+        wb.save(path)
+        return path
+
+    before = book(tmp_path / "before.xlsx", [("Revenue chart", 2)])
+    assert _findings(book(tmp_path / "renamed.xlsx", [("Revenue", 2)], rows=9), before) == []
+    found = _findings(book(tmp_path / "swap.xlsx", [("Cost chart", 3)]), before)
+    assert [(f.level, f.check, f.where) for f in found] == [("error", "sheet-removed", "Revenue chart")]
+    assert "'Cost chart'" in found[0].message
+
+
+def test_running_total_column_is_scanned_for_double_counting_in_linear_work(tmp_path, monkeypatch):
+    rows = [["Day", "Sales", "Cumulative"]] + [[f"D{r - 1}", (r * 37) % 101, f"=SUM(B$2:B{r})"] for r in range(2, 3002)]
+    path = _book(tmp_path / "daily.xlsx", rows, "Daily")
+    reads = {"n": 0}
+    value = audit_mod._value
+
+    def counting(ws, row, col):
+        reads["n"] += 1
+        return value(ws, row, col)
+
+    monkeypatch.setattr(audit_mod, "_value", counting)
+    assert _findings(path) == []
+    assert reads["n"] < 100_000, reads["n"]  # each of the 3,000 sums visited its whole range before
+    # A grand total over a column that holds its own subtotals is still found.
+    rows = [["Item", "Amount"], ["a", 1], ["b", 2], ["Sub 1", "=SUM(B2:B3)"], ["c", 3], ["Sub 2", "=SUM(B5:B5)"],
+            ["Total", "=SUM(B2:B6)"]]
+    found = _findings(_book(tmp_path / "subtotals.xlsx", rows, "S"))
+    assert [(f.level, f.check, f.where) for f in found] == [("error", "double-counting", "S!B7")]
+
+
+def test_sort_under_a_repeated_category_label_is_found_by_the_row_values(tmp_path):
+    rows = [["Category", "Product", "Price", "Unit", "Supplier"]]
+    rows += [["Fruit", p, x, "kg", "Acme"] for p, x in [("Apple", 2.1), ("Banana", 1.2), ("Kiwi", 3.4), ("Mango", 2.9)]]
+    before = _book(tmp_path / "before.xlsx", rows, "Prices")
+    wb = openpyxl.load_workbook(before)
+    wb.create_sheet("Summary").append(["Apple price", "=Prices!C2"])
+    wb.save(before)
+
+    def sort(w):  # =Prices!C2 left alone: it now shows Kiwi's price
+        ws = w["Prices"]
+        data = sorted(([c.value for c in r] for r in ws.iter_rows(min_row=2)), key=lambda r: -r[2])
+        for r, values in enumerate(data, start=2):
+            for col, v in enumerate(values, start=1):
+                ws.cell(r, col, v)
+
+    found = _findings(_edit(before, tmp_path / "after.xlsx", sort), before)
+    assert [(f.level, f.check, f.where) for f in found] == [("error", "reference-meaning-changed", "Summary!B1")]
+    assert "are now in row 4" in found[0].message
+    # Updating the reference, appending a product or changing a price in place stays clean.
+    fixed = _edit(tmp_path / "after.xlsx", tmp_path / "fixed.xlsx", lambda w: w["Summary"].__setitem__("B1", "=Prices!C4"))
+    assert _findings(fixed, before) == []
+    assert _findings(_edit(before, tmp_path / "more.xlsx", lambda w: w["Prices"].append(["Fruit", "Pear", 1.8, "kg", "Acme"])),
+                     before) == []
+    assert _findings(_edit(before, tmp_path / "price.xlsx", lambda w: w["Prices"].__setitem__("C2", 2.3)), before) == []
 
 
 def test_no_recalc_help_says_error_values_are_not_checked(capsys):

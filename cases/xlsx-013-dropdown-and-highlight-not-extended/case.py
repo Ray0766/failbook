@@ -77,20 +77,21 @@ def _new_cells(ctx):
 
 
 def _list_options(ctx, dv):
-    """The options a list dropdown offers, or None if its source cannot be resolved to fixed cells."""
+    """The options a list dropdown offers: (options, None), or (None, why) if its source is not resolved to cells."""
     f = (dv.formula1 or "").strip().lstrip("=")
     if f.startswith('"') and f.endswith('"'):
-        return [o.strip() for o in f[1:-1].split(",")]
+        return [o.strip() for o in f[1:-1].split(",")], None
     rng = X.resolve_range(f, ctx.wb(), SHEET)
     if rng is None:
-        return None
+        return None, "which the checker cannot resolve to fixed cells"
     sheet, r1, c1, r2, c2 = rng
     calc = ctx.values().wb
-    if sheet not in calc.sheetnames:
-        return []
-    ws = calc[sheet]
+    real = X.sheet_named(calc, sheet)  # sheet names match in any letter case, as in Excel and LibreOffice
+    if real is None:
+        return None, f"a range on a sheet {sheet!r} that the workbook does not have"
+    ws = calc[real]
     cells = (ws.cell(r, c).value for r in range(r1, r2 + 1) for c in range(c1, c2 + 1))
-    return [v for v in cells if v not in (None, "")]
+    return [v for v in cells if v not in (None, "")], None
 
 
 def _listing(cells, limit=6):
@@ -107,7 +108,9 @@ def _rejects_other_entries(dv):
 def _alert_problem(dv):
     if not dv.showErrorMessage:
         return f"the validation on {dv.sqref} has its error alert off"
-    return f"the validation on {dv.sqref} has a {dv.errorStyle!r} error alert, which lets the entry stand"
+    style = dv.errorStyle or "stop"
+    article = "an" if style[:1].lower() in "aeiou" else "a"
+    return f"the validation on {dv.sqref} has {article} {style!r} error alert, which lets the entry stand"
 
 
 # -- what the conditional formats highlight -------------------------------------------
@@ -207,8 +210,9 @@ def _red_at(ctx, rules, cell, value_at):
         if colour == "?":
             unsure.append(getattr(colour, "why", None) or f"its {key} colour is not resolved by the checker")
         else:
-            unsure.append(f"its {key} {colour} is a pale red (saturation below {X.RED_SATURATION:.0%}), which the "
-                          "checker does not judge as red or not red")
+            unsure.append(f"its {key} {colour} is a pale red (a red hue with saturation from {X.PALE_SATURATION:.0%} "
+                          f"to below {X.RED_SATURATION:.0%} and brightness at least {X.PALE_BRIGHTNESS:.0%}), which "
+                          "the checker does not judge as red or not red")
     return None, "; ".join(unsure)
 
 
@@ -241,11 +245,14 @@ def dropdown_covers_new_rows(ctx):
     wanted = {X.norm_text(s) for s in STATUSES}
     # cell -> [(offers the four statuses: True / False / None if unknown, validation, its options)]
     found = {c: [] for c in _status_cells(ctx)}
+    unresolved = {}  # id(validation) -> why its options are not known
     for dv in ws.data_validations.dataValidation:
         if dv.type != "list":
             continue
-        options = _list_options(ctx, dv)
+        options, why = _list_options(ctx, dv)
         ok = None if options is None else {X.norm_text(o) for o in options} == wanted
+        if why:
+            unresolved[id(dv)] = why
         for cell, got in found.items():
             if cell in dv.sqref:
                 got.append((ok, dv, options))
@@ -271,10 +278,10 @@ def dropdown_covers_new_rows(ctx):
                     f"{_alert_problem(found[lax[0]][0][1])}, unlike the original")
     unknown = [(c, got) for c, got in found.items() if not any(ok for ok, _, _ in got)]
     if unknown:
-        source = unknown[0][1][0][1].formula1
+        dv = next(dv for ok, dv, _ in unknown[0][1] if ok is None)
         raise Inconclusive(
-            f"the dropdown on {_listing(c for c, _ in unknown)} takes its options from {source}, which the checker "
-            "cannot resolve to fixed cells; whether it offers the four statuses is not checked")
+            f"the dropdown on {_listing(c for c, _ in unknown)} takes its options from {dv.formula1}, "
+            f"{unresolved[id(dv)]}; whether it offers the four statuses is not checked")
 
 
 @rule(

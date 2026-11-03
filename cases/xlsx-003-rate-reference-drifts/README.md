@@ -26,7 +26,7 @@ Use formulas, so that changing the rate in B1 updates every line and the totals.
 
 ## Expected
 
-Every line's VAT is Net × the rate in B1 (exact or rounded to the cent) and its Gross is Net + VAT; the totals match, and changing B1 updates VAT and Gross on every line and in the Total row (for example because every VAT formula refers to $B$1 or to a name). Net and Total Net are still calculated from Qty and Unit Price, as in the file as given.
+Every line's VAT is Net × the rate in B1 (exact or rounded to the cent) and its Gross is Net + VAT; the totals match, and changing B1, or a line's Qty or Unit Price, updates VAT and Gross on every line and in the Total row (for example because every VAT formula refers to its line's Net and to $B$1 or to a name). Net and Total Net are still calculated from Qty and Unit Price, as in the file as given.
 
 ## Observed in the failure artifact
 
@@ -45,6 +45,7 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 | `vat-correct` | value | VAT = Net x rate on every line | **FAIL**: 11 of 12 values are wrong, e.g. VAT of 'Headset' (row 5) is 0.00, expected 744.5872 (Net 3,918.88 x 19%; difference -744.5872); VAT of 'Label Printer' (Invoice!E6) evaluates to #VALUE!; VAT of 'Stapler' (row 7) is 362.53, expected 68.8807 (Net 362.53 x 19%; difference +293.6493). Exact amounts and amounts rounded to whole cents are both accepted. |
 | `gross-correct` | value | Gross = Net + VAT on every line | **FAIL**: 11 of 12 values are wrong, e.g. Gross of 'Headset' (row 5) is 3,918.88, expected 4,663.4672 (Net 3,918.88 + VAT 744.5872; difference -744.5872); Gross of 'Label Printer' (Invoice!F6) evaluates to #VALUE!; Gross of 'Stapler' (row 7) is 725.06, expected 431.4107 (Net 362.53 + VAT 68.8807; difference +293.6493). Exact amounts and amounts rounded to whole cents are both accepted. |
 | `vat-follows-rate` | live | Changing the rate in B1 updates VAT and Gross on every line and the totals | **FAIL**: with B1 changed to 24% in a copy of the file, 24 of 27 values are wrong, e.g. VAT of 'Headset' (row 5) is 0.00, expected 940.5312 (Net 3,918.88 x 24%; difference -940.5312), the same as before the change; Gross of 'Headset' (row 5) is 3,918.88, expected 4,859.4112 (Net 3,918.88 + VAT 940.5312; difference -940.5312), the same as before the change; VAT of 'Label Printer' (Invoice!E6) evaluates to #VALUE!. Exact amounts and amounts rounded to whole cents are both accepted. |
+| `vat-gross-follow-net` | live | When Qty and Unit Price change, VAT and Gross on every line and in the Total row follow the Nets | **FAIL**: in a copy of the file where every line's Qty was raised by a different amount and every Unit Price by 1.00 (rate unchanged), 14 of 26 VAT and Gross figures (the lines and the Total row) did not follow the Nets: VAT of 'Headset' (row 5) is 0.00, expected 841.0806 (its Net in that copy 4,426.74 x 19%), the same as before the change; VAT of 'Label Printer' (Invoice!E6) evaluates to #VALUE!; Gross of 'Label Printer' (Invoice!F6) evaluates to #VALUE! (and 11 more). Exact amounts and amounts rounded to whole cents are both accepted. |
 | `totals-correct` | value | The Total row shows the correct Net, VAT and Gross totals | **FAIL**: 2 of 3 values are wrong, e.g. Total VAT (Invoice!E16) evaluates to #VALUE!; Total Gross (Invoice!F16) evaluates to #VALUE!. Exact amounts and amounts rounded to whole cents are both accepted. |
 | `net-still-calculated` | no collateral damage | Each line's Net still follows its Qty and Unit Price, and Total Net still follows the lines | pass |
 | `invoice-unchanged` | no collateral damage | Line items, quantities, prices and the rate are unchanged | pass |
@@ -75,7 +76,7 @@ failbook run xlsx-003 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-003 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-003 --seeds 3`): [`reference.py`](reference.py), [`alt_named_rate.py`](alt_named_rate.py) and [`alt_round_cents.py`](alt_round_cents.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_data_only_roundtrip.py`](fail_data_only_roundtrip.py), [`fail_gross_and_totals_typed.py`](fail_gross_and_totals_typed.py), [`fail_gross_rate_typed.py`](fail_gross_rate_typed.py) and [`fail_total_net_typed.py`](fail_total_net_typed.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-003 --seeds 3`): [`reference.py`](reference.py), [`alt_named_rate.py`](alt_named_rate.py) and [`alt_round_cents.py`](alt_round_cents.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_data_only_roundtrip.py`](fail_data_only_roundtrip.py), [`fail_gross_and_totals_typed.py`](fail_gross_and_totals_typed.py), [`fail_gross_rate_typed.py`](fail_gross_rate_typed.py), [`fail_total_net_typed.py`](fail_total_net_typed.py), [`fail_total_vat_typed_net.py`](fail_total_vat_typed_net.py) and [`fail_vat_typed_net.py`](fail_vat_typed_net.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -84,7 +85,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 ## Limitations
 
 - The rate change scenario uses one new rate; exotic formulas that special-case the original rate value would not be detected.
-- Whether Net and Total Net are still calculated is tested in a second changed copy of the file (the k-th line's Qty raised by k and every Unit Price by 1.00, with the rate unchanged); only Net and Total Net are compared there. VAT and Gross are tested to follow the rate in B1, not changes of Net, so a VAT formula that multiplies a typed copy of the Net by $B$1 passes. Formula text is never inspected.
+- Whether Net and Total Net are still calculated, and whether VAT and Gross follow Net, is tested in a second changed copy of the file (the k-th line's Qty raised by k and every Unit Price by 1.00, with the rate unchanged). There each VAT and Gross, on the lines and in the Total row, is compared with the Nets as they are in that copy (VAT = Net × rate, Gross = Net + VAT, a total = the sum of its lines or follows Total Net, cents rounding accepted), so a Net that did not follow is reported once, under net-still-calculated. Formula text is never inspected, so a formula that happens to give the right results in the file and in both changed copies passes.
 - VAT and Gross are accepted exact or rounded to whole cents (at most one cent from the exact amount, in either direction). A total is accepted if it is exact, rounded to whole cents, or the sum of the accepted line amounts. Other rounding, for example to 0.1, fails.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
@@ -111,7 +112,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 ### 预期结果
 
-每一行的 VAT 都等于 Net × B1 中的税率（精确值或取整到分），Gross = Net + VAT；合计一致，修改 B1 会更新每一行以及 Total 行的 VAT 和 Gross（例如每个 VAT 公式都以 $B$1 或名称引用税率）。Net 和 Net 合计仍像原文件一样由数量和单价计算。
+每一行的 VAT 都等于 Net × B1 中的税率（精确值或取整到分），Gross = Net + VAT；合计一致，修改 B1 或某一行的数量、单价，都会更新每一行以及 Total 行的 VAT 和 Gross（例如每个 VAT 公式都引用本行的 Net，并以 $B$1 或名称引用税率）。Net 和 Net 合计仍像原文件一样由数量和单价计算。
 
 ### 失败产物中观察到的情况
 
@@ -130,6 +131,7 @@ VAT 公式中的税率引用每行下移一行，正如相对引用向下填充�
 | `vat-correct` | 数值 | 每一行 VAT = Net × 税率 | **FAIL**: 11 of 12 values are wrong, e.g. VAT of 'Headset' (row 5) is 0.00, expected 744.5872 (Net 3,918.88 x 19%; difference -744.5872); VAT of 'Label Printer' (Invoice!E6) evaluates to #VALUE!; VAT of 'Stapler' (row 7) is 362.53, expected 68.8807 (Net 362.53 x 19%; difference +293.6493). Exact amounts and amounts rounded to whole cents are both accepted. |
 | `gross-correct` | 数值 | 每一行 Gross = Net + VAT | **FAIL**: 11 of 12 values are wrong, e.g. Gross of 'Headset' (row 5) is 3,918.88, expected 4,663.4672 (Net 3,918.88 + VAT 744.5872; difference -744.5872); Gross of 'Label Printer' (Invoice!F6) evaluates to #VALUE!; Gross of 'Stapler' (row 7) is 725.06, expected 431.4107 (Net 362.53 + VAT 68.8807; difference +293.6493). Exact amounts and amounts rounded to whole cents are both accepted. |
 | `vat-follows-rate` | 实时性 | 修改 B1 的税率后，每一行的 VAT、Gross 以及合计都会更新 | **FAIL**: with B1 changed to 24% in a copy of the file, 24 of 27 values are wrong, e.g. VAT of 'Headset' (row 5) is 0.00, expected 940.5312 (Net 3,918.88 x 24%; difference -940.5312), the same as before the change; Gross of 'Headset' (row 5) is 3,918.88, expected 4,859.4112 (Net 3,918.88 + VAT 940.5312; difference -940.5312), the same as before the change; VAT of 'Label Printer' (Invoice!E6) evaluates to #VALUE!. Exact amounts and amounts rounded to whole cents are both accepted. |
+| `vat-gross-follow-net` | 实时性 | 数量和单价变化时，每一行以及 Total 行的 VAT 和 Gross 都随 Net 更新 | **FAIL**: in a copy of the file where every line's Qty was raised by a different amount and every Unit Price by 1.00 (rate unchanged), 14 of 26 VAT and Gross figures (the lines and the Total row) did not follow the Nets: VAT of 'Headset' (row 5) is 0.00, expected 841.0806 (its Net in that copy 4,426.74 x 19%), the same as before the change; VAT of 'Label Printer' (Invoice!E6) evaluates to #VALUE!; Gross of 'Label Printer' (Invoice!F6) evaluates to #VALUE! (and 11 more). Exact amounts and amounts rounded to whole cents are both accepted. |
 | `totals-correct` | 数值 | Total 行的 Net、VAT、Gross 合计正确 | **FAIL**: 2 of 3 values are wrong, e.g. Total VAT (Invoice!E16) evaluates to #VALUE!; Total Gross (Invoice!F16) evaluates to #VALUE!. Exact amounts and amounts rounded to whole cents are both accepted. |
 | `net-still-calculated` | 无连带破坏 | 每一行的 Net 仍随数量和单价变化，Net 合计仍随各行变化 | pass |
 | `invoice-unchanged` | 无连带破坏 | 明细、数量、单价和税率保持不变 | pass |
@@ -151,6 +153,6 @@ VAT 公式中的税率引用每行下移一行，正如相对引用向下填充�
 ### 限制
 
 - 税率变化场景只用一个新税率；针对原税率数值做特殊处理的奇怪公式检测不到。
-- Net 与 Net 合计是否仍随数量和单价变化，在第二个修改过的副本中检验（第 k 行的数量加 k，每个单价加 1.00，税率不变），该副本只比较 Net 和 Net 合计。VAT 与 Gross 只检验是否随 B1 的税率变化，不检验是否随 Net 变化，因此用 Net 的抄写数值乘以 $B$1 的 VAT 公式也会通过。检查不读公式文本。
+- Net 与 Net 合计是否仍随数量和单价变化、VAT 与 Gross 是否随 Net 变化，在第二个修改过的副本中检验（第 k 行的数量加 k，每个单价加 1.00，税率不变）。在该副本中，各行及 Total 行的每个 VAT 和 Gross 都与该副本中的 Net 比较（VAT = Net × 税率，Gross = Net + VAT，合计等于各行之和或随 Net 合计变化，可取整到分），因此没有随之变化的 Net 只在 net-still-calculated 中报告一次。检查不读公式文本，若某个公式恰好在原文件和两个修改过的副本中都给出正确结果，也会通过。
 - VAT 与 Gross 可以是精确值，也可以取整到分（与精确值相差不超过 1 分，向上向下均可）。合计若为精确值、取整到分的值，或各行已接受金额之和，均判为正确。其他取整方式（例如取整到 0.1）判为失败。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

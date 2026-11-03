@@ -80,6 +80,24 @@ behave like a spreadsheet application: most of them never rewrite formulas for y
 6. Compare against the original: sheets, other cells, formats, column widths, validation,
    conditional formatting and charts should be unchanged unless the task asked for a change.
 
+## What the audit script cannot tell
+
+- It tells moved rows apart by their label in column A or, when that label repeats, by the row's
+  constant values (two or more, unique in the sheet). Rows with a single constant, and duplicate
+  rows, are not tracked: after sorting or inserting such rows, check the single-cell references
+  to them yourself.
+- A formula that reads the previous row on its own sheet (a running balance) is accepted when it
+  was refilled after rows were inserted or deleted, but it can be reported as
+  `reference-meaning-changed` after a sort. A formula meant to read a fixed position (for example
+  the top row after sorting, `=Data!A2`) is reported the same way. If the new order was the task,
+  say so in your report.
+- A shorter aggregate below a total that covers more rows (an Average, a second-half sum) is a
+  `[warning]`. It is an `[error]` only with `--before`, when the original shows that both ranges
+  ended in the same row and only the total was extended.
+- A new sheet that holds at least half of a removed sheet's constants (its formulas, for a sheet
+  without constants) counts as that sheet renamed. A chart sheet counts as renamed when a new chart
+  sheet has the same title or series over the same columns.
+
 ## Reporting
 
 State what you verified and how. If something could not be verified (for example, no spreadsheet

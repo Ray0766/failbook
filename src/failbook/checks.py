@@ -11,14 +11,17 @@ of the agent.
 from __future__ import annotations
 
 import datetime as _dt
+import io
 import re
 import shutil
 import tempfile
 import traceback
+import zipfile
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Iterable
+from xml.etree import ElementTree as ET
 
 import openpyxl
 from openpyxl.formula.tokenizer import Token, Tokenizer
@@ -136,7 +139,7 @@ class Values:
         self.path = path
         self.label = label
         self.source = source  # the output file these values were computed from
-        self.wb = openpyxl.load_workbook(path, data_only=True)
+        self.wb = _open_workbook(path, data_only=True)
 
     def __getitem__(self, ref: str) -> Any:
         sheet, coord = X.split_ref(ref)
@@ -148,6 +151,43 @@ class Values:
         if sheet not in self.wb.sheetnames:
             raise Fail(f"sheet {sheet!r} not found (sheets: {', '.join(self.wb.sheetnames)})")
         return self.wb[sheet]
+
+
+_PACKAGE_RELS = "http://schemas.openxmlformats.org/package/2006/relationships"
+_DRAWING_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing"
+
+
+def _open_workbook(path: Path, *, data_only: bool):
+    """``path`` opened with openpyxl for its cells. Charts and images hold no cell data, so when openpyxl cannot
+    read a drawing (LibreOffice can save a chart whose plot area has no chart group, and openpyxl 3.1 stops on it
+    with an IndexError) the cells are read from a copy in which no sheet links to its drawing; that workbook has
+    no charts or images. Any other problem is raised as it was."""
+    try:
+        return openpyxl.load_workbook(path, data_only=data_only)
+    except Exception as exc:
+        failure = exc
+    try:
+        return openpyxl.load_workbook(_without_drawings(path), data_only=data_only)
+    except Exception:
+        raise failure from None
+
+
+def _without_drawings(path: Path) -> io.BytesIO:
+    """An in-memory copy of the package with every drawing relationship (charts, images, shapes) removed."""
+    out = io.BytesIO()
+    with zipfile.ZipFile(path) as src, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as dst:
+        for info in src.infolist():
+            data = src.read(info)
+            if info.filename.endswith(".rels"):
+                root = ET.fromstring(data)
+                drawings = [rel for rel in root if rel.get("Type") == _DRAWING_REL]
+                if drawings:
+                    for rel in drawings:
+                        root.remove(rel)
+                    data = ET.tostring(root, encoding="utf-8", xml_declaration=True, default_namespace=_PACKAGE_RELS)
+            dst.writestr(info, data)
+    out.seek(0)
+    return out
 
 
 _CELLISH = re.compile(r"^\$?[A-Za-z]{1,3}\$?\d+(:\$?[A-Za-z]{1,3}\$?\d+)?$|^\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3}$|^\$?\d+:\$?\d+$")
@@ -465,7 +505,7 @@ class Context:
         key = (name, data_only)
         if key not in self._wb:
             try:
-                self._wb[key] = openpyxl.load_workbook(self.path(name), data_only=data_only)
+                self._wb[key] = _open_workbook(self.path(name), data_only=data_only)
             except Fail:
                 raise
             except Exception as exc:
@@ -528,7 +568,7 @@ class Context:
         files[None] = base
         errors: dict[Any, BaseException] = {}
         for label, overrides in self._scenarios_for(name, errors).items():
-            wb = openpyxl.load_workbook(src)
+            wb = _open_workbook(src, data_only=False)
             for ref, value in overrides.items():
                 sheet, coord = X.split_ref(ref)
                 if sheet not in wb.sheetnames:

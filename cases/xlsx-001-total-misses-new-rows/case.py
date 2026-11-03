@@ -88,32 +88,10 @@ def _amt(x, sign=False):
     return f"{whole}.{frac.ljust(2, '0')}"
 
 
-#: Characters a number format shows as themselves without quotes; written plainly, quoted or
-#: backslash-escaped they are the same format.
-_PLAIN_LITERALS = set("$-+/():!^&'~{}<>= ")
-
-
-def _format_key(fmt):
-    """A number format with differences of spelling removed: letter case outside quotes, and
-    whether a literal character is written plainly, in quotes or after a backslash. So
-    'yyyy-mm-dd', 'YYYY-MM-DD', 'yyyy"-"mm"-"dd' and 'yyyy\\-mm\\-dd' (as LibreOffice saves it)
-    are one format; 'yyyy-mm-dd h:mm:ss', '0.00' or a locale tag such as '[$-409]' make another."""
-    fmt = fmt or "General"
-    out, i = [], 0
-    while i < len(fmt):
-        ch = fmt[i]
-        if ch == "\\" and i + 1 < len(fmt):
-            out.append(("text", fmt[i + 1]))
-            i += 2
-        elif ch == '"':
-            end = fmt.find('"', i + 1)
-            end = len(fmt) if end < 0 else end
-            out.extend(("text", c) for c in fmt[i + 1:end])
-            i = end + 1
-        else:
-            out.append(("text", ch) if ch in _PLAIN_LITERALS else ("code", ch.lower()))
-            i += 1
-    return tuple(out)
+#: What X.number_format_key counts as one format, as the format messages say it.
+_SAME_FORMAT = ("(formats that show every value alike count as the same, for example ones that differ only in "
+                "letter case, quotes or backslash escapes, a text section that is only '@', a negative section that "
+                "is '-' and the first section, or a locale tag such as [$-409] on a date of digits only).")
 
 
 #: The "bump" scenario changes, in a copy of the file, every order's Qty (by a different
@@ -180,21 +158,21 @@ def new_rows_formatted(ctx):
     given = ctx.input_wb()[SHEET]
     # In the file as given the original orders are rows 2 onwards, all formatted alike. Columns
     # they leave in General (Order ID, Customer, Qty) are not compared.
-    general = _format_key("General")
+    general = X.number_format_key("General")
     wanted = {h: X.number_format(given, 2, c) for c, h in enumerate(HEADERS, start=1)}
-    wanted = {h: f for h, f in wanted.items() if _format_key(f) != general}
+    wanted = {h: f for h, f in wanted.items() if X.number_format_key(f) != general}
     found = [(o, r) for o in ctx.meta["new"] for r in rows.get(o["id"], [])]
     require(found, "none of the new orders is in the sheet, so no new row's format can be compared")
     wrong = []
     for o, r in found:
         diff = [f"{h} '{X.number_format(ws, r, cols[h])}'" for h, f in wanted.items()
-                if _format_key(X.number_format(ws, r, cols[h])) != _format_key(f)]
+                if X.number_format_key(X.number_format(ws, r, cols[h])) != X.number_format_key(f)]
         if diff:
             wrong.append(f"{o['id']} (row {r}) has " + ", ".join(diff))
     given_text = ", ".join(f"{h} '{f}'" for h, f in wanted.items())
     require(not wrong, f"{len(wrong)} of {len(found)} new order rows are not formatted like the original order rows: "
                        + "; ".join(wrong[:3]) + f". In {ctx.case.inputs[0]} as given, the original order rows have "
-                       f"{given_text} (differences of letter case, quotes or backslash escapes are ignored).")
+                       f"{given_text} {_SAME_FORMAT}")
 
 
 @rule(

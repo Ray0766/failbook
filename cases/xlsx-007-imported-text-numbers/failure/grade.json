@@ -30,7 +30,7 @@
       "kind": "structure",
       "title": "The new dates and amounts have the number formats of the existing rows",
       "status": "fail",
-      "detail": "6 of 6 new rows are not formatted like the existing rows: row 17 (Train ticket #1) has Date 'General', Amount 'General'; row 18 (Client lunch #2) has Date 'General', Amount 'General'; row 19 (Paper and pens #3) has Date 'General', Amount 'General' (and 3 more). In expenses.xlsx as given, the existing rows have Date 'yyyy\\-mm\\-dd', Amount '#,##0.00' (differences of letter case, quotes or backslash escapes are ignored)."
+      "detail": "6 of 6 new rows are not formatted like the existing rows: row 17 (Train ticket #1) has Date 'General', Amount 'General'; row 18 (Client lunch #2) has Date 'General', Amount 'General'; row 19 (Paper and pens #3) has Date 'General', Amount 'General' (and 3 more). In expenses.xlsx as given, the existing rows have Date 'yyyy\\-mm\\-dd', Amount '#,##0.00' (formats that show every value alike count as the same, for example ones that differ only in letter case, quotes or backslash escapes, a text section that is only '@', a negative section that is '-' and the first section, or a locale tag such as [$-409] on a date of digits only)."
     },
     {
       "id": "summary-includes-new",

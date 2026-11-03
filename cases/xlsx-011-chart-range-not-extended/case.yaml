@@ -47,10 +47,15 @@ limitations:
   - en: >-
       The rule reads the series ranges, month labels and series names from the chart XML. A series that points
       at a defined name standing for a fixed range is resolved through the name; a name computed by a formula
-      (OFFSET, INDEX) is not. Every part the checker can read is checked first: if any series or the labels
-      are wrong the rule fails, and only when nothing is wrong but some part cannot be resolved does it report
-      inconclusive rather than pass or fail.
-    zh: 规则从图表 XML 读取系列区域、月份标签和系列名称。指向固定区域的命名区域会被解析；由公式计算的名称（OFFSET、INDEX）无法解析。规则先检查所有能读懂的部分：只要有一条系列或月份标签有错就判失败；只有在没有发现错误、但有部分无法解析时，才判为"无法判定"，而不是通过或失败。
+      (OFFSET, INDEX) is not. A series over the Revenue or Costs column of Monthly is checked by its rows. A
+      series over any other range (a helper sheet or column) counts as the Revenue or Costs line only when its
+      cells, after recalculation, hold exactly that line's twelve January to December figures, so a helper
+      range in another unit (thousands) does not count; month labels from another sheet or along a row must
+      read Jan to Dec. Everything the checker can tie to a line or to the axis is checked first, and any error
+      there fails the rule. Of a series it cannot resolve only the name is checked: when such series are the
+      only ones that can draw a line, one of them must carry that line's name. Only when nothing is found wrong
+      but some part cannot be resolved does the rule report inconclusive rather than pass or fail.
+    zh: 规则从图表 XML 读取系列区域、月份标签和系列名称。指向固定区域的命名区域会被解析；由公式计算的名称（OFFSET、INDEX）无法解析。位于 Monthly 表 Revenue 或 Costs 列上的系列按行号检查；指向其他区域（辅助工作表或辅助列）的系列，只有在重算后其单元格恰好是该线 1 月到 12 月的十二个数值时，才算作 Revenue 或 Costs 线，因此换算成其他单位（如千）的辅助区域不算；来自其他工作表或按行排列的月份标签须读作 Jan 到 Dec。规则先检查所有能对应到某条线或分类轴的部分，其中任何错误都判失败。无法解析的系列只检查名称：若某条线只能由这类系列画出，其中必须有一条使用该线的名称。只有在没有发现错误、但有部分无法解析时，才判为"无法判定"，而不是通过或失败。
   - en: >-
       A line chart has one category axis, drawn from the first series that has category labels, so the month
       labels are checked there: a range, or a list typed into the chart, that reads Jan to Dec. Labels stored

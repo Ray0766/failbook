@@ -433,16 +433,19 @@ def colour_rgb(color, wb=None) -> str | None:
     return None
 
 
-#: Saturation (HSV) from which a red hue counts as red, and below which down to PALE_SATURATION it is a pale red.
-RED_SATURATION, PALE_SATURATION = 0.15, 0.05
+#: Saturation (HSV) from which a red hue counts as red. Below it, a red hue with saturation at least
+#: PALE_SATURATION and brightness (HSV value) at least PALE_BRIGHTNESS is a pale red, which is not judged.
+RED_SATURATION, PALE_SATURATION, PALE_BRIGHTNESS = 0.15, 0.05, 0.80
 
 
 def is_red(rgb: str | None) -> bool | None:
     """Whether a colour reads as red: a hue from 340 to 15 degrees, HSV saturation at least 15%, value at least 25%.
 
     Light red fills such as FFC7CE (Excel's "Light Red Fill") count. None if the colour is
-    unknown, or if it is a pale red (saturation 5-15%, such as F2DCDB, the theme colour
-    "Red, Accent 2, Lighter 80%"), which the checker does not judge either way.
+    unknown, or if it is a pale red: a red hue with saturation at least 5% but below 15% and
+    brightness at least 80%, such as F2DCDB (the theme colour "Red, Accent 2, Lighter 80%"),
+    which the checker does not judge either way. Darker colours of low saturation (5A5050,
+    8C7F7F) are greys and browns: not red.
     """
     if rgb is None:
         return None
@@ -451,7 +454,9 @@ def is_red(rgb: str | None) -> bool | None:
     hue = h * 360
     if not (hue >= 340 or hue <= 15) or v < 0.25 or s < PALE_SATURATION:
         return False
-    return True if s >= RED_SATURATION else None
+    if s >= RED_SATURATION:
+        return True
+    return None if v >= PALE_BRIGHTNESS else False
 
 
 class Unresolved(str):
@@ -617,7 +622,7 @@ class _Formula:
     """A tiny evaluator for the formulas of simple conditional formats.
 
     It covers cell references (shifted from the rule's origin cell like Excel does),
-    text, numbers, TRUE/FALSE, comparisons, ``&``, ``+ - * /`` and the functions in
+    text, numbers, TRUE/FALSE (in any letter case), comparisons, ``&``, ``+ - * /`` and the functions in
     ``_FUNCS``. Anything else raises :class:`Unknown`, so that the caller reports "cannot
     tell" instead of guessing.
     """
@@ -718,8 +723,10 @@ class _Formula:
                 return tok.value[1:-1].replace('""', '"')
             if tok.subtype == T.NUMBER:
                 return float(tok.value)
-            if tok.subtype == T.LOGICAL:
-                return tok.value.upper() == "TRUE"
+            # openpyxl's tokenizer marks only "TRUE" and "FALSE" as logical; Excel and LibreOffice read
+            # them in any letter case ("True", "false") as the boolean constants, not as names.
+            if tok.subtype == T.LOGICAL or (tok.subtype == T.RANGE and tok.value.casefold() in ("true", "false")):
+                return tok.value.casefold() == "true"
             if tok.subtype == T.ERROR:
                 return _Err(tok.value.upper())
             if tok.subtype == T.RANGE:
@@ -977,3 +984,87 @@ def _rule_applies(cf_rule, value, ev, truthy) -> bool:
         err = is_error(value)
         return err if kind == "containsErrors" else not err
     raise Unknown(f"rules of type {kind!r} are not supported")
+
+
+# -- number formats -----------------------------------------------------------------
+def number_format_key(fmt: str | None) -> tuple:
+    """A key for comparing number formats: two formats with the same key show every value alike.
+
+    Differences that change no shown value are removed: letter case outside quotes; a literal
+    written plainly, quoted or backslash-escaped (so 'yyyy-mm-dd', 'YYYY"-"MM"-"DD' and
+    'yyyy\\-mm\\-dd', as LibreOffice saves it, are one format); a last section that is only '@'
+    ('yyyy-mm-dd;@': text shows as typed either way); a zero section equal to the first; a negative
+    section that is '-' and the first section ('#,##0.00;-#,##0.00'); and a locale tag with no
+    currency symbol ('[$-409]') on a section of digits and numeric date or time parts only
+    ('[$-409]yyyy-mm-dd'). Each of these was checked against LibreOffice's display of dates,
+    positive, negative and zero numbers and text.
+
+    Everything else makes a different key: a time part, General, '0.00' against '#,##0.00', a
+    currency, a colour or a condition, an empty section (it hides the values it applies to), and a
+    locale tag on a section with separators, month or day names or AM/PM ('[$-407]#,##0.00' shows
+    1.766,34 in LibreOffice, '[$-407]mmm' shows Mär) or naming a system format ('[$-F800]').
+    """
+    # Characters a format shows as themselves without quotes; codes no locale tag changes (digit
+    # placeholders, numeric date and time parts).
+    plain, locale_free = frozenset("$-+/():!^&'~{}<>= "), frozenset("0#?ymdhs ")
+
+    def split(fmt):  # at the semicolons that are not quoted, escaped or inside brackets
+        parts, start, i, quoted, bracket = [], 0, 0, False, False
+        while i < len(fmt):
+            ch = fmt[i]
+            if ch == "\\" and not quoted:
+                i += 1
+            elif ch == '"':
+                quoted = not quoted
+            elif not quoted and ch in "[]":
+                bracket = ch == "["
+            elif ch == ";" and not quoted and not bracket:
+                parts.append(fmt[start:i])
+                start = i + 1
+            i += 1
+        return [*parts, fmt[start:]]
+
+    def tokens(section):
+        out, i = [], 0
+        while i < len(section):
+            ch = section[i]
+            if ch == "\\" and i + 1 < len(section):
+                out.append(("text", section[i + 1]))
+                i += 2
+            elif ch == '"':
+                end = section.find('"', i + 1)
+                end = len(section) if end < 0 else end
+                out.extend(("text", c) for c in section[i + 1:end])
+                i = end + 1
+            elif ch == "[" and "]" in section[i:]:
+                end = section.index("]", i)
+                out.append(("bracket", section[i + 1:end].lower()))
+                i = end + 1
+            elif ch in "_*" and i + 1 < len(section):  # pad to the width of, or fill with, the next character
+                out.append(("code", ch + section[i + 1]))
+                i += 2
+            else:
+                out.append(("text", ch) if ch in plain else ("code", ch.lower()))
+                i += 1
+        # A bare locale tag ([$-409]; from F000 up the tags name system formats such as [$-F800])
+        # is dropped when the rest of the section shows nothing a locale changes.
+        tags = [t for t in out if t[0] == "bracket" and re.fullmatch(r"\$-[0-9a-f]{1,4}", t[1])
+                and int(t[1].removeprefix("$-"), 16) < 0xF000]
+        if len(tags) == 1:
+            rest = tuple(t for t in out if t is not tags[0])
+            codes = "".join(c if kind == "code" else " " for kind, c in rest)
+            if (codes.strip() and not any(kind == "bracket" for kind, _ in rest)
+                    and set(codes) <= locale_free and not re.search(r"mmm|ddd", codes)):
+                return rest
+        return tuple(out)
+
+    sections = [tokens(s) for s in split(fmt or "General")]
+    if any(kind == "bracket" and c[:1] in "<>=" for s in sections for kind, c in s):
+        return tuple(sections)  # conditional sections are not positive / negative / zero / text
+    if len(sections) > 1 and sections[-1] == (("code", "@"),):
+        sections.pop()
+    if len(sections) == 3 and sections[2] == sections[0]:
+        sections.pop()
+    if len(sections) == 2 and sections[1] == (("text", "-"), *sections[0]):
+        sections.pop()
+    return tuple(sections)

@@ -233,6 +233,101 @@ def vat_follows_rate(ctx):
     _report(problems, checked, lead=f"with B1 changed to {_pct(rate)} in a copy of the file, ")
 
 
+#: How the "lines_changed" copy is described in messages.
+_LINES_CHANGED = (f"in a copy of the file where every line's Qty was raised by a different amount and every Unit "
+                  f"Price by {PRICE_BUMP:.2f}")
+
+
+@rule(
+    "vat-gross-follow-net",
+    "When Qty and Unit Price change, VAT and Gross on every line and in the Total row follow the Nets",
+    kind="live",
+    title_zh="数量和单价变化时，每一行以及 Total 行的 VAT 和 Gross 都随 Net 更新",
+    requirement="Fill in, for every line item: VAT = Net x the VAT rate in B1; Gross = Net + VAT. Use formulas. "
+                "The Total row at the bottom must show the correct Net, VAT and Gross totals.",
+)
+def vat_gross_follow_net(ctx):
+    # Each figure is compared with the Nets as they are in the changed copy, so a Net that did not
+    # follow its Qty and Unit Price (net-still-calculated) is not counted again here.
+    base, changed = ctx.values(), ctx.values(scenario="lines_changed")
+    rate = ctx.meta["rate"]
+    problems, vats, grosses = [], [], []
+
+    def stale(col, r, got):
+        before = base[X.make_ref(SHEET, (r, col))]
+        return ", the same as before the change" if X.is_number(before) and X.close(before, got) else ""
+
+    def expected(options):
+        """'a (how) or b (how)' for the accepted (value, accepted?, how) options, equal values merged."""
+        merged = []
+        for v, _, how in options:
+            if v is None:
+                continue
+            same = next((m for m in merged if X.close(m[0], v)), None)
+            if same:
+                same[1].append(how)
+            else:
+                merged.append((v, [how]))
+        return " or ".join(f"{_amt(v)} ({', and '.join(hows)})" for v, hows in merged)
+
+    def net_in_copy(r, what):
+        net = _read(ctx, changed, None, 4, r, what)
+        if net is None:
+            problems.append(Inconclusive(f"{_LINES_CHANGED}, {what} (row {r}) is not a number, so the VAT and "
+                                         "Gross that depend on it cannot be compared"))
+        return net
+
+    for r, line in zip(_rows(ctx), _changed_lines(ctx.meta)):
+        item = line["item"]
+        vat = _read(ctx, changed, problems, 5, r, f"VAT of '{item}'")
+        gross = _read(ctx, changed, problems, 6, r, f"Gross of '{item}'")
+        vats.append(vat)
+        grosses.append(gross)
+        net = net_in_copy(r, f"Net of '{item}'")
+        if net is None:
+            continue
+        exp_vat = net * rate
+        if vat is not None and not _money_ok(vat, exp_vat):
+            problems.append(f"VAT of '{item}' (row {r}) is {_amt(vat)}, expected {_amt(exp_vat)} (its Net in that "
+                            f"copy {_amt(net)} x {_pct(rate)}){stale(5, r, vat)}")
+        follows = _money_ok(gross - net, exp_vat) if gross is not None else True
+        if not follows and not (vat is not None and X.close(gross, net + vat)):  # Gross = Net + VAT as shown
+            problems.append(f"Gross of '{item}' (row {r}) is {_amt(gross)}, expected {_amt(net + exp_vat)} (its Net "
+                            f"in that copy {_amt(net)} + VAT {_amt(exp_vat)}){stale(6, r, gross)}")
+    t = _total_row(ctx)
+    vat = _read(ctx, changed, problems, 5, t, "Total VAT")
+    gross = _read(ctx, changed, problems, 6, t, "Total Gross")
+    net = net_in_copy(t, "Total Net")
+    # A total is accepted if it is the sum of its column's lines as read in that copy, or follows Total Net.
+    vat_sum = sum(vats) if None not in vats else None
+    gross_sum = sum(grosses) if None not in grosses else None
+    if vat is not None and (vat_sum is not None or net is not None):
+        ok = [(vat_sum, X.close(vat, vat_sum) if vat_sum is not None else False,
+               "the sum of the line VATs in that copy")]
+        if net is not None:
+            ok.append((net * rate, _money_ok(vat, net * rate), f"Total Net in that copy x {_pct(rate)}"))
+        if not any(good for _, good, _ in ok):
+            problems.append(f"Total VAT (row {t}) is {_amt(vat)}, expected {expected(ok)}{stale(5, t, vat)}")
+    if gross is not None and (gross_sum is not None or net is not None):
+        ok = [(gross_sum, X.close(gross, gross_sum) if gross_sum is not None else False,
+               "the sum of the line Gross amounts in that copy")]
+        if net is not None:
+            ok.append((net + net * rate, _money_ok(gross - net, net * rate),
+                       f"Total Net in that copy + {_pct(rate)} of it"))
+            if vat is not None:
+                ok.append((net + vat, X.close(gross, net + vat), "Total Net + Total VAT in that copy"))
+        if not any(good for _, good, _ in ok):
+            problems.append(f"Total Gross (row {t}) is {_amt(gross)}, expected {expected(ok)}{stale(6, t, gross)}")
+    fails = [str(p) for p in problems if not isinstance(p, Inconclusive)]
+    checked = 2 * len(vats) + 2
+    require(not fails, f"{_LINES_CHANGED} (rate unchanged), {len(fails)} of {checked} VAT and Gross figures (the "
+                       "lines and the Total row) did not follow the Nets: " + "; ".join(fails[:3])
+                       + (f" (and {len(fails) - 3} more)" if len(fails) > 3 else "")
+                       + ". Exact amounts and amounts rounded to whole cents are both accepted.")
+    if problems:
+        raise problems[0]
+
+
 @rule(
     "totals-correct",
     "The Total row shows the correct Net, VAT and Gross totals",
@@ -257,23 +352,33 @@ def net_still_calculated(ctx):
     lines = _changed_lines(ctx.meta)
     problems = []
 
-    def compare(r, what, exp, how):
-        got = _read(ctx, changed, problems, 4, r, what)
-        if got is None or X.close(got, exp):
-            return
+    def problem(r, what, got, exp, how):
         before = base[X.make_ref(SHEET, (r, 4))]
         same = ", the same as before the change" if X.is_number(before) and X.close(before, got) else ""
         problems.append(f"{what} (row {r}) is {_amt(got)}, expected {_amt(exp)} ({how}){same}")
 
+    nets = []
     for r, line in zip(_rows(ctx), lines):
-        compare(r, f"Net of '{line['item']}'", _net(line), f"Qty {line['qty']} x Unit Price {_amt(line['price'])}")
-    compare(_total_row(ctx), "Total Net", sum(_net(line) for line in lines), "the sum of the line Nets")
+        what = f"Net of '{line['item']}'"
+        got = _read(ctx, changed, problems, 4, r, what)
+        nets.append(got)
+        if got is not None and not X.close(got, _net(line)):
+            problem(r, what, got, _net(line), f"Qty {line['qty']} x Unit Price {_amt(line['price'])}")
+    t, note = _total_row(ctx), ""
+    got, exp = _read(ctx, changed, problems, 4, t, "Total Net"), sum(_net(line) for line in lines)
+    if got is not None and not X.close(got, exp):
+        if None not in nets and X.close(got, sum(nets)):
+            # Total Net did follow the lines; the gap is in line Nets reported above.
+            note = (f"; Total Net (row {t}) does equal the sum of the line Nets in that copy, "
+                    f"{_amt(got)}, so it differs from {_amt(exp)} (the sum of Qty x Unit Price over the lines) "
+                    "only because of those Nets")
+        else:
+            problem(t, "Total Net", got, exp, "the sum of Qty x Unit Price over the lines")
     fails = [str(p) for p in problems if not isinstance(p, Inconclusive)]
     checked = len(lines) + 1
-    require(not fails, f"in a copy of the file where every line's Qty was raised by a different amount and every Unit "
-                       f"Price by {PRICE_BUMP:.2f}, {len(fails)} of {checked} Net figures (the lines and Total Net) "
+    require(not fails, f"{_LINES_CHANGED}, {len(fails)} of {checked} Net figures (the lines and Total Net) "
                        "did not follow: "
-                       + "; ".join(fails[:3]) + (f" (and {len(fails) - 3} more)" if len(fails) > 3 else ""))
+                       + "; ".join(fails[:3]) + (f" (and {len(fails) - 3} more)" if len(fails) > 3 else "") + note)
     if problems:
         raise problems[0]
 

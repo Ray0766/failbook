@@ -26,6 +26,13 @@
       "detail": "with B1 changed to 24% in a copy of the file, 24 of 27 values are wrong, e.g. VAT of 'Headset' (row 5) is 0.00, expected 940.5312 (Net 3,918.88 x 24%; difference -940.5312), the same as before the change; Gross of 'Headset' (row 5) is 3,918.88, expected 4,859.4112 (Net 3,918.88 + VAT 940.5312; difference -940.5312), the same as before the change; VAT of 'Label Printer' (Invoice!E6) evaluates to #VALUE!. Exact amounts and amounts rounded to whole cents are both accepted."
     },
     {
+      "id": "vat-gross-follow-net",
+      "kind": "live",
+      "title": "When Qty and Unit Price change, VAT and Gross on every line and in the Total row follow the Nets",
+      "status": "fail",
+      "detail": "in a copy of the file where every line's Qty was raised by a different amount and every Unit Price by 1.00 (rate unchanged), 14 of 26 VAT and Gross figures (the lines and the Total row) did not follow the Nets: VAT of 'Headset' (row 5) is 0.00, expected 841.0806 (its Net in that copy 4,426.74 x 19%), the same as before the change; VAT of 'Label Printer' (Invoice!E6) evaluates to #VALUE!; Gross of 'Label Printer' (Invoice!F6) evaluates to #VALUE! (and 11 more). Exact amounts and amounts rounded to whole cents are both accepted."
+    },
+    {
       "id": "totals-correct",
       "kind": "value",
       "title": "The Total row shows the correct Net, VAT and Gross totals",
