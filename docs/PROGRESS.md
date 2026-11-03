@@ -7,8 +7,8 @@ Last updated 2026-11-03.
 | What | Evidence |
 |---|---|
 | 15 spreadsheet cases with inputs, tasks (en/zh), rules, reference, failure artifact, limitations | `cases/`, `failbook verify --seeds 3` (CI) |
-| Checker validation: reference + alternatives pass, failure fails on the named rules, untouched input fails, LibreOffice re-save passes | `failbook verify` output in CI |
-| Core claim: live and preserve rules catch 4 failures that value checks miss, without false rejections | [evidence/checker-ablation.md](evidence/checker-ablation.md) |
+| Checker validation: reference + alternatives pass (also after a LibreOffice re-save), failure fails on the named rules, review-found wrong answers (`fail_*.py`) fail, untouched input fails | `failbook verify` output in CI |
+| Core claim: live, preserve and structure rules catch the failures that value checks miss, without rejecting correct solutions <!-- sync-numbers --> | [evidence/checker-ablation.md](evidence/checker-ablation.md) |
 | Evidence chain for one case, end to end, no AI needed | [evidence/demo-xlsx-001.md](evidence/demo-xlsx-001.md), `scripts/demo-evidence-chain.sh` |
 | Fix with a deterministic self-check: flags 13/15 failures, no error on 22 correct solutions | [evidence/fix-self-check.md](evidence/fix-self-check.md) |
 | Harbor export loads in Harbor 0.24.0; SkillEvaluator 0.7.0 `tier3 validate --harbor-contract` passes | [DECISIONS.md](DECISIONS.md) D4 |

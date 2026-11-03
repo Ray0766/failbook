@@ -8,23 +8,27 @@ version = "0.1.0"
 description = "Reproducible cases where an AI agent said 'done' but the work was wrong, with fair, re-runnable acceptance checks."
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "Failbook contributors" }]
 keywords = ["ai", "agents", "evaluation", "benchmark", "spreadsheet", "excel", "reproducibility"]
 classifiers = [
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
   "Topic :: Software Development :: Testing",
 ]
 dependencies = [
   "openpyxl>=3.1,<4",
   "PyYAML>=6",
+  # xlsx-012's failure reproduction uses pandas, so `failbook solve/verify/build` need it.
+  "pandas>=2",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8",
-  "pandas>=2",
 ]
 
 [project.scripts]

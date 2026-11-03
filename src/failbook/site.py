@@ -40,7 +40,7 @@ T = {
         "role_input": "input given to the agent", "role_failure": "failure artifact", "role_grade": "grading of the failure artifact",
         "validation": "Is this checker trustworthy?", "fix": "Fix and self-check",
         "history": "Retest history", "history_note": "Append-only: every run is a new record. Counts, not rates; a curated case says nothing about overall reliability.",
-        "date": "Date", "agent": "Agent", "model": "Model", "fixcol": "Fix", "status": "Run status", "verdict": "Verdict", "notpassed": "Rules not passed",
+        "date": "Date", "cversion": "Case version", "older": " (older)", "agent": "Agent", "model": "Model", "fixcol": "Fix", "status": "Run status", "verdict": "Verdict", "notpassed": "Rules not passed",
         "limitations": "Limitations", "classification": "Classification", "tool": "Tool behaviour involved",
         "prev": "Previous case", "next": "Next case", "built": "Built {date} from {commit} · failbook {ver}",
         "pass": "Pass", "fail": "Fail", "inconclusive": "Inconclusive", "notrun": "Not run",
@@ -72,7 +72,7 @@ T = {
         "role_input": "交给智能体的输入", "role_failure": "失败产物", "role_grade": "失败产物的判定结果",
         "validation": "这个检查器可信吗？", "fix": "修复与自检",
         "history": "复测记录", "history_note": "只追加：每次运行都是一条新记录。只显示计数，不算比率；精选案例不能说明总体可靠性。",
-        "date": "日期", "agent": "智能体", "model": "模型", "fixcol": "修复", "status": "运行状态", "verdict": "判定", "notpassed": "未通过的规则",
+        "date": "日期", "cversion": "案例版本", "older": "（旧版）", "agent": "智能体", "model": "模型", "fixcol": "修复", "status": "运行状态", "verdict": "判定", "notpassed": "未通过的规则",
         "limitations": "限制", "classification": "分类", "tool": "涉及的工具行为",
         "prev": "上一个案例", "next": "下一个案例", "built": "构建于 {date}，提交 {commit} · failbook {ver}",
         "pass": "通过", "fail": "不通过", "inconclusive": "无法判定", "notrun": "未运行",
@@ -500,12 +500,13 @@ def case_page(case: Case, cases: list[Case], lang: str, ablation: dict) -> str:
     if runs:
         hist = "".join(
             f'<tr><td data-label="{t["date"]}" class="num">{r["started_at"][:10]}</td>'
+            f'<td data-label="{t["cversion"]}" class="num">v{r["case_version"]}{"" if r["case_version"] == case.version else t["older"]}</td>'
             f'<td data-label="{t["agent"]}">{html.escape(r["agent"]["name"] + " " + (r["agent"].get("version") or ""))}</td>'
             f'<td data-label="{t["model"]}">{html.escape(r.get("model") or "—")}</td><td data-label="{t["fixcol"]}">{html.escape(r.get("fix") or "—")}</td>'
             f'<td data-label="{t["status"]}">{html.escape(r.get("run_status", "—"))}</td><td data-label="{t["verdict"]}">{verdict(r["verdict"], lang)}</td>'
             f'<td data-label="{t["notpassed"]}" class="mono xs">{html.escape(", ".join(x["id"] for x in r["rules"] if x["status"] != "pass") or "—")}</td></tr>'
             for r in runs)
-        history = (f'<table class="tbl stack"><thead><tr><th>{t["date"]}</th><th>{t["agent"]}</th><th>{t["model"]}</th><th>{t["fixcol"]}</th>'
+        history = (f'<table class="tbl stack"><thead><tr><th>{t["date"]}</th><th>{t["cversion"]}</th><th>{t["agent"]}</th><th>{t["model"]}</th><th>{t["fixcol"]}</th>'
                    f'<th>{t["status"]}</th><th>{t["verdict"]}</th><th>{t["notpassed"]}</th></tr></thead><tbody>{hist}</tbody></table>')
     else:
         history = f'<p>{t["empty_history"]}</p>'

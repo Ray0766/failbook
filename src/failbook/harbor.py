@@ -13,7 +13,8 @@ Layout of one exported task::
       environment/Dockerfile    Python, openpyxl, pandas, LibreOffice; inputs copied to /workspace
       environment/workspace/    the input files
       tests/test.sh             runs the Failbook grader; writes /logs/verifier/reward.json
-      tests/lib/failbook/       the grader (uploaded only after the agent has finished)
+      tests/lib/failbook/       the grader (uploaded only after the agent has finished; run in
+                                isolated mode so files the agent left in /workspace are never imported)
       tests/cases/<case>/       the case definition, without its solutions
       solution/solve.sh         applies the reference solution (for Harbor's oracle agent)
 """
@@ -41,48 +42,75 @@ COPY workspace/ /workspace/
 WORKDIR /workspace
 """
 
+#: Runs the packaged grader without letting anything else onto its import path: ``-I`` ignores the
+#: working directory, PYTHON* variables and user site-packages, and only ``<dir>/lib`` is added.
+_RUN_FAILBOOK = (
+    "python3 -I -c 'import sys; sys.path.insert(0, sys.argv.pop(1)); "
+    "from failbook.cli import main; sys.exit(main(sys.argv[1:]))'"
+)
+
 TEST_SH = """#!/bin/bash
 # Grades /workspace with Failbook and writes Harbor rewards. Never fails the script itself:
-# a crash in the grader must not be confused with a failing agent.
+# a crash in the grader must not be confused with a failing agent; it is reported as grader_error 1.
 set -uo pipefail
 tests_dir="${{HARBOR_TESTS_DIR:-/tests}}"
 logs_dir="${{HARBOR_LOGS_DIR:-/logs}}"
-mkdir -p "$logs_dir/verifier"
-export PYTHONPATH="$tests_dir/lib"
+verifier="$logs_dir/verifier"
+mkdir -p "$verifier"
+# The verifier directory is writable while the agent works: never keep a reward written before grading.
+rm -f "$verifier/reward.json" "$verifier/reward.txt" "$verifier/failbook.json"
+# Run from a neutral directory, in isolated mode: files in /workspace (the agent's) are never imported.
+cd "$tests_dir" 2>/dev/null || cd /
 export FAILBOOK_CASES="$tests_dir/cases"
-python3 -m failbook grade {case} /workspace --seed {seed} \\
-    --json "$logs_dir/verifier/failbook.json" --harbor-reward "$logs_dir/verifier"
+{run} "$tests_dir/lib" grade {case} /workspace --seed {seed} \\
+    --json "$verifier/failbook.json" --harbor-reward "$verifier"
 status=$?
-if [ ! -s "$logs_dir/verifier/reward.json" ]; then
-    echo '{{"reward": 0, "overall": 0, "inconclusive": 1}}' > "$logs_dir/verifier/reward.json"
-    echo 0 > "$logs_dir/verifier/reward.txt"
+if [ ! -s "$verifier/reward.json" ]; then
+    echo '{grader_error_json}' > "$verifier/reward.json"
+    echo 0 > "$verifier/reward.txt"
 fi
-echo "failbook grade exited with $status"
+echo "failbook grade exited with $status (0 pass, 1 fail, 3 inconclusive, 4 grader error)"
 exit 0
 """
 
 SOLVE_SH = """#!/bin/bash
 set -euo pipefail
 here="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
-export PYTHONPATH="$here/lib"
+cd "$here"
 export FAILBOOK_CASES="$here/cases"
-python3 -m failbook solve {case} /workspace --kind reference --seed {seed}
+{run} "$here/lib" solve {case} /workspace --kind reference --seed {seed}
 """
+
+#: Every reward.json has the same keys: Harbor averages each key over trials and counts a missing key as 0.
+GRADER_ERROR_REWARD = {"reward": 0.0, "overall": 0.0, "rules_passed": 0.0, "inconclusive": 0, "grader_error": 1}
 
 
 def write_reward(report, outdir: Path) -> None:
-    """Harbor reward contract: reward.txt plus a reward.json whose top-level values are all numbers."""
-    outdir = Path(outdir)
-    outdir.mkdir(parents=True, exist_ok=True)
+    """Harbor reward contract: reward.txt plus a reward.json whose top-level values are all numbers.
+
+    ``reward``/``overall`` is 1 only for a pass. An inconclusive verdict (the grader could not decide)
+    also gives 0, because Harbor accepts numbers only; ``inconclusive`` = 1 marks those trials so they
+    can be left out (see the README written by ``export_harbor``).
+    """
     reward = 1.0 if report.verdict == "pass" else 0.0
-    data = {
+    _write_reward_files(Path(outdir), {
         "reward": reward,
         "overall": reward,
         "rules_passed": round(report.score, 4),
         "inconclusive": 1 if report.verdict == "inconclusive" else 0,
-    }
+        "grader_error": 0,
+    })
+
+
+def write_grader_error(outdir: Path) -> None:
+    """Rewards for a trial whose grading crashed: no verdict, marked with ``grader_error`` = 1."""
+    _write_reward_files(Path(outdir), dict(GRADER_ERROR_REWARD))
+
+
+def _write_reward_files(outdir: Path, data: dict) -> None:
+    outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "reward.json").write_text(json.dumps(data) + "\n", encoding="utf-8")
-    (outdir / "reward.txt").write_text(f"{reward:g}\n", encoding="utf-8")
+    (outdir / "reward.txt").write_text(f"{data['reward']:g}\n", encoding="utf-8")
 
 
 def _package_src() -> Path:
@@ -129,14 +157,16 @@ def export_task(case: Case, out: Path, *, seed: int = 0, lang: str = "en", skill
     _copy_lib(tests / "lib")
     _copy_case(case, tests / "cases", with_reference=False)
     test_sh = tests / "test.sh"
-    test_sh.write_text(TEST_SH.format(case=case.id, seed=seed), encoding="utf-8", newline="\n")
+    test_sh.write_text(TEST_SH.format(case=case.id, seed=seed, run=_RUN_FAILBOOK,
+                                      grader_error_json=json.dumps(GRADER_ERROR_REWARD)),
+                       encoding="utf-8", newline="\n")
     test_sh.chmod(0o755)
 
     solution = task_dir / "solution"
     _copy_lib(solution / "lib")
     _copy_case(case, solution / "cases", with_reference=True)
     solve_sh = solution / "solve.sh"
-    solve_sh.write_text(SOLVE_SH.format(case=case.id, seed=seed), encoding="utf-8", newline="\n")
+    solve_sh.write_text(SOLVE_SH.format(case=case.id, seed=seed, run=_RUN_FAILBOOK), encoding="utf-8", newline="\n")
     solve_sh.chmod(0o755)
 
     keywords = ", ".join(_toml_str(t) for t in ["failbook", case.spec.get("domain", "spreadsheet"), *case.spec.get("tags", [])])
@@ -173,18 +203,44 @@ workdir = "/workspace"
     return task_dir
 
 
+HARBOR_README = """# Failbook cases as Harbor tasks
+
+Generated by `failbook export harbor`. Run them with Harbor, for example:
+
+```bash
+harbor run -p . -a claude-code -m <model> -k 3
+```
+
+Each trial writes `/logs/verifier/failbook.json` with the per-rule verdicts, and a `reward.json` with
+these numeric keys:
+
+| Key | Meaning |
+|---|---|
+| `reward`, `overall` | 1 only when every rule passes, otherwise 0 |
+| `rules_passed` | share of the decided rules that passed |
+| `inconclusive` | 1 when the grader could not decide (for example a function LibreOffice lacks) |
+| `grader_error` | 1 when the grader itself crashed, so there is no verdict |
+
+Harbor accepts only numbers, so inconclusive and crashed trials also get `reward` 0. They are not failures
+of the agent. Harbor's mean reward (and, for a SkillEvaluator export, pass@k and the lift computed from
+`overall`) counts them as 0, so read the means of `inconclusive` and `grader_error` next to it, and leave
+those trials out when you compute a pass rate. With [jq](https://jqlang.org/), over one job:
+
+```bash
+jq -s '[.[] | .verifier_result.rewards // empty | select(.inconclusive == 0 and .grader_error == 0)]
+       | {decided: length, passed: (map(.reward) | add // 0)}' jobs/<job-name>/*/result.json
+```
+
+Trials without a `verifier_result` (for example a verifier timeout) are left out by `// empty`; Harbor
+itself counts them as 0 as well.
+"""
+
+
 def export_harbor(cases: list[Case], out: Path, *, seed: int = 0, lang: str = "en") -> list[Path]:
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     paths = [export_task(c, out, seed=seed, lang=lang) for c in cases]
-    (out / "README.md").write_text(
-        "# Failbook cases as Harbor tasks\n\n"
-        "Generated by `failbook export harbor`. Run them with Harbor, for example:\n\n"
-        "```bash\nharbor run -p . -a claude-code -m <model> -k 3\n```\n\n"
-        "Each task writes `/logs/verifier/failbook.json` with the per-rule verdicts. "
-        "`reward` is 1 only when every rule passes; `inconclusive` is 1 when the grader could not decide.\n",
-        encoding="utf-8",
-    )
+    (out / "README.md").write_text(HARBOR_README, encoding="utf-8")
     return paths
 
 
@@ -216,6 +272,10 @@ def export_skillevaluator(cases: list[Case], out: Path, *, fix: str, seed: int =
         "harbor:\n"
         "  task_source: native_harbor\n"
         "  n_attempts: 3\n"
+        "  # Rewards are 0 or 1, so an attempt counts as passed only when every rule passed.\n"
+        "  # Inconclusive and grader-error attempts also get overall 0 (Harbor accepts numbers only),\n"
+        "  # so pass@k and the lift count them as not passed. Their share is reported as the custom\n"
+        "  # metrics `inconclusive` and `grader_error`; check both arms before reading the lift.\n"
         "  pass_threshold: 1.0\n\n"
         "grading:\n"
         "  mode: custom_only\n",

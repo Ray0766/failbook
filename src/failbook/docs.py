@@ -84,17 +84,37 @@ def runs_table(case: Case, lang: str) -> str:
                     "每次运行追加一个新文件，不覆盖旧记录。")
         return ("No recorded runs yet. Run one of the commands above and open a pull request with the file it "
                 "writes under `results/`. Every run is a new file; existing records are never overwritten.")
-    head = ("| 日期 | 智能体 | 模型 | 修复 | 运行状态 | 判定 | 未通过的规则 |" if lang == "zh"
-            else "| Date | Agent | Model | Fix | Run status | Verdict | Rules not passed |")
-    lines = [head, "|---|---|---|---|---|---|---|"]
+    head = ("| 日期 | 案例版本 | 智能体 | 模型 | 修复 | 运行状态 | 判定 | 未通过的规则 |" if lang == "zh"
+            else "| Date | Case version | Agent | Model | Fix | Run status | Verdict | Rules not passed |")
+    lines = [head, "|---|---|---|---|---|---|---|---|"]
     for r in runs:
         bad = ", ".join(f"`{x['id']}`" for x in r["rules"] if x["status"] != "pass") or "—"
         agent = r["agent"]["name"] + (f" {r['agent'].get('version')}" if r["agent"].get("version") else "")
+        version = f"v{r['case_version']}" + ("" if r["case_version"] == case.version else
+                                             (" (旧版)" if lang == "zh" else " (older)"))
         lines.append(
-            f"| {r['started_at'][:10]} | {_esc(agent)} | {_esc(r.get('model') or '—')} | {r.get('fix') or '—'} | "
-            f"{r.get('run_status', '—')} | **{r['verdict']}** | {bad} |"
+            f"| {r['started_at'][:10]} | {version} | {_esc(agent)} | {_esc(r.get('model') or '—')} | "
+            f"{r.get('fix') or '—'} | {r.get('run_status', '—')} | **{r['verdict']}** | {bad} |"
         )
     return "\n".join(lines)
+
+
+def _links(kinds: list[str]) -> str:
+    links = [f"[`{k}.py`]({k}.py)" for k in kinds]
+    return links[0] if len(links) == 1 else ", ".join(links[:-1]) + " and " + links[-1]
+
+
+def _validation(case: Case) -> str:
+    """What `failbook verify` proves for this case, naming the solution files it uses."""
+    valid = ["reference", *case.alternatives()]
+    wrong = case.failure_fixtures()
+    their = "its" if len(valid) == 1 else "their"
+    text = (f"{_links(valid)} must pass, also after LibreOffice opens and re-saves {their} output; "
+            "the failure must fail on the rules listed in `case.yaml`")
+    if wrong:
+        text += (f"; {_links(wrong)} ({'another wrong solution' if len(wrong) == 1 else 'other wrong solutions'}) "
+                 "must be graded fail")
+    return text + "; and the untouched input must fail."
 
 
 def case_readme(case: Case) -> str:
@@ -104,7 +124,6 @@ def case_readme(case: Case) -> str:
     cls = case.spec.get("classification", {})
     files_in = ", ".join(f"[`input/{n}`](input/{n})" for n in case.inputs)
     files_fail = ", ".join(f"[`failure/{n}`](failure/{n})" for n in case.outputs)
-    alts = case.alternatives()
     limits = case.spec.get("limitations", [])
     status = str(case.spec.get("status", "draft")).split()[0]
 
@@ -172,7 +191,7 @@ Classification: **{CATEGORY_LABEL['en'].get(cls.get('category', 'undetermined'))
 
 {retest}
 
-How the checker itself is validated: [`reference.py`](reference.py){''.join(f', [`{a}.py`]({a}.py)' for a in alts)} must pass, the failure must fail on the rules listed in `case.yaml`, the untouched input must fail, and the reference must still pass after LibreOffice re-saves it (`failbook verify {case.id} --seeds 3`).
+How the checker itself is validated (`failbook verify {case.id} --seeds 3`): {_validation(case)}
 
 ## Retests
 

@@ -24,7 +24,7 @@ An evidence chain you can follow and rerun:
 
 ## Quick start (no AI, no API key)
 
-Needs Python 3.10+ and LibreOffice (`apt install libreoffice-calc`, `brew install --cask libreoffice`, or
+Needs Python 3.11+ and LibreOffice (`apt install libreoffice-calc`, `brew install --cask libreoffice`, or
 the Windows installer).
 
 ```bash
@@ -39,9 +39,11 @@ grades again ([captured output](docs/evidence/demo-xlsx-001.md)).
 
 ## Why these checks
 
-Most of these failures pass a plain "compare the numbers" check. Failbook adds **live** rules (change an
-input in a copy, recalculate, check that results follow) and **preserve** rules (nothing the task did not
-ask for changed). On the 15 failure artifacts ([full table](docs/evidence/checker-ablation.md)):
+A plain "compare the recalculated numbers with the expected answer" check misses some of these failures,
+and reading the numbers stored in the file instead of recalculating also rejects correct work. Failbook adds
+**live** rules (change an input in a copy, recalculate, check that results follow), **preserve** rules (the
+specific data and structures a case protects are unchanged) and **structure** rules (charts, validation,
+formats). On the 15 failure artifacts ([full table](docs/evidence/checker-ablation.md)): <!-- sync-numbers -->
 
 | Grader | Failures caught | Correct solutions accepted | Empty attempts caught |
 |---|---|---|---|
@@ -51,8 +53,9 @@ ask for changed). On the 15 failure artifacts ([full table](docs/evidence/checke
 
 The failures are Failbook's own reconstructions, chosen because they are subtle; these counts describe the
 graders on this collection, not how often agents fail. Every checker is itself tested on three data variants:
-correct and alternative solutions must pass, the failure must fail on the rules that explain it, an untouched
-input must fail, and a LibreOffice re-save must not change the verdict (`failbook verify --seeds 3`).
+the reference and alternative solutions must pass, also after LibreOffice re-saves them; the failure must fail
+on the rules that explain it; the other wrong answers found in review (`fail_*.py`) must be graded fail; and an
+untouched input must fail (`failbook verify --seeds 3`).
 
 ## Cases
 
@@ -91,8 +94,11 @@ failbook export harbor --out dist/harbor
 harbor run -p dist/harbor -a claude-code -m <model> -k 3
 ```
 
-`failbook run` is **not a sandbox**: the agent runs as your user in a temporary directory. Use Harbor for
-isolated, comparable runs. Submit every attempt as described in [results/README.md](results/README.md);
+`failbook run` is **not a sandbox**: the agent runs unsandboxed as your user and can read and write the rest
+of the file system. Its working directory is a fresh temporary directory outside the checkout (a `--runs-dir`
+inside the checkout is refused), and on a timeout the whole process group is killed. Use Harbor for isolated,
+comparable runs. `failbook grade` exits 0 on pass, 1 on fail, 3 when inconclusive and 4 when the grader could
+not run. Submit every attempt as described in [results/README.md](results/README.md);
 [RESULTS.md](RESULTS.md) shows passes / attempts per case, and deliberately no overall score or ranking.
 
 ## Fixes

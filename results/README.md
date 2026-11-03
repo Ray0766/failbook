@@ -10,13 +10,23 @@ fills `classification.reviewed` and `classification.note`).
 # Failbook drives the agent (not sandboxed: run as a normal user, in a throwaway account or VM)
 failbook run xlsx-004 --agent claude-code --model <model> --attempts 3 --submitter <github-handle>
 
-# Any other tool (a chat app, an IDE agent, a Harbor job): prepare, let the agent work, then record
+# Any other tool (a chat app, an IDE agent): prepare, let the agent work, then record
 failbook prepare xlsx-004 /tmp/try && <agent works on /tmp/try using TASK.md>
 failbook grade xlsx-004 /tmp/try --record results --agent cursor --agent-version 2.3 --model <model> \
     --harness manual --final-message reply.txt --submitter <github-handle>
+
+# A timed-out or crashed attempt is recorded too, with its status
+failbook grade xlsx-004 /tmp/try2 --record results --agent cursor --model <model> --run-status timeout \
+    --timeout 900 --duration 900
+
+# A Harbor trial: grade the trial's workspace and say how it was isolated
+failbook grade xlsx-004 <trial>/workspace --record results --agent claude-code --model <model> \
+    --harness harbor --isolation docker
 ```
 
-Submit **every** attempt, including timeouts and crashes; do not pick the best one. Then run
+Submit **every** attempt, including timeouts and crashes; do not pick the best one. Other `--record` flags:
+`--exit-code`, `--duration`, `--timeout`, `--prompt-file` (the prompt actually given, when it differs from the
+directory's `TASK.md`). Then run
 `failbook docs` and open a pull request.
 
 ## Schema `failbook.result/1`

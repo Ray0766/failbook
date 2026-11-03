@@ -25,6 +25,9 @@ formulas, pandas' `to_excel` writing a new file) is a **model** failure with the
 
 - `run_status`: `completed`, `timeout`, `agent-error` (non-zero exit), or `not-run`.
 - `verdict` (from the grader): `pass`, `fail`, or `inconclusive` (never counted as a failure).
+- If the grader itself cannot finish (for example LibreOffice is missing), `failbook grade` exits 4 with no
+  verdict; inside `failbook run` the attempt is recorded as `inconclusive` with a note, and in Harbor as
+  `grader_error = 1`.
 - `classification.auto`, assigned mechanically: `none` (pass), `task-failure` (completed but failed the
   rules), `agent-or-environment-error` (timeout or agent error), `evaluator-inconclusive`.
 - `classification.reviewed`: filled by a human reviewer with one of the categories above, plus a note.

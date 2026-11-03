@@ -8,6 +8,7 @@ A case directory contains:
 ``reference.py``   ``solve(workdir, meta)``: a correct solution, used to prove the rules accept good work
 ``failure.py``     ``solve(workdir, meta)``: reproduces the recorded failure, proving the rules catch it
 ``alt_*.py``       optional: other valid solutions, which must pass as well
+``fail_*.py``      optional: other wrong solutions (regression fixtures), which must be graded fail
 ``input/``         committed inputs for the canonical seed 0
 ``failure/``       committed failure artifact for seed 0
 """
@@ -44,6 +45,7 @@ TASK_FOOTER = {
 }
 
 _PLACEHOLDER = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
+_EXTRA_SOLUTION = re.compile(r"(?:alt|fail)_[A-Za-z0-9_]+")
 
 
 class CaseError(Exception):
@@ -224,9 +226,13 @@ class Case:
         """Names of alternative valid solutions (``alt_*.py``)."""
         return sorted(p.stem for p in self.dir.glob("alt_*.py"))
 
+    def failure_fixtures(self) -> list[str]:
+        """Names of other wrong solutions that the checker must grade fail (``fail_*.py``)."""
+        return sorted(p.stem for p in self.dir.glob("fail_*.py"))
+
     def solution(self, kind: str) -> ModuleType:
-        if kind not in ("reference", "failure") and not kind.startswith("alt_"):
-            raise CaseError(f"unknown solution kind {kind!r}")
+        if kind not in ("reference", "failure") and not _EXTRA_SOLUTION.fullmatch(kind):
+            raise CaseError(f"unknown solution kind {kind!r} (expected reference, failure, alt_<name> or fail_<name>)")
         path = self.dir / f"{kind}.py"
         if not path.is_file():
             raise CaseError(f"{self.id}: {kind}.py is missing")

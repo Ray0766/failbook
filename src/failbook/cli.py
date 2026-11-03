@@ -11,6 +11,7 @@ from pathlib import Path
 
 from . import __version__
 from .case import Case, CaseError, resolve_cases
+from .engine import EngineUnavailable
 
 
 def _print_report(case: Case, report, *, lang: str = "en") -> None:
@@ -70,11 +71,68 @@ def cmd_prepare(args) -> int:
     return 0
 
 
+#: Exit status of ``failbook grade``.
+GRADE_EXIT = {"pass": 0, "fail": 1, "inconclusive": 3}
+GRADER_ERROR_EXIT = 4
+
+GRADE_EPILOG = """exit status: 0 pass, 1 fail, 3 inconclusive (the grader could not decide),
+4 grader error (for example LibreOffice is missing; no verdict), 2 usage error"""
+
+
+def _grader_error(exc: Exception, harbor_dir: str | None) -> int:
+    """Report that grading itself failed. This is never a verdict on the agent's work."""
+    import subprocess
+    import traceback
+
+    if not isinstance(exc, (EngineUnavailable, OSError, subprocess.SubprocessError)):
+        traceback.print_exc()  # an unexpected grader bug: keep the details for a bug report
+    first_line = (str(exc).strip().splitlines() or [""])[0]
+    print(f"error: the grader could not finish, so there is no verdict (exit {GRADER_ERROR_EXIT}): "
+          f"{type(exc).__name__}: {first_line}", file=sys.stderr)
+    if harbor_dir:
+        from .harbor import write_grader_error
+
+        write_grader_error(Path(harbor_dir))
+    return GRADER_ERROR_EXIT
+
+
+def _record_status(args) -> tuple[str, int | None] | None:
+    """Run status and exit code for ``grade --record``; None (after a message) if they contradict."""
+    from .runner import run_status
+
+    code = args.exit_code
+    status = args.run_status or run_status(code, False)
+    if status == "completed" and code not in (None, 0):
+        print(f"error: --exit-code {code} means the agent failed; use --run-status agent-error "
+              "(or timeout / not-run)", file=sys.stderr)
+        return None
+    if status == "agent-error" and code == 0:
+        print("error: --run-status agent-error contradicts --exit-code 0", file=sys.stderr)
+        return None
+    return status, code
+
+
 def cmd_grade(args) -> int:
     from .grade import grade
 
     case = resolve_cases([args.case])[0]
-    report = grade(case, Path(args.dir), args.seed)
+    workdir = Path(args.dir)
+    if args.record:
+        if not args.agent:
+            print("error: --record needs --agent (and ideally --model)", file=sys.stderr)
+            return 2
+        recorded = _record_status(args)
+        if recorded is None:
+            return 2
+        if args.prompt_file and not Path(args.prompt_file).is_file():
+            print(f"error: --prompt-file {args.prompt_file} does not exist", file=sys.stderr)
+            return 2
+    try:
+        report = grade(case, workdir, args.seed)
+    except CaseError:
+        raise
+    except Exception as exc:
+        return _grader_error(exc, args.harbor_reward)
     if args.json:
         Path(args.json).write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if args.harbor_reward:
@@ -85,20 +143,25 @@ def cmd_grade(args) -> int:
     if args.record:
         from .runner import _now, make_result, sha256_file, write_result
 
-        if not args.agent:
-            print("error: --record needs --agent (and ideally --model)", file=sys.stderr)
-            return 2
+        status, code = recorded
+        # The prompt given to the agent: --prompt-file, else the TASK.md that `failbook prepare` wrote
+        # (unless a fix changed the prompt). Unknown prompts stay null.
+        prompt_path = Path(args.prompt_file) if args.prompt_file else (None if args.fix else workdir / "TASK.md")
+        prompt = prompt_path.read_text(encoding="utf-8") if prompt_path and prompt_path.is_file() else None
+        # `failbook prepare` copies the committed inputs for seed 0. Other seeds are rebuilt on every
+        # prepare and the bytes differ between builds, so their hashes cannot be reconstructed here.
+        inputs = ({n: sha256_file(case.input_dir / n) for n in case.inputs} if args.seed == 0 else {})
         result = make_result(
             case, report, seed=args.seed, lang=args.lang, agent=args.agent, agent_ver=args.agent_version,
             command="", model=args.model, fix=args.fix, harness=args.harness, attempt=1, attempts=1,
-            started_at=_now(), duration=None, exit_code=None, timed_out=False,
+            started_at=_now(), duration=args.duration, exit_code=code, timed_out=status == "timeout",
             final_message=Path(args.final_message).read_text(encoding="utf-8") if args.final_message else "",
-            submitter=args.submitter, notes=args.notes,
-            outputs={n: sha256_file(Path(args.dir) / n) for n in case.outputs},
-            isolation=args.isolation,
+            submitter=args.submitter, notes=args.notes, inputs=inputs, prompt=prompt,
+            outputs={n: sha256_file(workdir / n) for n in case.outputs},
+            isolation=args.isolation, ran=status != "not-run", status=status, timeout_sec=args.timeout,
         )
-        print(f"recorded {write_result(result, Path(args.record))}")
-    return {"pass": 0, "fail": 1}.get(report.verdict, 3)
+        print(f"recorded {write_result(result, Path(args.record))} (run {status})")
+    return GRADE_EXIT.get(report.verdict, 3)
 
 
 def cmd_solve(args) -> int:
@@ -125,8 +188,10 @@ def cmd_verify(args) -> int:
             if o.ok:
                 failed = [r.id for r in o.failure.rules if r.status == "fail"]
                 alts = f" + {len(o.alternatives)} alternative(s)" if o.alternatives else ""
+                fixtures = getattr(o, "fixtures", None) or {}
+                more = f"; {len(fixtures)} other wrong solution(s) fail too" if fixtures else ""
                 print(f"ok    {case.id} seed {o.seed}: reference{alts} pass (also after re-save), "
-                      f"failure caught by {', '.join(failed)}")
+                      f"failure caught by {', '.join(failed)}{more}")
             else:
                 bad += 1
                 print(f"FAIL  {case.id} seed {o.seed}:")
@@ -195,8 +260,8 @@ def cmd_export(args) -> int:
 def cmd_report(args) -> int:
     from .report import write_report
 
-    write_report(Path(args.results), Path(args.out) if args.out else None)
-    return 0
+    # Non-zero when any result file is invalid, so CI catches malformed submissions.
+    return write_report(Path(args.results), Path(args.out) if args.out else None)
 
 
 def cmd_site(args) -> int:
@@ -268,7 +333,8 @@ def main(argv: list[str] | None = None) -> int:
     lang_opt(sp)
     sp.set_defaults(func=cmd_prepare)
 
-    sp = sub.add_parser("grade", help="grade the output files in a directory")
+    sp = sub.add_parser("grade", help="grade the output files in a directory", epilog=GRADE_EPILOG,
+                        formatter_class=argparse.RawDescriptionHelpFormatter)
     sp.add_argument("case")
     sp.add_argument("dir")
     sp.add_argument("--seed", type=int, default=0)
@@ -282,6 +348,14 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--harness", default="manual", help="(with --record) how the run was done: manual, harbor, ...")
     sp.add_argument("--final-message", metavar="FILE", help="(with --record) file with the agent's final reply")
     sp.add_argument("--isolation", default="unknown", help="(with --record) how the agent was isolated, e.g. docker")
+    sp.add_argument("--run-status", choices=["completed", "timeout", "agent-error", "not-run"],
+                    help="(with --record) how the agent run ended; default: completed, or agent-error "
+                         "with a non-zero --exit-code")
+    sp.add_argument("--exit-code", type=int, help="(with --record) the agent's exit code, if known")
+    sp.add_argument("--duration", type=float, metavar="SEC", help="(with --record) how long the agent ran")
+    sp.add_argument("--timeout", type=int, metavar="SEC", help="(with --record) the time limit the agent had")
+    sp.add_argument("--prompt-file", metavar="FILE",
+                    help="(with --record) the prompt given to the agent; default: DIR/TASK.md, unless --fix is set")
     sp.add_argument("--submitter", default="")
     sp.add_argument("--notes", default="")
     lang_opt(sp)
@@ -290,7 +364,8 @@ def main(argv: list[str] | None = None) -> int:
     sp = sub.add_parser("solve", help="apply the reference or failure solution to a directory")
     sp.add_argument("case")
     sp.add_argument("dir")
-    sp.add_argument("--kind", choices=["reference", "failure"], default="reference")
+    sp.add_argument("--kind", default="reference",
+                    help="reference, failure, or the name of a case's alt_*.py / fail_*.py solution")
     sp.add_argument("--seed", type=int, default=0)
     sp.set_defaults(func=cmd_solve)
 
@@ -309,17 +384,23 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--check", action="store_true", help="exit 1 if any generated doc is out of date")
     sp.set_defaults(func=cmd_docs)
 
-    sp = sub.add_parser("run", help="run an agent on cases and record results")
+    sp = sub.add_parser("run", help="run an agent on cases and record results",
+                        description="Run an installed agent CLI on cases and record every attempt. Not a sandbox: "
+                                    "the agent runs as your user and can read the rest of the file system. "
+                                    "Use `failbook export harbor` for isolated runs.")
     sp.add_argument("cases", nargs="*")
     sp.add_argument("--agent", required=True, help="preset name (claude-code, codex, gemini-cli) or 'custom'")
-    sp.add_argument("--cmd", help="command template for --agent custom; placeholders {prompt}, {prompt_file}, {workdir}, {model}")
+    sp.add_argument("--cmd", help="command template for --agent custom; placeholders {prompt}, {prompt_file}, "
+                                   "{workdir}, {model} ({prompt_file} and {workdir} are absolute paths)")
     sp.add_argument("--model", default="", help="model name passed to the agent and recorded in the result")
     sp.add_argument("--seed", type=int, default=0)
     sp.add_argument("--attempts", type=int, default=1, help="attempts per case (all are recorded)")
     sp.add_argument("--fix", help="apply a fix from fixes/ (skill or prompt) before running")
     sp.add_argument("--timeout", type=int, default=900, help="seconds per attempt")
     sp.add_argument("--results", default="results", help="directory to write result files into")
-    sp.add_argument("--runs-dir", default="runs", help="where to keep working directories and logs")
+    sp.add_argument("--runs-dir", default=None,
+                    help="where to keep working directories and logs (default: a new temporary directory); "
+                         "must be outside the Failbook checkout")
     sp.add_argument("--submitter", default="", help="your GitHub handle, recorded in the result")
     sp.add_argument("--dry-run", action="store_true", help="prepare and print the command without running it")
     lang_opt(sp)
@@ -371,6 +452,9 @@ def main(argv: list[str] | None = None) -> int:
     except CaseError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    except EngineUnavailable as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return GRADER_ERROR_EXIT
     except BrokenPipeError:  # output piped into `head` and friends
         sys.stderr.close()
         return 0

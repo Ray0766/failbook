@@ -22,7 +22,7 @@
 
 ## 快速开始（不需要 AI，不需要 API 密钥）
 
-需要 Python 3.10+ 和 LibreOffice（`apt install libreoffice-calc`、`brew install --cask libreoffice` 或 Windows 安装包）。
+需要 Python 3.11+ 和 LibreOffice（`apt install libreoffice-calc`、`brew install --cask libreoffice` 或 Windows 安装包）。
 
 ```bash
 git clone https://github.com/Ray0766/failbook && cd failbook
@@ -35,7 +35,7 @@ scripts/demo-evidence-chain.sh xlsx-001
 
 ## 为什么要这样检查
 
-这些失败大多能通过“对一下数字”的检查。Failbook 增加了**实时性**规则（在副本中修改某个输入、重新计算，检查结果是否跟着变）和**无连带破坏**规则（任务没要求改的东西都没变）。在 15 个失败产物上（[完整表格](docs/evidence/checker-ablation.md)）：
+只做“把重新计算后的数字和预期答案对一下”的检查，会漏掉其中一部分失败；而直接读取文件里缓存的数字、不重新计算，还会把正确的结果判错。Failbook 增加了**实时性**规则（在副本中修改某个输入、重新计算，检查结果是否跟着变）、**无连带破坏**规则（案例要保护的具体数据和结构没有被改动）和**结构**规则（图表、数据验证、格式）。在 15 个失败产物上（[完整表格](docs/evidence/checker-ablation.md)）：<!-- sync-numbers -->
 
 | 评分器 | 抓到的失败 | 接受的正确解 | 抓到的空操作 |
 |---|---|---|---|
@@ -43,7 +43,7 @@ scripts/demo-evidence-chain.sh xlsx-001
 | 只查数值（重新计算） | 11 / 15 | 15 / 15 | 15 / 15 |
 | 只查数值（读文件缓存值，`openpyxl data_only=True`） | 11 / 15 | 3 / 15 | 15 / 15 |
 
-这些失败是 Failbook 自己复现的，专门挑选了隐蔽的模式；这些数字描述的是评分器在本案例集上的表现，不代表智能体犯错的频率。每个检查器本身都在三个数据变体上接受检验：正确解与替代解法必须通过；失败产物必须在解释它的规则上失败；原样交回的输入必须失败；经 LibreOffice 重新保存不得改变判定（`failbook verify --seeds 3`）。
+这些失败是 Failbook 自己复现的，专门挑选了隐蔽的模式；这些数字描述的是评分器在本案例集上的表现，不代表智能体犯错的频率。每个检查器本身都在三个数据变体上接受检验：参考解与替代解法必须通过，经 LibreOffice 重新保存后也要通过；失败产物必须在解释它的规则上失败；复核中发现的其他错误答案（`fail_*.py`）必须被判不通过；原样交回的输入必须失败（`failbook verify --seeds 3`）。
 
 ## 案例
 
@@ -82,7 +82,7 @@ failbook export harbor --out dist/harbor
 harbor run -p dist/harbor -a claude-code -m <model> -k 3
 ```
 
-`failbook run` **不是沙箱**：智能体以你的用户身份在临时目录中运行。需要隔离、可比较的运行时请用 Harbor。请按 [results/README.md](results/README.md) 提交每一次尝试；[RESULTS.md](RESULTS.md) 只显示每个案例的通过次数/尝试次数，刻意不给总分或排名。
+`failbook run` **不是沙箱**：智能体以你的用户身份、在没有隔离的情况下运行，可以读写文件系统的其他部分。它的工作目录是检出目录之外新建的临时目录（拒绝使用检出目录内的 `--runs-dir`），超时时会终止整个进程组。需要隔离、可比较的运行时请用 Harbor。`failbook grade` 的退出码：0 通过，1 不通过，3 无法判定，4 评分器无法运行。请按 [results/README.md](results/README.md) 提交每一次尝试；[RESULTS.md](RESULTS.md) 只显示每个案例的通过次数/尝试次数，刻意不给总分或排名。
 
 ## 修复方案
 

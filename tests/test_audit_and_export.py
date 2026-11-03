@@ -1,9 +1,13 @@
+import shlex
 import shutil
+import subprocess
+import sys
 import tomllib
 
+from failbook import __version__
 from failbook.audit import audit
 from failbook.case import load_case
-from failbook.harbor import export_harbor
+from failbook.harbor import _RUN_FAILBOOK, export_harbor
 
 
 def _errors(findings):
@@ -36,3 +40,24 @@ def test_harbor_export_layout(tmp_path):
     assert not (task / "tests" / "cases" / case.dir.name / "reference.py").exists()
     assert (task / "solution" / "cases" / case.dir.name / "reference.py").exists()
     assert "/workspace" in (task / "instruction.md").read_text()
+    test_sh = (task / "tests" / "test.sh").read_text()
+    assert "python3 -I " in test_sh and "python3 -m" not in test_sh
+    assert 'rm -f "$verifier/reward.json"' in test_sh  # a reward left by the agent is never kept
+    assert "grader_error" in (tmp_path / "README.md").read_text()
+
+
+def test_harbor_grader_never_imports_files_from_the_workspace(tmp_path):
+    """Files an agent leaves in /workspace must not shadow the grader or the standard library."""
+    case = load_case("xlsx-002")
+    export_harbor([case], tmp_path / "out")
+    lib = tmp_path / "out" / "xlsx-002" / "tests" / "lib"
+    ws = tmp_path / "workspace"
+    (ws / "failbook").mkdir(parents=True)
+    (ws / "failbook" / "__init__.py").write_text("raise SystemExit('planted failbook package imported')\n")
+    (ws / "inspect.py").write_text("raise SystemExit('planted inspect.py imported')\n")
+    runner = _RUN_FAILBOOK.replace("python3", sys.executable, 1)
+    proc = subprocess.run(f"{runner} {shlex.quote(str(lib))} --version", shell=True, cwd=ws, capture_output=True,
+                          text=True, env={"PYTHONPATH": str(ws), "PATH": "/usr/bin:/bin"})
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == f"failbook {__version__}"
+

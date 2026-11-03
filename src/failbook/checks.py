@@ -15,12 +15,14 @@ import re
 import shutil
 import tempfile
 import traceback
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Iterable
 
 import openpyxl
 from openpyxl.formula.tokenizer import Token, Tokenizer
+from openpyxl.utils.cell import range_boundaries
 
 from . import xlsx as X
 from .engine import default_engine
@@ -36,7 +38,7 @@ RULE_KINDS = {
     "content": "the requested change is present, with the right values and types",
     "value": "recalculated results are correct",
     "live": "results follow when an input changes (formulas, not pasted numbers)",
-    "preserve": "nothing the task did not ask for was changed",
+    "preserve": "specific things the task did not ask to change (named in each rule) are unchanged",
     "structure": "formats, charts, validation and other non-cell structure",
 }
 
@@ -69,7 +71,7 @@ def rule(id: str, title: str, *, requirement: str, kind: str = "value", title_zh
 
     ``requirement`` quotes (or closely paraphrases) the sentence of the task that
     this rule verifies. Every rule must trace back to something the agent was
-    actually asked to do; see docs/fairness.md.
+    actually asked to do; see "Rules for rules" in docs/WRITING_CASES.md.
     """
 
     if kind not in RULE_KINDS:
@@ -150,6 +152,274 @@ class Values:
 
 _CELLISH = re.compile(r"^\$?[A-Za-z]{1,3}\$?\d+(:\$?[A-Za-z]{1,3}\$?\d+)?$|^\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3}$|^\$?\d+:\$?\d+$")
 
+#: How many cells the #NAME? diagnosis may visit while following an error to its origin.
+_PRECEDENT_BUDGET = 50_000
+
+
+def _is_name_error(value: Any) -> bool:
+    return isinstance(value, str) and value.strip().upper() == "#NAME?"
+
+
+def _split_sheet(text: str) -> tuple[list[str], str] | None:
+    """``"'Jan 1:Mar 1'!B2"`` -> ``(["Jan 1", "Mar 1"], "B2")``; None if there is no sheet part.
+
+    A 3-D span gives both end sheets (sheet names cannot contain ``:``). An
+    external reference (``[1]Sheet!A1``) gives an empty sheet list.
+    """
+    if text.startswith("'"):
+        i = 1
+        while i < len(text):
+            if text[i] == "'":
+                if text[i + 1:i + 2] == "'":
+                    i += 2
+                    continue
+                break
+            i += 1
+        if text[i + 1:i + 2] != "!":
+            return None
+        name, rest = text[1:i].replace("''", "'"), text[i + 2:]
+    else:
+        if "!" not in text:
+            return None
+        name, rest = text.split("!", 1)
+    if name.startswith("[") or not name:
+        return [], rest
+    return name.split(":"), rest
+
+
+class _References:
+    """What the sheets, defined names and tables of one workbook make of a formula."""
+
+    def __init__(self, wb):
+        self.wb = wb
+        self.sheets = {s.casefold(): s for s in wb.sheetnames}
+        self.global_names = {n.casefold(): d for n, d in _items(wb.defined_names)}
+        self.local_names = {ws.title: {n.casefold(): d for n, d in _items(getattr(ws, "defined_names", {}))}
+                            for ws in wb.worksheets}
+        self.any_name = set(self.global_names).union(*self.local_names.values())
+        self.tables = {}
+        for ws in wb.worksheets:
+            for t_name, table in _items(getattr(ws, "tables", {})):
+                ref = table if isinstance(table, str) else getattr(table, "ref", None)
+                if ref:
+                    self.tables[t_name.casefold()] = (ws.title, ref)
+
+    # -- what a name or table refers to ------------------------------------------
+    def _name(self, sheet: str, name: str):
+        local = self.local_names.get(sheet, {})
+        return local.get(name.casefold()) or self.global_names.get(name.casefold())
+
+    def _name_problem(self, defn, seen: frozenset = frozenset()) -> str | None:
+        text = str(getattr(defn, "attr_text", "") or "")
+        if defn.name.casefold() in seen:
+            return None
+        seen = seen | {defn.name.casefold()}
+        tokens = _tokens("=" + text)
+        if tokens is None:
+            return None
+        scope = self.wb.sheetnames[defn.localSheetId] if getattr(defn, "localSheetId", None) is not None \
+            and defn.localSheetId < len(self.wb.sheetnames) else None
+        for tok in tokens:
+            if _is_ref_error(tok):
+                return "contains a broken reference (#REF!)"
+            if tok.type != Token.OPERAND or tok.subtype != Token.RANGE:
+                continue
+            split = _split_sheet(tok.value)
+            if split is not None:
+                missing = [s for s in split[0] if s.casefold() not in self.sheets]
+                if missing:
+                    return f"points to a sheet that does not exist ({missing[0]!r})"
+            elif not _CELLISH.match(tok.value) and "[" not in tok.value:
+                inner = self._name(scope, tok.value) if scope else self.global_names.get(tok.value.casefold())
+                if inner is not None:
+                    problem = self._name_problem(inner, seen)
+                    if problem:
+                        return f"{problem} (through the name {inner.name} = {inner.attr_text})"
+        return None
+
+    # -- one formula ------------------------------------------------------------------
+    def problem(self, sheet: str, formula: str) -> str | None:
+        """A fact about ``formula`` (on ``sheet``) that makes it a broken reference, or None."""
+        tokens = _tokens(formula)
+        if tokens is None:
+            return None
+        local = _local_names(tokens)
+        for tok in tokens:
+            if _is_ref_error(tok):
+                return "contains a broken reference"
+            if tok.type != Token.OPERAND or tok.subtype != Token.RANGE:
+                continue
+            text = tok.value
+            split = _split_sheet(text)
+            if split is not None:
+                sheets, rest = split
+                for s in sheets:
+                    if s.casefold() not in self.sheets:
+                        return f"refers to a sheet that does not exist ({s!r})"
+                if len(sheets) == 1 and rest and not _CELLISH.match(rest) and "!" not in rest:
+                    defn = self.local_names.get(self.sheets[sheets[0].casefold()], {}).get(rest.casefold())
+                    if defn is not None:
+                        problem = self._name_problem(defn)
+                        if problem:
+                            return f"uses the name {text} (= {defn.attr_text}), which {problem}"
+                tail = rest.split(":", 1)[1] if ":" in rest else ""
+                tail_split = _split_sheet(tail) if "!" in tail else None
+                if tail_split:
+                    for s in tail_split[0]:
+                        if s.casefold() not in self.sheets:
+                            return f"refers to a sheet that does not exist ({s!r})"
+                continue
+            if "[" in text:  # structured reference: Table[Column], [@Column], ...
+                table = text.split("[", 1)[0]
+                if table and table.casefold() not in self.tables and table.casefold() not in self.any_name:
+                    return f"refers to a table that does not exist ({table!r})"
+                continue
+            if _CELLISH.match(text) or text.casefold() in local or text.lower().startswith("_xl"):
+                continue  # a cell, a name the formula defines itself, or an Excel-internal token (_xlpm., _xleta.)
+            defn = self._name(sheet, text)
+            if defn is not None:
+                problem = self._name_problem(defn)
+                if problem:
+                    return f"uses the name {text} (= {defn.attr_text}), which {problem}"
+                continue
+            if text.casefold() in self.any_name or text.casefold() in self.tables:
+                continue
+            return f"refers to an undefined name {text!r}"
+        return None
+
+    def precedents(self, sheet: str, formula: str) -> Iterable[tuple]:
+        """Cell ranges ``formula`` reads directly: (sheet, min_col, min_row, max_col, max_row).
+
+        A bound is None for a whole column or row.
+        """
+        tokens = _tokens(formula) or []
+        for tok in tokens:
+            if tok.type != Token.OPERAND or tok.subtype != Token.RANGE:
+                continue
+            yield from self._ranges(sheet, tok.value, frozenset())
+
+    def _ranges(self, sheet: str, text: str, seen: frozenset):
+        split = _split_sheet(text)
+        if split is not None:
+            sheets, rest = split
+            if not sheets or not _CELLISH.match(rest):
+                return
+            titles = [self.sheets.get(s.casefold()) for s in sheets]
+            if None in titles:
+                return
+            order = self.wb.sheetnames
+            lo, hi = sorted(order.index(t) for t in (titles[0], titles[-1]))
+            for title in order[lo:hi + 1]:
+                yield (title, *_bounds(rest))
+            return
+        if _CELLISH.match(text):
+            yield (sheet, *_bounds(text))
+            return
+        if "[" in text:
+            table = self.tables.get(text.split("[", 1)[0].casefold())
+            if table:
+                yield (table[0], *_bounds(table[1]))
+            return
+        if text.casefold() in self.tables and self._name(sheet, text) is None:
+            title, ref = self.tables[text.casefold()]
+            yield (title, *_bounds(ref))
+            return
+        defn = self._name(sheet, text)
+        if defn is None or defn.name.casefold() in seen:
+            return
+        for tok in _tokens("=" + str(defn.attr_text or "")) or []:
+            if tok.type == Token.OPERAND and tok.subtype == Token.RANGE:
+                yield from self._ranges(sheet, tok.value, seen | {defn.name.casefold()})
+
+
+def _items(mapping) -> list:
+    try:
+        return list(mapping.items())
+    except Exception:  # pragma: no cover - unexpected openpyxl container
+        return []
+
+
+def _tokens(formula: str) -> list[Token] | None:
+    """The formula's tokens without white space, or None if it cannot be parsed.
+
+    A range operand loses the ``@`` (implicit intersection) and the ``:`` it can
+    carry when the range operator joins it to a function, as in ``OFFSET(...):A5``.
+    """
+    try:
+        items = Tokenizer(formula).items
+    except Exception:
+        return None
+    out = []
+    for tok in items:
+        if tok.type == Token.WSPACE:
+            continue
+        if tok.type == Token.OPERAND and tok.subtype == Token.RANGE:
+            value = tok.value.lstrip("@").strip(":")
+            if not value:
+                continue
+            tok = Token(value, Token.OPERAND, Token.RANGE)
+        out.append(tok)
+    return out
+
+
+def _is_ref_error(tok) -> bool:
+    return tok.type == Token.OPERAND and tok.subtype in (Token.ERROR, Token.RANGE) and "#REF!" in tok.value.upper()
+
+
+#: Functions that take a LAMBDA, to which a function can also be passed by name (``BYROW(A1:C3, SUM)``).
+_LAMBDA_TAKERS = {"BYROW", "BYCOL", "MAP", "REDUCE", "SCAN", "MAKEARRAY", "GROUPBY", "PIVOTBY"}
+
+
+def _function_name(tok: Token) -> str:
+    """``"_xlfn.LET("`` -> ``"LET"``; ``"A2:INDEX("`` -> ``"INDEX"``."""
+    return tok.value[:-1].rsplit(":", 1)[-1].lstrip("@").rsplit(".", 1)[-1].upper()
+
+
+def _local_names(tokens: list[Token]) -> set[str]:
+    """Bare names a formula gives a meaning to itself, so they need no defined name.
+
+    These are LET names, LAMBDA parameters, and a function passed by name as a
+    whole argument of BYROW, MAP and the like. They are collected generously
+    (every bare name in a LET name position or in any LAMBDA argument), because
+    missing a real undefined name only makes the verdict inconclusive, while
+    taking a parameter for an undefined name would fail correct work.
+    """
+    local: set[str] = set()
+    stack: list[list] = []  # [function name, argument index]
+    for i, tok in enumerate(tokens):
+        if tok.subtype == Token.OPEN:
+            stack.append([_function_name(tok) if tok.type == Token.FUNC else "", 0])
+        elif tok.subtype == Token.CLOSE:
+            if stack:
+                stack.pop()
+        elif tok.type == Token.SEP and tok.subtype == Token.ARG and stack:
+            stack[-1][1] += 1
+        elif tok.type == Token.OPERAND and tok.subtype == Token.RANGE and stack:
+            func, arg = stack[-1]
+            if (func == "LET" and arg % 2 == 0) or func == "LAMBDA":
+                local.add(tok.value.casefold())
+            elif func in _LAMBDA_TAKERS and _whole_argument(tokens, i):
+                local.add(tok.value.casefold())
+    return local
+
+
+def _whole_argument(tokens: list[Token], i: int) -> bool:
+    def boundary(tok: Token | None, edge: str) -> bool:
+        return tok is not None and (tok.subtype == edge or (tok.type == Token.SEP and tok.subtype == Token.ARG))
+
+    before = tokens[i - 1] if i > 0 else None
+    after = tokens[i + 1] if i + 1 < len(tokens) else None
+    return boundary(before, Token.OPEN) and boundary(after, Token.CLOSE)
+
+
+def _bounds(ref: str) -> tuple[int | None, int | None, int | None, int | None]:
+    min_col, min_row, max_col, max_row = range_boundaries(ref.replace("$", ""))
+    if min_col is not None and max_col is not None and min_col > max_col:
+        min_col, max_col = max_col, min_col
+    if min_row is not None and max_row is not None and min_row > max_row:
+        min_row, max_row = max_row, min_row
+    return min_col, min_row, max_col, max_row
+
 
 class Context:
     """Everything a rule may look at."""
@@ -168,7 +438,7 @@ class Context:
         self._wb: dict[tuple[str, bool], Any] = {}
         self._input: dict[tuple[str, bool], Any] = {}
         self._values: dict[str, dict[str | None, Values] | BaseException] = {}
-        self._diagnosis: dict[str, str | None] = {}
+        self._diagnosis: dict[tuple, str | None] = {}
         self._tmp = Path(tempfile.mkdtemp(prefix="failbook-grade-"))
 
     # -- files --------------------------------------------------------------------
@@ -316,73 +586,75 @@ class Context:
 
     def _raise_for_error(self, values: Values, ref: str, v: str, label: str | None = None):
         label = label or ref
-        source = values.source
         if v.strip().upper() == "#NAME?":
-            broken = self.broken_references(source)
-            if broken:
-                raise Fail(f"{label} evaluates to #NAME? because {broken}")
+            cause = self.explain_name_error(values, ref)
+            if cause:
+                raise Fail(f"{label} evaluates to #NAME? because {cause}")
             raise Inconclusive(
-                f"{label} evaluates to #NAME? and no broken reference was found; the formula may use a "
-                "function the recalculation engine does not support (or that was saved without its "
-                "_xlfn. prefix). Re-check with a newer LibreOffice or Excel before counting this as a failure."
+                f"{label} evaluates to #NAME? and no broken reference was found in its formula or in the "
+                "formulas it depends on; it may use a function the recalculation engine does not support (or "
+                "one saved without its _xlfn. prefix). Re-check with a newer LibreOffice or Excel before "
+                "counting this as a failure."
             )
         raise Fail(f"{label} evaluates to {v}")
 
-    def broken_references(self, name: str | None = None) -> str | None:
-        """Describe the first formula that points to a missing sheet or name, if any."""
-        name = name or self.primary
-        if name in self._diagnosis:
-            return self._diagnosis[name]
-        wb = self.wb(name)
-        sheets = set(wb.sheetnames)
-        names = set()
-        try:
-            names |= set(wb.defined_names.keys())
-        except Exception:  # pragma: no cover - older openpyxl
-            pass
-        for ws in wb.worksheets:
-            try:
-                names |= set(ws.defined_names.keys())
-            except Exception:  # pragma: no cover
-                pass
-        lowered_sheets = {s.casefold() for s in sheets}
-        lowered_names = {n.casefold() for n in names}
-        found = None
-        for ws in wb.worksheets:
-            for row, col, value in X.used_cells(ws):
-                formula = X.formula_text(value)
-                if not formula:
+    def explain_name_error(self, values: Values, ref: str) -> str | None:
+        """Name a broken reference that explains the ``#NAME?`` in ``ref``, or return None.
+
+        Only the cell's own formula and the cells it depends on that also evaluate to
+        ``#NAME?`` are examined, so an unrelated problem elsewhere in the workbook is
+        never blamed. A cause is reported only when it is a fact about the file: a
+        reference to a missing sheet or table, a literal ``#REF!``, a defined name that
+        points to a missing sheet or contains ``#REF!``, an undefined name, or an error
+        value stored as a constant. LET/LAMBDA parameters, structured references to
+        existing tables and function names are not names that need defining.
+        """
+        key = (values.source, getattr(values, "label", None), ref)
+        if key not in self._diagnosis:
+            self._diagnosis[key] = self._explain_name_error(values, ref)
+        return self._diagnosis[key]
+
+    def _explain_name_error(self, values: Values, ref: str) -> str | None:
+        wb = self.wb(values.source)
+        refs = _References(wb)
+        calc = getattr(values, "wb", None)  # recalculated values, to follow the error to its origin
+        sheet, coord = X.split_ref(ref)
+        start = (sheet, *X.coord_to_rc(coord))
+        queue, seen, budget = deque([start]), {start}, _PRECEDENT_BUDGET
+        while queue:
+            title, row, col = queue.popleft()
+            if title not in wb.sheetnames:
+                continue
+            cell = wb[title]._cells.get((row, col))
+            raw = cell.value if cell is not None else None
+            where = X.make_ref(title, (row, col))
+            formula = X.formula_text(raw)
+            if formula is None:
+                if X.is_error(raw):
+                    return f"{where} holds the error value {raw} as a constant, not a formula"
+                continue
+            problem = refs.problem(title, formula)
+            if problem:
+                return f"{where} {problem}: {formula}"
+            if calc is None:
+                continue
+            for p_sheet, min_col, min_row, max_col, max_row in refs.precedents(title, formula):
+                if p_sheet not in calc.sheetnames:
                     continue
-                where = X.make_ref(ws.title, (row, col))
-                if "#REF!" in formula.upper():
-                    found = f"{where} contains a broken reference: {formula}"
-                    break
-                try:
-                    tokens = Tokenizer(formula).items
-                except Exception:
-                    continue
-                for tok in tokens:
-                    if tok.type != Token.OPERAND or tok.subtype != Token.RANGE:
-                        continue
-                    text = tok.value
-                    if "!" in text:
-                        sheet = text.rsplit("!", 1)[0]
-                        if sheet.startswith("'") and sheet.endswith("'"):
-                            sheet = sheet[1:-1].replace("''", "'")
-                        if sheet.startswith("["):
-                            continue  # external workbook reference
-                        if sheet.casefold() not in lowered_sheets:
-                            found = f"{where} refers to a sheet that does not exist ({sheet!r}): {formula}"
-                            break
-                    elif not _CELLISH.match(text) and text.casefold() not in lowered_names:
-                        found = f"{where} refers to an undefined name {text!r}: {formula}"
-                        break
-                if found:
-                    break
-            if found:
-                break
-        self._diagnosis[name] = found
-        return found
+                cws = calc[p_sheet]
+                max_row = min(max_row or cws.max_row, cws.max_row)
+                max_col = min(max_col or cws.max_column, cws.max_column)
+                for r in range(min_row or 1, max_row + 1):
+                    for c in range(min_col or 1, max_col + 1):
+                        budget -= 1
+                        if budget < 0:
+                            return None
+                        got = cws._cells.get((r, c))
+                        node = (p_sheet, r, c)
+                        if got is not None and _is_name_error(got.value) and node not in seen:
+                            seen.add(node)
+                            queue.append(node)
+        return None
 
     def cleanup(self) -> None:
         shutil.rmtree(self._tmp, ignore_errors=True)

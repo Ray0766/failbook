@@ -47,10 +47,11 @@ project's own repository, package metadata or installed source, as each note say
 
 - **Decision.** Each case has 3 to 7 rules in Python. Every rule quotes the sentence of the task it checks.
   Rules have a *kind*: content, value, **live** (change an input in a copy, recalculate, check that results
-  follow), **preserve** (nothing else changed) and structure (charts, validation, formats). No LLM judge:
+  follow), **preserve** (the specific data and structures a case protects are unchanged, each rule names what it
+  covers) and structure (charts, validation, formats). No LLM judge:
   nothing in these cases needs semantic judgement, and the project rules forbid using another model's
   opinion as ground truth.
-- **Why live and preserve rules.** A value comparison accepts numbers pasted where formulas were asked for,
+- **Why live, preserve and structure rules.** A value comparison accepts numbers pasted where formulas were asked for,
   and ignores collateral damage. Measured on the 15 failure artifacts
   ([evidence/checker-ablation.md](evidence/checker-ablation.md)):
 
@@ -63,8 +64,9 @@ project's own repository, package metadata or installed source, as each note say
   This is the release's core, demonstrable claim. It is measured on reconstructed failures; it does not say
   how often agents make these mistakes.
 - **Checker validation** (`failbook verify --seeds 3`, run in CI): the reference and every alternative valid
-  solution pass, the failure fails on the rules named in `case.yaml`, the untouched input fails, and the
-  reference still passes after a LibreOffice re-save. Seeds generate different data for the same case, which
+  solution (`alt_*.py`) pass, also after LibreOffice re-saves their output; the failure fails on the rules named
+  in `case.yaml`; every regression fixture (`fail_*.py`, other wrong solutions found in review) is graded
+  exactly `fail`; and the untouched input fails. Seeds generate different data for the same case, which
   tests that rules do not depend on one dataset and gives retests a way around memorised answers.
 
 ## D4. Run agents through Harbor (and thereby SkillEvaluator); keep a thin local runner
@@ -73,7 +75,12 @@ project's own repository, package metadata or installed source, as each note say
   attempts and trajectory logs. Building that is out of scope.
 - **Decision.** `failbook export harbor` writes standard Harbor tasks (`task.toml` schema 1.4, Dockerfile,
   `tests/test.sh` writing a flat numeric `reward.json`, `solution/solve.sh`). The grader is uploaded only
-  after the agent finishes, so the agent cannot read the rules or solutions. `failbook export skillevaluator`
+  after the agent finishes, so the agent cannot read the rules or solutions, and `test.sh` runs it with
+  `python3 -I` from the tests directory, so files the agent leaves in `/workspace` cannot shadow it.
+  `reward.json` always has the same keys (`reward`, `overall`, `rules_passed`, `inconclusive`,
+  `grader_error`); an inconclusive or crashed grading gets reward 0 with its flag set to 1, because Harbor's
+  mean (and SkillEvaluator's pass@k and lift) count it as 0. The export README explains how to exclude those
+  trials. `failbook export skillevaluator`
   packages a skill fix with the cases as native Harbor evals (`grading.mode: custom_only`), so NVIDIA
   SkillEvaluator's Tier 3 can measure the skill's lift (with vs without).
 - **Sources.** Harbor 0.24.0 source (installed) and PyPI (0.25.0 released 2026-10-25). SkillEvaluator 0.7.0
@@ -86,8 +93,10 @@ project's own repository, package metadata or installed source, as each note say
   network and routes model calls through a proxy; `inspect_swe` 0.2.72 provides Claude Code, Codex and Gemini
   agents; `inspect-harbor` 1.0.0 runs Harbor tasks inside Inspect, and its log viewer is richer. Because
   Inspect can consume Harbor tasks, exporting to Harbor keeps both paths open. Not yet tested end to end here.
-- **Local runner.** `failbook run` drives an installed CLI in a temporary directory. It is **not a sandbox**
-  and is documented as such; presets were checked against current CLIs (Codex removed `--full-auto` in 0.147.0,
+- **Local runner.** `failbook run` drives an installed CLI in a fresh temporary directory outside the
+  checkout (a `--runs-dir` inside it is refused, so the agent does not start next to the reference solutions).
+  It is **not a sandbox**: the agent runs as your user and can read the whole file system; on a timeout the
+  whole process group is killed. Presets were checked against current CLIs (Codex removed `--full-auto` in 0.147.0,
   so the preset uses `--sandbox workspace-write`; Gemini CLI needs `--skip-trust` for `--yolo` to apply;
   Claude Code refuses `--dangerously-skip-permissions` as root outside a recognised sandbox).
 - **Limits.** No Docker daemon was available in the build environment, so no Harbor job was executed with a
@@ -109,7 +118,9 @@ project's own repository, package metadata or installed source, as each note say
 ## D6. Results: append-only records, counts not rates, no ranking
 
 - **Decision.** One JSON file per attempt in `results/<case>/`, never edited or overwritten (a review adds a
-  field or a new file). Each record has the agent and version, model, fix, harness, seed, run status
+  field or a new file). `failbook run` fills the prompt and input hashes for every seed; `failbook grade
+  --record` takes the prompt from the directory's `TASK.md` or `--prompt-file` and records timeouts and agent
+  errors with `--run-status`. Timeouts and agent errors are reported apart from task failures. Each record has the agent and version, model, fix, harness, seed, run status
   (completed / timeout / agent-error), a mechanical classification, input/output/prompt SHA-256, environment,
   budget (`null` when unknown) and the final message. `RESULTS.md` shows *passed / attempts* per case and
   configuration and deliberately has no cross-case total or ranking.
@@ -146,3 +157,18 @@ project's own repository, package metadata or installed source, as each note say
 - **Visual system.** System fonts with CJK fallbacks, 13 to 30 px scale, colour only for verdicts, links and
   focus; verdicts are glyph + word (WCAG 2.2 1.4.1), 2 px focus ring, no page-level horizontal scroll at
   320 px (checked with Playwright on five pages), `prefers-reduced-motion` respected. Not a full WCAG audit.
+
+## D9. An independent adversarial review before release
+
+- **What.** Before merging, eight reviewer agents with separate lenses (checker fairness for cases 001-008 and
+  009-015, core bugs, accuracy of public claims) tried to break the release. Each finding needed reproduction
+  commands; a second, skeptical agent per lens tried to refute it. 52 findings were reported and 51 survived.
+- **Examples.** Graders that let partly hard-coded answers pass because a live rule perturbed one row; a stale
+  defined name graded inconclusive instead of fail; a chart over a named range graded fail; Harbor's
+  `test.sh` importable from the agent's workspace; `failbook run` defaulting to a directory inside the
+  checkout; "observed" texts that did not match the committed artifacts; a headline sentence contradicted by
+  its own table.
+- **Handling.** Each was fixed in the file group that owns it. Wrong solutions the reviewers wrote became
+  `fail_*.py` regression fixtures and valid ones `alt_*.py`, so `failbook verify` keeps checking them.
+- **Limits.** The reviewers are models, not ground truth; their findings were accepted only with a reproduced
+  failure. A second review was not run after the fixes.

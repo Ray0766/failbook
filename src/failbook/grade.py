@@ -67,24 +67,60 @@ class VerifyOutcome:
     reference: GradeReport
     failure: GradeReport
     problems: list[str] = field(default_factory=list)
+    #: ``alt_*.py``: other valid solutions, graded as written.
     alternatives: dict[str, GradeReport] = field(default_factory=dict)
+    #: ``fail_*.py``: other wrong solutions (regression fixtures), each expected to be graded fail.
+    fixtures: dict[str, GradeReport] = field(default_factory=dict)
+    #: The reference and every alternative after LibreOffice opened and re-saved their output.
+    resaved: dict[str, GradeReport] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
         return not self.problems
 
 
+def _resave(workdirs: dict[str, Path], outputs: list[str], tmp: Path, engine) -> dict[str, Path]:
+    """Open and re-save each solution's output files with LibreOffice, in one batch.
+
+    ``workdirs`` maps a solution kind to its working directory; the result maps the
+    kind to a directory holding the re-saved files under their original names.
+    """
+    staging, out = tmp / "_resave_in", tmp / "_resave_out"
+    staging.mkdir(parents=True)
+    origin: dict[Path, tuple[str, str]] = {}
+    for kind, work in workdirs.items():
+        for name in outputs:
+            src = work / name
+            if src.is_file():
+                staged = staging / f"{kind}__{name}"
+                shutil.copyfile(src, staged)
+                origin[staged.resolve()] = (kind, name)
+    mapping = engine.recalc(list(origin), out) if origin else {}
+    dirs = {}
+    for kind in workdirs:
+        dirs[kind] = tmp / "resaved" / kind
+        dirs[kind].mkdir(parents=True)
+    for staged, saved in mapping.items():
+        kind, name = origin[Path(staged).resolve()]
+        shutil.copyfile(saved, dirs[kind] / name)
+    return dirs
+
+
 def verify(case: Case, seeds: list[int], *, engine=None) -> list[VerifyOutcome]:
     """Prove the checker is fair and sharp for each seed.
 
     * the reference solution must pass every rule (no false failures),
-    * the untouched input (an agent that did nothing) must fail,
-    * the failure reproduction must fail, and fail on the rules the case says
-      it fails (so the case catches the failure for the right reason),
-    * the reference output, opened and re-saved by a spreadsheet application,
-      must still pass (the checks do not depend on how a file was written), and
     * every alternative solution (``alt_*.py``: other valid ways to do the task)
-      must pass too.
+      must pass too,
+    * the output of the reference and of every alternative, opened and re-saved by
+      a spreadsheet application, must still pass (the checks do not depend on how a
+      file was written),
+    * the untouched input (an agent that did nothing) must fail,
+    * the failure reproduction must fail, and fail on the rules the case says it
+      fails (so the case catches the failure for the right reason), and
+    * every failure fixture (``fail_*.py``: other wrong solutions) must be graded
+      fail; an inconclusive verdict is a problem too, because it would not be
+      counted against an agent that made the same mistake.
     """
     engine = engine or default_engine()
     outcomes = []
@@ -93,17 +129,19 @@ def verify(case: Case, seeds: list[int], *, engine=None) -> list[VerifyOutcome]:
             tmp = Path(tmp)
             inputs = tmp / "input"
             meta = case.build(seed, inputs, engine=engine)
-            reports = {}
-            for kind in ("reference", "failure"):
-                work = tmp / kind
+            alternatives, fixtures = case.alternatives(), case.failure_fixtures()
+            reports: dict[str, GradeReport] = {}
+            for kind in ("reference", "failure", *alternatives, *fixtures):
+                work = tmp / "solved" / kind
                 shutil.copytree(inputs, work)
                 case.solve(kind, work, meta)
                 reports[kind] = grade(case, work, seed, engine=engine, input_dir=inputs)
             problems = []
             ref, fail = reports["reference"], reports["failure"]
-            for r in ref.rules:
-                if r.status != PASS:
-                    problems.append(f"reference: rule {r.id} is {r.status}: {r.detail}")
+            for kind in ("reference", *alternatives):
+                for r in reports[kind].rules:
+                    if r.status != PASS:
+                        problems.append(f"{kind}: rule {r.id} is {r.status}: {r.detail}")
             if fail.verdict != FAIL:
                 problems.append(f"failure reproduction was graded {fail.verdict}, expected fail")
             failed_ids = {r.id for r in fail.rules if r.status == FAIL}
@@ -112,30 +150,31 @@ def verify(case: Case, seeds: list[int], *, engine=None) -> list[VerifyOutcome]:
                     problems.append(f"failure reproduction should fail rule {expected} but it did not")
             if not case.expected_failures:
                 problems.append("case.yaml must list failure.failing_rules")
+            for kind in fixtures:
+                rep = reports[kind]
+                if rep.verdict != FAIL:
+                    undecided = "; ".join(f"{r.id} is {r.status}: {r.detail}" for r in rep.rules
+                                          if r.status != PASS)
+                    problems.append(f"{kind} (a wrong solution) was graded {rep.verdict}, expected fail"
+                                    + (f" ({undecided})" if undecided else ""))
             # Doing nothing must never pass: grade the untouched inputs.
             noop = grade(case, inputs, seed, engine=engine, input_dir=inputs)
             if noop.verdict != FAIL:
                 problems.append(f"untouched input was graded {noop.verdict}; an empty attempt must fail")
             # Re-saved by LibreOffice, like a user opening and saving the file.
-            resaved = tmp / "resaved"
-            names = [tmp / "reference" / n for n in case.outputs]
-            mapping = engine.recalc(names, resaved / "_out")
-            (resaved / "work").mkdir(parents=True)
-            for src, out in mapping.items():
-                shutil.copyfile(out, resaved / "work" / src.name)
-            rs = grade(case, resaved / "work", seed, engine=engine, input_dir=inputs)
-            for r in rs.rules:
-                if r.status != PASS:
-                    problems.append(f"reference re-saved by LibreOffice: rule {r.id} is {r.status}: {r.detail}")
-            alternatives = {}
-            for alt in case.alternatives():
-                work = tmp / alt
-                shutil.copytree(inputs, work)
-                case.solve(alt, work, meta)
-                rep = grade(case, work, seed, engine=engine, input_dir=inputs)
-                alternatives[alt] = rep
-                for r in rep.rules:
+            resaved_dirs = _resave({k: tmp / "solved" / k for k in ("reference", *alternatives)},
+                                   case.outputs, tmp, engine)
+            resaved = {}
+            for kind, work in resaved_dirs.items():
+                rs = grade(case, work, seed, engine=engine, input_dir=inputs)
+                resaved[kind] = rs
+                for r in rs.rules:
                     if r.status != PASS:
-                        problems.append(f"{alt}: rule {r.id} is {r.status}: {r.detail}")
-            outcomes.append(VerifyOutcome(case.id, seed, ref, fail, problems, alternatives))
+                        problems.append(f"{kind} re-saved by LibreOffice: rule {r.id} is {r.status}: {r.detail}")
+            outcomes.append(VerifyOutcome(
+                case.id, seed, ref, fail, problems,
+                alternatives={k: reports[k] for k in alternatives},
+                fixtures={k: reports[k] for k in fixtures},
+                resaved=resaved,
+            ))
     return outcomes
