@@ -1,0 +1,1555 @@
+{
+  "generated_at": "2026-11-03T02:54:00+00:00",
+  "failbook_version": "0.1.0",
+  "engine": "LibreOffice 24.2.7.2 420(Build:2)",
+  "seed": 0,
+  "graders": {
+    "failbook": {
+      "kinds": "all",
+      "recalculated": true
+    },
+    "values-only": {
+      "kinds": [
+        "content",
+        "value"
+      ],
+      "recalculated": true
+    },
+    "cached-values": {
+      "kinds": [
+        "content",
+        "value"
+      ],
+      "recalculated": false
+    }
+  },
+  "rows": [
+    {
+      "case": "xlsx-001",
+      "output": "noop",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "new-orders-added",
+        "totals-include-all-orders",
+        "totals-are-live"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-001",
+      "output": "noop",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "new-orders-added",
+        "totals-include-all-orders"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-001",
+      "output": "noop",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "new-orders-added",
+        "totals-include-all-orders"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-001",
+      "output": "failure",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "totals-include-all-orders",
+        "totals-are-live"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-001",
+      "output": "failure",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "totals-include-all-orders"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-001",
+      "output": "failure",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "amounts-correct",
+        "totals-include-all-orders"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-001",
+      "output": "reference",
+      "grader": "failbook",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-001",
+      "output": "reference",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-001",
+      "output": "reference",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "pass",
+      "failed_rules": [
+        "amounts-correct",
+        "totals-include-all-orders"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-002",
+      "output": "noop",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "margin-column-added",
+        "margins-correct",
+        "margins-are-live",
+        "percent-format"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-002",
+      "output": "noop",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "margin-column-added",
+        "margins-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-002",
+      "output": "noop",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "margin-column-added",
+        "margins-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-002",
+      "output": "failure",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "margins-are-live"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-002",
+      "output": "failure",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "fail",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-002",
+      "output": "failure",
+      "grader": "cached-values",
+      "verdict": "pass",
+      "expected": "fail",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-002",
+      "output": "reference",
+      "grader": "failbook",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-002",
+      "output": "reference",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-002",
+      "output": "reference",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "pass",
+      "failed_rules": [
+        "margins-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-003",
+      "output": "noop",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "vat-correct",
+        "gross-correct",
+        "vat-follows-rate",
+        "totals-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-003",
+      "output": "noop",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "vat-correct",
+        "gross-correct",
+        "totals-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-003",
+      "output": "noop",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "vat-correct",
+        "gross-correct",
+        "totals-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-003",
+      "output": "failure",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "vat-correct",
+        "gross-correct",
+        "vat-follows-rate",
+        "totals-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-003",
+      "output": "failure",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "vat-correct",
+        "gross-correct",
+        "totals-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-003",
+      "output": "failure",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "vat-correct",
+        "gross-correct",
+        "totals-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-003",
+      "output": "reference",
+      "grader": "failbook",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-003",
+      "output": "reference",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-003",
+      "output": "reference",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "pass",
+      "failed_rules": [
+        "vat-correct",
+        "gross-correct",
+        "totals-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-004",
+      "output": "noop",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "sorted"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-004",
+      "output": "noop",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "sorted"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-004",
+      "output": "noop",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "sorted"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-004",
+      "output": "failure",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "bonus-matches-row",
+        "bonus-is-live"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-004",
+      "output": "failure",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "bonus-matches-row"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-004",
+      "output": "failure",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "bonus-matches-row"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-004",
+      "output": "reference",
+      "grader": "failbook",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-004",
+      "output": "reference",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-004",
+      "output": "reference",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "pass",
+      "failed_rules": [
+        "bonus-matches-row"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-005",
+      "output": "noop",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "columns-in-order",
+        "discounts-entered",
+        "line-totals-correct",
+        "line-totals-live",
+        "summary-correct",
+        "summary-live",
+        "lines-unchanged"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-005",
+      "output": "noop",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "columns-in-order",
+        "discounts-entered",
+        "line-totals-correct",
+        "summary-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-005",
+      "output": "noop",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "columns-in-order",
+        "discounts-entered",
+        "line-totals-correct",
+        "summary-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-005",
+      "output": "failure",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "summary-correct",
+        "summary-live"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-005",
+      "output": "failure",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "summary-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-005",
+      "output": "failure",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "line-totals-correct",
+        "summary-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-005",
+      "output": "reference",
+      "grader": "failbook",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-005",
+      "output": "reference",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-005",
+      "output": "reference",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "pass",
+      "failed_rules": [
+        "line-totals-correct",
+        "summary-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-006",
+      "output": "noop",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "sheet-renamed",
+        "dashboard-live"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-006",
+      "output": "noop",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "sheet-renamed"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-006",
+      "output": "noop",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "sheet-renamed"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-006",
+      "output": "failure",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "dashboard-values",
+        "dashboard-live"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-006",
+      "output": "failure",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "dashboard-values"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-006",
+      "output": "failure",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "dashboard-values"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-006",
+      "output": "reference",
+      "grader": "failbook",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-006",
+      "output": "reference",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-006",
+      "output": "reference",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "pass",
+      "failed_rules": [
+        "dashboard-values"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-007",
+      "output": "noop",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "rows-appended",
+        "amounts-are-numbers",
+        "dates-are-dates",
+        "summary-includes-new"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-007",
+      "output": "noop",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "rows-appended",
+        "amounts-are-numbers",
+        "dates-are-dates",
+        "summary-includes-new"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-007",
+      "output": "noop",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "rows-appended",
+        "amounts-are-numbers",
+        "dates-are-dates",
+        "summary-includes-new"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-007",
+      "output": "failure",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "amounts-are-numbers",
+        "dates-are-dates",
+        "summary-includes-new"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-007",
+      "output": "failure",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "amounts-are-numbers",
+        "dates-are-dates",
+        "summary-includes-new"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-007",
+      "output": "failure",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "amounts-are-numbers",
+        "dates-are-dates",
+        "summary-includes-new"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-007",
+      "output": "reference",
+      "grader": "failbook",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-007",
+      "output": "reference",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-007",
+      "output": "reference",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "pass",
+      "failed_rules": [
+        "summary-includes-new"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-008",
+      "output": "noop",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "growth-values",
+        "targets-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-008",
+      "output": "noop",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "growth-values",
+        "targets-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-008",
+      "output": "noop",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "growth-values",
+        "targets-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-008",
+      "output": "failure",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "growth-values",
+        "targets-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-008",
+      "output": "failure",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "growth-values",
+        "targets-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-008",
+      "output": "failure",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "growth-values",
+        "targets-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-008",
+      "output": "reference",
+      "grader": "failbook",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-008",
+      "output": "reference",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-008",
+      "output": "reference",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "pass",
+      "failed_rules": [
+        "targets-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-009",
+      "output": "noop",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "categories-correct",
+        "prices-correct",
+        "amounts-correct",
+        "lookups-live"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-009",
+      "output": "noop",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "categories-correct",
+        "prices-correct",
+        "amounts-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-009",
+      "output": "noop",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "categories-correct",
+        "prices-correct",
+        "amounts-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-009",
+      "output": "failure",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "categories-correct",
+        "prices-correct",
+        "amounts-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-009",
+      "output": "failure",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "categories-correct",
+        "prices-correct",
+        "amounts-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-009",
+      "output": "failure",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "categories-correct",
+        "prices-correct",
+        "amounts-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-009",
+      "output": "reference",
+      "grader": "failbook",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-009",
+      "output": "reference",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-009",
+      "output": "reference",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "pass",
+      "failed_rules": [
+        "categories-correct",
+        "prices-correct",
+        "amounts-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-010",
+      "output": "noop",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "grand-total-row",
+        "grand-total-values",
+        "grand-total-live"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-010",
+      "output": "noop",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "grand-total-row",
+        "grand-total-values"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-010",
+      "output": "noop",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "grand-total-row",
+        "grand-total-values"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-010",
+      "output": "failure",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "grand-total-values",
+        "grand-total-live"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-010",
+      "output": "failure",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "grand-total-values"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-010",
+      "output": "failure",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "grand-total-values"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-010",
+      "output": "reference",
+      "grader": "failbook",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-010",
+      "output": "reference",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-010",
+      "output": "reference",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "pass",
+      "failed_rules": [
+        "grand-total-values"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-011",
+      "output": "noop",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "new-months-added",
+        "chart-covers-all-months"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-011",
+      "output": "noop",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "new-months-added"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-011",
+      "output": "noop",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "new-months-added"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-011",
+      "output": "failure",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "chart-covers-all-months"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-011",
+      "output": "failure",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "fail",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-011",
+      "output": "failure",
+      "grader": "cached-values",
+      "verdict": "pass",
+      "expected": "fail",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-011",
+      "output": "reference",
+      "grader": "failbook",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-011",
+      "output": "reference",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-011",
+      "output": "reference",
+      "grader": "cached-values",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-012",
+      "output": "noop",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "typo-fixed",
+        "customer-data-unchanged"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-012",
+      "output": "noop",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "typo-fixed"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-012",
+      "output": "noop",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "typo-fixed"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-012",
+      "output": "failure",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "customer-data-unchanged",
+        "other-sheets-unchanged",
+        "formatting-kept",
+        "dropdown-kept"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-012",
+      "output": "failure",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "fail",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-012",
+      "output": "failure",
+      "grader": "cached-values",
+      "verdict": "pass",
+      "expected": "fail",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-012",
+      "output": "reference",
+      "grader": "failbook",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-012",
+      "output": "reference",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-012",
+      "output": "reference",
+      "grader": "cached-values",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "noop",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "tasks-added",
+        "dropdown-covers-new-rows",
+        "highlight-covers-new-rows"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "noop",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "tasks-added"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "noop",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "tasks-added"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "failure",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "dropdown-covers-new-rows",
+        "highlight-covers-new-rows"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "failure",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "fail",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "failure",
+      "grader": "cached-values",
+      "verdict": "pass",
+      "expected": "fail",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "reference",
+      "grader": "failbook",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "reference",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "reference",
+      "grader": "cached-values",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-014",
+      "output": "noop",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "discontinued-removed",
+        "remaining-items-kept",
+        "values-correct",
+        "stock-totals-correct",
+        "summary-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-014",
+      "output": "noop",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "discontinued-removed",
+        "values-correct",
+        "stock-totals-correct",
+        "summary-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-014",
+      "output": "noop",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "discontinued-removed",
+        "values-correct",
+        "stock-totals-correct",
+        "summary-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-014",
+      "output": "failure",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "values-correct",
+        "stock-totals-correct",
+        "summary-correct",
+        "totals-live"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-014",
+      "output": "failure",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "values-correct",
+        "stock-totals-correct",
+        "summary-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-014",
+      "output": "failure",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "values-correct",
+        "stock-totals-correct",
+        "summary-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-014",
+      "output": "reference",
+      "grader": "failbook",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-014",
+      "output": "reference",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-014",
+      "output": "reference",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "pass",
+      "failed_rules": [
+        "values-correct",
+        "stock-totals-correct",
+        "summary-correct"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-015",
+      "output": "noop",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "corrections-applied",
+        "summary-dept-totals",
+        "summary-grand-total"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-015",
+      "output": "noop",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "corrections-applied",
+        "summary-dept-totals",
+        "summary-grand-total"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-015",
+      "output": "noop",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "corrections-applied",
+        "summary-dept-totals",
+        "summary-grand-total"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-015",
+      "output": "failure",
+      "grader": "failbook",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "summary-dept-totals",
+        "summary-grand-total"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-015",
+      "output": "failure",
+      "grader": "values-only",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "summary-dept-totals",
+        "summary-grand-total"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-015",
+      "output": "failure",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "fail",
+      "failed_rules": [
+        "summary-dept-totals",
+        "summary-grand-total"
+      ],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-015",
+      "output": "reference",
+      "grader": "failbook",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-015",
+      "output": "reference",
+      "grader": "values-only",
+      "verdict": "pass",
+      "expected": "pass",
+      "failed_rules": [],
+      "inconclusive_rules": []
+    },
+    {
+      "case": "xlsx-015",
+      "output": "reference",
+      "grader": "cached-values",
+      "verdict": "fail",
+      "expected": "pass",
+      "failed_rules": [
+        "summary-dept-totals",
+        "summary-grand-total"
+      ],
+      "inconclusive_rules": []
+    }
+  ]
+}

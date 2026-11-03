@@ -1,0 +1,754 @@
+{
+  "generated_at": "2026-11-03T02:54:54+00:00",
+  "failbook_version": "0.1.0",
+  "engine": "LibreOffice 24.2.7.2 420(Build:2)",
+  "rows": [
+    {
+      "case": "xlsx-001",
+      "output": "failure",
+      "errors": [
+        {
+          "level": "error",
+          "check": "range-omits-adjacent-cells",
+          "where": "Orders!D15",
+          "message": "D2:D11 stops at row 11, but rows 12-14 between it and the formula hold values"
+        },
+        {
+          "level": "error",
+          "check": "range-omits-adjacent-cells",
+          "where": "Orders!F15",
+          "message": "F2:F11 stops at row 11, but rows 12-14 between it and the formula hold values"
+        },
+        {
+          "level": "error",
+          "check": "formula-moved-as-text",
+          "where": "Orders!D15",
+          "message": "2 formula(s) were moved without updating their references, e.g. =SUM(D2:D11) was at D12"
+        }
+      ],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-001",
+      "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-001",
+      "output": "alt_subtotal",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-002",
+      "output": "failure",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-002",
+      "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-002",
+      "output": "alt_equivalent_formula",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-003",
+      "output": "failure",
+      "errors": [
+        {
+          "level": "error",
+          "check": "error-value",
+          "where": "Invoice!E6",
+          "message": "evaluates to #VALUE! (=D6*B3)"
+        },
+        {
+          "level": "error",
+          "check": "error-value",
+          "where": "Invoice!F6",
+          "message": "evaluates to #VALUE! (=D6+E6)"
+        },
+        {
+          "level": "error",
+          "check": "error-value",
+          "where": "Invoice!E16",
+          "message": "evaluates to #VALUE! (=SUM(E4:E15))"
+        },
+        {
+          "level": "error",
+          "check": "error-value",
+          "where": "Invoice!F16",
+          "message": "evaluates to #VALUE! (=SUM(F4:F15))"
+        }
+      ],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-003",
+      "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-003",
+      "output": "alt_named_rate",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-004",
+      "output": "failure",
+      "errors": [
+        {
+          "level": "error",
+          "check": "formula-moved-as-text",
+          "where": "Staff!E2",
+          "message": "15 formula(s) were moved without updating their references, e.g. =C6*D6 was at E6"
+        }
+      ],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-004",
+      "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-005",
+      "output": "failure",
+      "errors": [
+        {
+          "level": "error",
+          "check": "reference-meaning-changed",
+          "where": "Summary!B1",
+          "message": "=SUM(Lines!D2:D12) refers to column D of 'Lines', whose header was 'Line Total' and is now 'Qty'"
+        },
+        {
+          "level": "error",
+          "check": "reference-meaning-changed",
+          "where": "Summary!B2",
+          "message": "=SUM(Lines!C2:C12) refers to column C of 'Lines', whose header was 'Qty' and is now 'Discount'"
+        }
+      ],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-005",
+      "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-006",
+      "output": "failure",
+      "errors": [
+        {
+          "level": "error",
+          "check": "error-value",
+          "where": "Dashboard!B2",
+          "message": "evaluates to #NAME? (=SUMIFS(Data!C:C,Data!A:A,A2))"
+        },
+        {
+          "level": "error",
+          "check": "error-value",
+          "where": "Dashboard!B3",
+          "message": "evaluates to #NAME? (=SUMIFS(Data!C:C,Data!A:A,A3))"
+        },
+        {
+          "level": "error",
+          "check": "error-value",
+          "where": "Dashboard!B4",
+          "message": "evaluates to #NAME? (=SUMIFS(Data!C:C,Data!A:A,A4))"
+        },
+        {
+          "level": "error",
+          "check": "error-value",
+          "where": "Dashboard!B5",
+          "message": "evaluates to #NAME? (=SUMIFS(Data!C:C,Data!A:A,A5))"
+        },
+        {
+          "level": "error",
+          "check": "error-value",
+          "where": "Dashboard!B6",
+          "message": "evaluates to #NAME? (=SUM(RevenueRange))"
+        },
+        {
+          "level": "error",
+          "check": "error-value",
+          "where": "Dashboard!B7",
+          "message": "evaluates to #NAME? (=AVERAGE(Data!C2:C13))"
+        },
+        {
+          "level": "error",
+          "check": "stale-sheet-reference",
+          "where": "Dashboard!B2",
+          "message": "sheet 'Data' was renamed to 'Sales 2024', but 6 formula(s)/name(s) still refer to 'Data'"
+        }
+      ],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-006",
+      "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-007",
+      "output": "failure",
+      "errors": [
+        {
+          "level": "error",
+          "check": "number-stored-as-text",
+          "where": "Expenses!A17",
+          "message": "6 cell(s) in column A hold text that looks like a number or date (e.g. '2024-03-02'); sums and date filters ignore them"
+        },
+        {
+          "level": "error",
+          "check": "number-stored-as-text",
+          "where": "Expenses!D17",
+          "message": "6 cell(s) in column D hold text that looks like a number or date (e.g. '1,766.34'); sums and date filters ignore them"
+        }
+      ],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-007",
+      "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-008",
+      "output": "failure",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-008",
+      "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-009",
+      "output": "failure",
+      "errors": [],
+      "warnings": [
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D2",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B2,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E2",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B2,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D3",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B3,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E3",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B3,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D4",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B4,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E4",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B4,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D5",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B5,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E5",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B5,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D6",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B6,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E6",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B6,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D7",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B7,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E7",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B7,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D8",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B8,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E8",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B8,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D9",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B9,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E9",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B9,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D10",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B10,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E10",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B10,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D11",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B11,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E11",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B11,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D12",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B12,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E12",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B12,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D13",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B13,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E13",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B13,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D14",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B14,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E14",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B14,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D15",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B15,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E15",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B15,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D16",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B16,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E16",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B16,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D17",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B17,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E17",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B17,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D18",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B18,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E18",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B18,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D19",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B19,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E19",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B19,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D20",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B20,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E20",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B20,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D21",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B21,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E21",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B21,Products!$A$2:$C$17,3)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!D22",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B22,Products!$A$2:$C$17,2)"
+        },
+        {
+          "level": "warning",
+          "check": "approximate-lookup",
+          "where": "Orders!E22",
+          "message": "VLOOKUP without exact match (4th argument FALSE): =VLOOKUP(B22,Products!$A$2:$C$17,3)"
+        }
+      ]
+    },
+    {
+      "case": "xlsx-009",
+      "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-009",
+      "output": "alt_vlookup_exact",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-010",
+      "output": "failure",
+      "errors": [
+        {
+          "level": "error",
+          "check": "double-counting",
+          "where": "Sales!C18",
+          "message": "C2:C17 includes rows 4, 9, 14, 17 which are themselves sums of rows in the same range"
+        },
+        {
+          "level": "error",
+          "check": "double-counting",
+          "where": "Sales!D18",
+          "message": "D2:D17 includes rows 4, 9, 14, 17 which are themselves sums of rows in the same range"
+        },
+        {
+          "level": "error",
+          "check": "double-counting",
+          "where": "Sales!E18",
+          "message": "E2:E17 includes rows 4, 9, 14, 17 which are themselves sums of rows in the same range"
+        },
+        {
+          "level": "error",
+          "check": "double-counting",
+          "where": "Sales!F18",
+          "message": "F2:F17 includes rows 4, 9, 14, 17 which are themselves sums of rows in the same range"
+        },
+        {
+          "level": "error",
+          "check": "double-counting",
+          "where": "Sales!G18",
+          "message": "G2:G17 includes rows 4, 9, 14, 17 which are themselves sums of rows in the same range"
+        }
+      ],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-010",
+      "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-010",
+      "output": "alt_sumif_reps",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-011",
+      "output": "failure",
+      "errors": [],
+      "warnings": [
+        {
+          "level": "warning",
+          "check": "range-stops-before-data-ends",
+          "where": "Monthly (chart)",
+          "message": "chart 'Revenue vs Costs 2024' series covers rows 2-11 of column B, but data continues to row 13"
+        },
+        {
+          "level": "warning",
+          "check": "range-stops-before-data-ends",
+          "where": "Monthly (chart)",
+          "message": "chart 'Revenue vs Costs 2024' series covers rows 2-11 of column C, but data continues to row 13"
+        }
+      ]
+    },
+    {
+      "case": "xlsx-011",
+      "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-012",
+      "output": "failure",
+      "errors": [
+        {
+          "level": "error",
+          "check": "sheet-removed",
+          "where": "Regions",
+          "message": "sheet 'Regions' existed before and is gone"
+        },
+        {
+          "level": "error",
+          "check": "sheet-removed",
+          "where": "Notes",
+          "message": "sheet 'Notes' existed before and is gone"
+        },
+        {
+          "level": "error",
+          "check": "formulas-lost",
+          "where": "Customers",
+          "message": "'Customers' had 21 formulas and now has 0"
+        },
+        {
+          "level": "error",
+          "check": "validation-lost",
+          "where": "Customers",
+          "message": "data validation rules were removed"
+        }
+      ],
+      "warnings": [
+        {
+          "level": "warning",
+          "check": "frozen-panes-lost",
+          "where": "Customers",
+          "message": "frozen panes at A2 were removed"
+        },
+        {
+          "level": "warning",
+          "check": "header-style-lost",
+          "where": "Customers!A1",
+          "message": "header 'ID' lost its bold style"
+        }
+      ]
+    },
+    {
+      "case": "xlsx-012",
+      "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "failure",
+      "errors": [],
+      "warnings": [
+        {
+          "level": "warning",
+          "check": "range-stops-before-data-ends",
+          "where": "Tracker!D2:D13",
+          "message": "data validation (list) covers rows 2-13 of column D, but data continues to row 18"
+        },
+        {
+          "level": "warning",
+          "check": "range-stops-before-data-ends",
+          "where": "Tracker!D2:D13",
+          "message": "conditional formatting covers rows 2-13 of column D, but data continues to row 18"
+        }
+      ]
+    },
+    {
+      "case": "xlsx-013",
+      "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "alt_whole_column",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-014",
+      "output": "failure",
+      "errors": [
+        {
+          "level": "error",
+          "check": "error-value",
+          "where": "Stock!D16",
+          "message": "evaluates to #VALUE! (=SUM(D2:D19))"
+        },
+        {
+          "level": "error",
+          "check": "error-value",
+          "where": "Stock!F16",
+          "message": "evaluates to #VALUE! (=SUM(F2:F19))"
+        },
+        {
+          "level": "error",
+          "check": "double-counting",
+          "where": "Stock!D16",
+          "message": "D2:D19 includes rows 16 which are themselves sums of rows in the same range"
+        },
+        {
+          "level": "error",
+          "check": "double-counting",
+          "where": "Stock!F16",
+          "message": "F2:F19 includes rows 16 which are themselves sums of rows in the same range"
+        },
+        {
+          "level": "error",
+          "check": "formula-moved-as-text",
+          "where": "Stock!F3",
+          "message": "15 formula(s) were moved without updating their references, e.g. =D4*E4 was at F4"
+        },
+        {
+          "level": "error",
+          "check": "reference-meaning-changed",
+          "where": "Summary!B2",
+          "message": "=Stock!D20 refers to row 20 of 'Stock', which was 'Total' and is now None"
+        },
+        {
+          "level": "error",
+          "check": "reference-meaning-changed",
+          "where": "Summary!B3",
+          "message": "=Stock!F20 refers to row 20 of 'Stock', which was 'Total' and is now None"
+        }
+      ],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-014",
+      "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-015",
+      "output": "failure",
+      "errors": [],
+      "warnings": [
+        {
+          "level": "warning",
+          "check": "totals-without-formulas",
+          "where": "Summary",
+          "message": "'Summary' holds 6 numbers and no formulas; if they summarise other sheets they will not update"
+        }
+      ]
+    },
+    {
+      "case": "xlsx-015",
+      "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-015",
+      "output": "alt_static_values",
+      "errors": [],
+      "warnings": [
+        {
+          "level": "warning",
+          "check": "totals-without-formulas",
+          "where": "Summary",
+          "message": "'Summary' holds 6 numbers and no formulas; if they summarise other sheets they will not update"
+        }
+      ]
+    }
+  ]
+}

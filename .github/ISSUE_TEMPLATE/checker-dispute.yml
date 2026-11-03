@@ -1,0 +1,19 @@
+name: Checker dispute
+description: A correct output was graded fail (or a wrong one pass)
+labels: [checker-dispute]
+body:
+  - type: input
+    id: case
+    attributes: {label: Case and version, placeholder: "xlsx-005, case v1"}
+    validations: {required: true}
+  - type: textarea
+    id: why
+    attributes: {label: Why the verdict is wrong, description: Which rule, and which sentence of the task supports your reading.}
+    validations: {required: true}
+  - type: textarea
+    id: evidence
+    attributes: {label: Grader output and file, description: "Paste `failbook grade` output and attach the workbook (synthetic data only)."}
+    validations: {required: true}
+  - type: input
+    id: engine
+    attributes: {label: Engine, description: "LibreOffice version reported by the grader."}
