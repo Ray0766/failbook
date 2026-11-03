@@ -69,7 +69,7 @@ failbook run xlsx-006 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-006 --out dist/harbor
 ```
 
-How the checker itself is validated: [`reference.py`](reference.py) must pass, the failure must fail on the rules listed in `case.yaml`, the untouched input must fail, and the reference must still pass after LibreOffice re-saves it (`failbook verify xlsx-006 --seeds 3`).
+How the checker itself is validated (`failbook verify xlsx-006 --seeds 3`): [`reference.py`](reference.py) must pass, also after LibreOffice opens and re-saves its output; the failure must fail on the rules listed in `case.yaml`; [`fail_stale_defined_name.py`](fail_stale_defined_name.py) (another wrong solution) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
