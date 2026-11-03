@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-03T02:54:54+00:00",
+  "generated_at": "2026-11-03T05:39:03+00:00",
   "failbook_version": "0.1.0",
   "engine": "LibreOffice 24.2.7.2 420(Build:2)",
   "rows": [
@@ -102,6 +102,12 @@
       "warnings": []
     },
     {
+      "case": "xlsx-003",
+      "output": "alt_round_cents",
+      "errors": [],
+      "warnings": []
+    },
+    {
       "case": "xlsx-004",
       "output": "failure",
       "errors": [
@@ -128,13 +134,13 @@
           "level": "error",
           "check": "reference-meaning-changed",
           "where": "Summary!B1",
-          "message": "=SUM(Lines!D2:D12) refers to column D of 'Lines', whose header was 'Line Total' and is now 'Qty'"
+          "message": "=SUM(Lines!D2:D12) refers to column D of 'Lines', whose header was 'Line Total' and is now 'Qty' ('Line Total' is now in column E)"
         },
         {
           "level": "error",
           "check": "reference-meaning-changed",
           "where": "Summary!B2",
-          "message": "=SUM(Lines!C2:C12) refers to column C of 'Lines', whose header was 'Qty' and is now 'Discount'"
+          "message": "=SUM(Lines!C2:C12) refers to column C of 'Lines', whose header was 'Qty' and is now 'Discount' ('Qty' is now in column D)"
         }
       ],
       "warnings": []
@@ -142,6 +148,18 @@
     {
       "case": "xlsx-005",
       "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-005",
+      "output": "alt_rebuild_sumproduct",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-005",
+      "output": "alt_round_cents",
       "errors": [],
       "warnings": []
     },
@@ -226,6 +244,12 @@
       "warnings": []
     },
     {
+      "case": "xlsx-007",
+      "output": "alt_serial_dates",
+      "errors": [],
+      "warnings": []
+    },
+    {
       "case": "xlsx-008",
       "output": "failure",
       "errors": [],
@@ -234,6 +258,12 @@
     {
       "case": "xlsx-008",
       "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-008",
+      "output": "alt_percent_formula",
       "errors": [],
       "warnings": []
     },
@@ -583,6 +613,12 @@
       "warnings": []
     },
     {
+      "case": "xlsx-011",
+      "output": "alt_named_range",
+      "errors": [],
+      "warnings": []
+    },
+    {
       "case": "xlsx-012",
       "output": "failure",
       "errors": [
@@ -659,6 +695,18 @@
     },
     {
       "case": "xlsx-013",
+      "output": "alt_begins_with",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "alt_named_status_list",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-013",
       "output": "alt_whole_column",
       "errors": [],
       "warnings": []
@@ -701,13 +749,13 @@
           "level": "error",
           "check": "reference-meaning-changed",
           "where": "Summary!B2",
-          "message": "=Stock!D20 refers to row 20 of 'Stock', which was 'Total' and is now None"
+          "message": "=Stock!D20 refers to row 20 of 'Stock', whose label in column A was 'Total' and is now None ('Total' is now in row 16)"
         },
         {
           "level": "error",
           "check": "reference-meaning-changed",
           "where": "Summary!B3",
-          "message": "=Stock!F20 refers to row 20 of 'Stock', which was 'Total' and is now None"
+          "message": "=Stock!F20 refers to row 20 of 'Stock', whose label in column A was 'Total' and is now None ('Total' is now in row 16)"
         }
       ],
       "warnings": []
@@ -727,7 +775,7 @@
           "level": "warning",
           "check": "totals-without-formulas",
           "where": "Summary",
-          "message": "'Summary' holds 6 numbers and no formulas; if they summarise other sheets they will not update"
+          "message": "'Summary' holds 6 numbers and no formulas; if they summarise other sheets they will not update (also in the original file)"
         }
       ]
     },
@@ -746,7 +794,7 @@
           "level": "warning",
           "check": "totals-without-formulas",
           "where": "Summary",
-          "message": "'Summary' holds 6 numbers and no formulas; if they summarise other sheets they will not update"
+          "message": "'Summary' holds 6 numbers and no formulas; if they summarise other sheets they will not update (also in the original file)"
         }
       ]
     }

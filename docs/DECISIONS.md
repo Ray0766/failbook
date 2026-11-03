@@ -135,9 +135,14 @@ project's own repository, package metadata or installed source, as each note say
   task-agnostic audit script (`scripts/audit_xlsx.py`, generated from `src/failbook/audit.py`) that compares
   the edited file with the original.
 - **Validation** ([evidence/fix-self-check.md](evidence/fix-self-check.md)): the script flags 13 of the 15
-  failure artifacts (9 with an error-level finding) and reports no error on any of the 22 correct solutions
-  (one warning on a valid "static values" alternative). It misses xlsx-002 and xlsx-008, which leave no
-  generic symptom.
+  failure artifacts (9 with an error-level finding) and reports no error on any of the 30 correct solutions
+  (one warning on a valid "static values" alternative, a symptom the original file already had). It misses
+  xlsx-002 and xlsx-008, which leave no generic symptom.
+- **Corrected after the review (D9).** The audit raised errors on ordinary correct edits (stacked summary
+  rows below a total, a renamed header or row label, a symptom the original already had, `#NAME?` from a
+  function LibreOffice lacks) and crashed when LibreOffice could not start. Those are now warnings or a
+  stated `recalculation-unavailable` finding; real breakage (a shifted column, deleted rows, a stale sheet
+  name) is still an error. Each case is a test in `tests/test_audit_more.py`.
 - **Limits.** The checks were written with these failures in view, so this is coverage, not generalisation.
   **Whether agents do better with the skill is a hypothesis** until runs with and without it are recorded.
 

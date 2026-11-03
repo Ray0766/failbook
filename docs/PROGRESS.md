@@ -10,7 +10,7 @@ Last updated 2026-11-03.
 | Checker validation: reference + alternatives pass (also after a LibreOffice re-save), failure fails on the named rules, review-found wrong answers (`fail_*.py`) fail, untouched input fails | `failbook verify` output in CI |
 | Core claim: live, preserve and structure rules catch the failures that value checks miss, without rejecting correct solutions <!-- sync-numbers --> | [evidence/checker-ablation.md](evidence/checker-ablation.md) |
 | Evidence chain for one case, end to end, no AI needed | [evidence/demo-xlsx-001.md](evidence/demo-xlsx-001.md), `scripts/demo-evidence-chain.sh` |
-| Fix with a deterministic self-check: flags 13/15 failures, no error on 22 correct solutions | [evidence/fix-self-check.md](evidence/fix-self-check.md) |
+| Fix with a deterministic self-check: flags 13/15 failures, no error on 30 correct solutions | [evidence/fix-self-check.md](evidence/fix-self-check.md) |
 | Harbor export loads in Harbor 0.24.0; SkillEvaluator 0.7.0 `tier3 validate --harbor-contract` passes | [DECISIONS.md](DECISIONS.md) D4 |
 | Static site: catalog + evidence pages, en/zh, reflow at 320 px checked | `failbook site`, GitHub Pages workflow |
 

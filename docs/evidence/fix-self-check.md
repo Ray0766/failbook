@@ -11,7 +11,7 @@ The [spreadsheet-verify-skill](../../fixes/spreadsheet-verify-skill/) fix asks t
 | Output | Total | Flagged (error or warning) | Flagged with an error | Clean |
 |---|---|---|---|---|
 | failure artifacts | 15 | 13 | 9 | 2 |
-| correct solutions | 22 | 1 | 0 | 21 |
+| correct solutions | 30 | 1 | 0 | 29 |
 
 ## Per case
 
@@ -19,17 +19,17 @@ The [spreadsheet-verify-skill](../../fixes/spreadsheet-verify-skill/) fix asks t
 |---|---|---|
 | [xlsx-001](../../cases/xlsx-001-total-misses-new-rows/) New orders inserted above the Total row are left out of the total | **range-omits-adjacent-cells**, **formula-moved-as-text** | reference: clean; alt_subtotal: clean |
 | [xlsx-002](../../cases/xlsx-002-margin-hardcoded/) A calculated column is pasted in as fixed numbers | clean | reference: clean; alt_equivalent_formula: clean |
-| [xlsx-003](../../cases/xlsx-003-rate-reference-drifts/) Filling a formula down shifts the reference to the tax-rate cell | **error-value** | reference: clean; alt_named_rate: clean |
+| [xlsx-003](../../cases/xlsx-003-rate-reference-drifts/) Filling a formula down shifts the reference to the tax-rate cell | **error-value** | reference: clean; alt_named_rate: clean; alt_round_cents: clean |
 | [xlsx-004](../../cases/xlsx-004-sort-scrambles-formulas/) Sorting rows leaves each formula pointing at its old row | **formula-moved-as-text** | reference: clean |
-| [xlsx-005](../../cases/xlsx-005-insert-column-stale-refs/) Inserting a column silently breaks formulas on another sheet | **reference-meaning-changed** | reference: clean |
+| [xlsx-005](../../cases/xlsx-005-insert-column-stale-refs/) Inserting a column silently breaks formulas on another sheet | **reference-meaning-changed** | reference: clean; alt_rebuild_sumproduct: clean; alt_round_cents: clean |
 | [xlsx-006](../../cases/xlsx-006-rename-sheet-breaks-refs/) Renaming a sheet breaks every formula that referred to it | **error-value**, **stale-sheet-reference** | reference: clean |
-| [xlsx-007](../../cases/xlsx-007-imported-text-numbers/) Imported amounts and dates are stored as text, so totals ignore them | **number-stored-as-text** | reference: clean |
-| [xlsx-008](../../cases/xlsx-008-percent-entered-as-whole-numbers/) Percentages typed as whole numbers become 100 times too large | clean | reference: clean |
+| [xlsx-007](../../cases/xlsx-007-imported-text-numbers/) Imported amounts and dates are stored as text, so totals ignore them | **number-stored-as-text** | reference: clean; alt_serial_dates: clean |
+| [xlsx-008](../../cases/xlsx-008-percent-entered-as-whole-numbers/) Percentages typed as whole numbers become 100 times too large | clean | reference: clean; alt_percent_formula: clean |
 | [xlsx-009](../../cases/xlsx-009-lookup-approximate-match/) A lookup without exact match returns another product's data | approximate-lookup (warning) | reference: clean; alt_vlookup_exact: clean |
 | [xlsx-010](../../cases/xlsx-010-grand-total-double-counts/) A grand total sums the subtotals as well, counting everything twice | **double-counting** | reference: clean; alt_sumif_reps: clean |
-| [xlsx-011](../../cases/xlsx-011-chart-range-not-extended/) New months are added, but the chart still stops at October | range-stops-before-data-ends (warning) | reference: clean |
+| [xlsx-011](../../cases/xlsx-011-chart-range-not-extended/) New months are added, but the chart still stops at October | range-stops-before-data-ends (warning) | reference: clean; alt_named_range: clean |
 | [xlsx-012](../../cases/xlsx-012-typo-fix-wipes-workbook/) Fixing a typo with pandas wipes out the rest of the workbook | **sheet-removed**, **formulas-lost**, **validation-lost**, frozen-panes-lost (warning), header-style-lost (warning) | reference: clean |
-| [xlsx-013](../../cases/xlsx-013-dropdown-and-highlight-not-extended/) New rows get no dropdown and no highlighting | range-stops-before-data-ends (warning) | reference: clean; alt_whole_column: clean |
+| [xlsx-013](../../cases/xlsx-013-dropdown-and-highlight-not-extended/) New rows get no dropdown and no highlighting | range-stops-before-data-ends (warning) | reference: clean; alt_begins_with: clean; alt_named_status_list: clean; alt_whole_column: clean |
 | [xlsx-014](../../cases/xlsx-014-delete-rows-shifts-formulas/) Deleting rows leaves formulas pointing at the wrong rows | **error-value**, **double-counting**, **formula-moved-as-text**, **reference-meaning-changed** | reference: clean |
 | [xlsx-015](../../cases/xlsx-015-summary-was-pasted-values/) Data corrected, but the summary was pasted values and never updates | totals-without-formulas (warning) | reference: clean; alt_static_values: totals-without-formulas (warning) |
 
@@ -39,4 +39,4 @@ These failures leave no generic symptom; only the task's requirements reveal the
 
 ## Findings on correct solutions
 
-- xlsx-015 alt_static_values: [warning] totals-without-formulas at Summary: 'Summary' holds 6 numbers and no formulas; if they summarise other sheets they will not update
+- xlsx-015 alt_static_values: [warning] totals-without-formulas at Summary: 'Summary' holds 6 numbers and no formulas; if they summarise other sheets they will not update (also in the original file)
