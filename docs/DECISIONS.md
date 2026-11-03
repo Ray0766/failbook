@@ -90,9 +90,11 @@ project's own repository, package metadata or installed source, as each note say
 - **Sources.** Harbor 0.24.0 source (installed) and PyPI (0.25.0 released 2026-10-25). SkillEvaluator 0.7.0
   (repository and PyPI, 2026-11-02), which pins `harbor==0.24.0` and supports claude-code, codex and opencode
   (not gemini-cli).
-- **Validation.** All 15 exported tasks load with Harbor 0.24.0's own `Task` class; `skillevaluator tier3
-  validate --harbor-contract` passes all 10 checks on an exported skill; the oracle flow (solve.sh then
-  test.sh, run without Docker) gives reward 1.0.
+- **Validation** (repeated on the final code of the first release). All 15 exported tasks load with Harbor
+  0.24.0's own `Task` class; `skillevaluator tier3 validate --harbor-contract` passes all 49 checks on the
+  skill exported with the 15 cases; the oracle flow (solve.sh then test.sh, run without Docker, with the
+  workspace path pointed at a scratch directory) gives reward 1.0 for xlsx-001, 011 and 013, and the
+  untouched input gives 0.0. No Harbor job has been run with Docker or a real agent.
 - **Alternative considered: Inspect** (inspect-ai 0.3.287, 2026-10-31). Its Docker sandbox defaults to no
   network and routes model calls through a proxy; `inspect_swe` 0.2.72 provides Claude Code, Codex and Gemini
   agents; `inspect-harbor` 1.0.0 runs Harbor tasks inside Inspect, and its log viewer is richer. Because
