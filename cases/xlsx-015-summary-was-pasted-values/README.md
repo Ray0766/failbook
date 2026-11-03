@@ -48,7 +48,7 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 | `corrections-applied` | content | The three corrections are applied in Q3 Data | pass |
 | `summary-dept-totals` | value | Each department's Q3 total on Summary reflects the corrections | **FAIL**: Summary total of Engineering is 117,810, expected 115,520 |
 | `summary-grand-total` | value | The Summary grand total reflects the corrections | **FAIL**: Summary grand total is 690,630, expected 686,420 |
-| `summary-layout-kept` | no collateral damage | Summary keeps its departments in the same order, followed by Total | pass |
+| `summary-layout-kept` | no collateral damage | Summary keeps its headers, its departments in the same order and Total, with nothing added around the table | pass |
 | `other-data-unchanged` | no collateral damage | Rows that were not corrected are unchanged | pass |
 
 Files: [`failure/budget.xlsx`](failure/budget.xlsx) (graded in [`failure/grade.json`](failure/grade.json)); the steps that produced it: [`failure.py`](failure.py).
@@ -77,7 +77,7 @@ failbook run xlsx-015 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-015 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-015 --seeds 3`): [`reference.py`](reference.py) and [`alt_static_values.py`](alt_static_values.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_other_row_changed.py`](fail_other_row_changed.py) (another wrong solution) must be graded fail; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-015 --seeds 3`): [`reference.py`](reference.py) and [`alt_static_values.py`](alt_static_values.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_other_row_changed.py`](fail_other_row_changed.py), [`fail_summary_header_renamed.py`](fail_summary_header_renamed.py) and [`fail_summary_note_added.py`](fail_summary_note_added.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -86,6 +86,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 ## Limitations
 
 - The task does not require formulas on the Summary; correct static values pass, which the alternative solution proves.
+- On the Summary, the labels (the header row and column A) must read as in the input and no cell may be filled outside the original table; only the totals may change. Case and spacing of labels are ignored, and formatting (fonts, number formats) is not compared.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
 ---
@@ -133,7 +134,7 @@ Q3 Data 中的三处更正已完成。但 Summary 表和输入文件一样，存
 | `corrections-applied` | 内容 | Q3 Data 中的三处更正已完成 | pass |
 | `summary-dept-totals` | 数值 | Summary 上各部门的 Q3 合计已反映更正 | **FAIL**: Summary total of Engineering is 117,810, expected 115,520 |
 | `summary-grand-total` | 数值 | Summary 的总计已反映更正 | **FAIL**: Summary grand total is 690,630, expected 686,420 |
-| `summary-layout-kept` | 无连带破坏 | Summary 部门顺序不变，末尾为 Total | pass |
+| `summary-layout-kept` | 无连带破坏 | Summary 的表头、部门顺序和 Total 行不变，表格外没有新增内容 | pass |
 | `other-data-unchanged` | 无连带破坏 | 未被更正的行保持不变 | pass |
 
 ### 解释
@@ -153,4 +154,5 @@ Q3 Data 中的三处更正已完成。但 Summary 表和输入文件一样，存
 ### 限制
 
 - 任务不要求 Summary 使用公式；正确的静态数值也能通过，替代解法证明了这一点。
+- Summary 上的标签（表头行和 A 列）须与输入一致，原表格范围之外不能新增内容，只有合计可以改变。标签的大小写和空格差异不计，格式（字体、数字格式）不做比较。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

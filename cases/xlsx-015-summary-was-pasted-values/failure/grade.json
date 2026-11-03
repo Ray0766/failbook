@@ -28,7 +28,7 @@
     {
       "id": "summary-layout-kept",
       "kind": "preserve",
-      "title": "Summary keeps its departments in the same order, followed by Total",
+      "title": "Summary keeps its headers, its departments in the same order and Total, with nothing added around the table",
       "status": "pass",
       "detail": ""
     },

@@ -26,6 +26,13 @@
       "detail": "dates are wrong: row 17: '2024-03-02' is not a date; row 18: '2024-03-03' is not a date; row 19: '2024-03-07' is not a date"
     },
     {
+      "id": "new-rows-formatted",
+      "kind": "structure",
+      "title": "The new dates and amounts have the number formats of the existing rows",
+      "status": "fail",
+      "detail": "6 of 6 new rows are not formatted like the existing rows: row 17 (Train ticket #1) has Date 'General', Amount 'General'; row 18 (Client lunch #2) has Date 'General', Amount 'General'; row 19 (Paper and pens #3) has Date 'General', Amount 'General' (and 3 more). In expenses.xlsx as given, the existing rows have Date 'yyyy\\-mm\\-dd', Amount '#,##0.00' (differences of letter case, quotes or backslash escapes are ignored)."
+    },
+    {
       "id": "summary-includes-new",
       "kind": "value",
       "title": "Every Summary total (category, month, grand total) includes the new expenses",

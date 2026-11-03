@@ -223,3 +223,102 @@ def test_a_stored_error_constant_is_a_failure(tmp_path):
     values.wb["S"]["A2"] = "#NAME?"
     status, detail = _verdict(ctx, values)
     assert status == FAIL and "S!A2 holds the error value #NAME? as a constant" in detail
+
+
+# -- xlsx.py helpers for conditional formats (xlsx-013) -----------------------------------
+def _cf_book(tmp_path, fill, raw_pattern=None):
+    """A saved workbook with one conditional format whose dxf fill is ``fill``; optionally patch its patternType."""
+    import re
+    import zipfile
+
+    from openpyxl.formatting.rule import CellIsRule
+
+    wb = openpyxl.Workbook()
+    wb.active.conditional_formatting.add("A1:A3", CellIsRule(operator="equal", formula=['"x"'], fill=fill))
+    path = tmp_path / "cf.xlsx"
+    wb.save(path)
+    if raw_pattern:
+        patched = tmp_path / "cf2.xlsx"
+        with zipfile.ZipFile(path) as src, zipfile.ZipFile(patched, "w") as out:
+            for item in src.infolist():
+                data = src.read(item.filename)
+                if item.filename == "xl/styles.xml":
+                    data = re.sub(rb"<dxfs.*?</dxfs>", lambda m: m.group(0).replace(
+                        b"<patternFill>", b'<patternFill patternType="%s">' % raw_pattern.encode()), data, flags=re.S)
+                out.writestr(item, data)
+        path = patched
+    wb = openpyxl.load_workbook(path)
+    rule = next(iter(wb.active.conditional_formatting)).rules[0]
+    return path, wb, rule
+
+
+def test_conditional_fill_follows_the_pattern_type_as_written(tmp_path):
+    from openpyxl.styles import PatternFill
+
+    from failbook import xlsx as X
+
+    # Excel's own form (bgColor, no pattern type) is painted solid.
+    path, wb, rule = _cf_book(tmp_path, PatternFill(bgColor="FFFF0000"))
+    assert X.dxf_fill_patterns(path) == [None]
+    assert X.dxf_colours(rule.dxf, wb, raw_pattern=None) == {"fill": "FF0000"}
+    # patternType="none" is no fill; openpyxl reads it as None, so only the raw value tells.
+    path, wb, rule = _cf_book(tmp_path, PatternFill(bgColor="FFFF0000"), raw_pattern="none")
+    assert rule.dxf.fill.patternType is None and X.dxf_fill_patterns(path) == ["none"]
+    assert X.dxf_colours(rule.dxf, wb, raw_pattern="none") == {}
+    # Only a pattern colour and no pattern type: LibreOffice paints nothing, so it is unresolved, not red.
+    path, wb, rule = _cf_book(tmp_path, PatternFill(start_color="FFFF0000"))
+    fill = X.dxf_colours(rule.dxf, wb, raw_pattern=None)["fill"]
+    assert fill == "?" and "LibreOffice paints no fill" in fill.why
+    # With a solid pattern the pattern colour is the fill.
+    path, wb, rule = _cf_book(tmp_path, PatternFill("solid", start_color="FFFF0000"))
+    assert X.dxf_colours(rule.dxf, wb, raw_pattern="solid") == {"fill": "FF0000"}
+
+
+def test_pale_reds_are_not_judged():
+    from failbook import xlsx as X
+
+    assert X.is_red("FFC7CE") is True and X.is_red("9C0006") is True  # Excel's "Light Red Fill" and its text
+    assert X.is_red("F2DCDB") is None  # theme "Red, Accent 2, Lighter 80%"
+    assert X.is_red("FFFFFF") is False and X.is_red("808080") is False and X.is_red("00B050") is False
+
+
+def test_cf_formulas_compare_dates_as_serials_and_undefined_names_as_errors():
+    import datetime as dt
+
+    from failbook import xlsx as X
+
+    wb = openpyxl.Workbook()
+    wb.active.title = "Tracker"
+    wb.defined_names["Limit"] = DefinedName("Limit", attr_text="Tracker!$Z$1")
+    cells = {(2, 4): "Blocked", (2, 5): dt.datetime(2024, 6, 3)}
+
+    def value_at(sheet, row, col):
+        return cells.get((row, col))
+
+    def ev(formula, wb=wb):
+        return X.eval_cf_formula(formula, "Tracker", (2, 4), (2, 4), value_at, wb)
+
+    assert ev('AND($D2="Blocked",$E2>45000)') is True and ev("$E2=45446") is True
+    got = ev("Blocked")
+    assert got == "#NAME?" and "'Blocked' is not defined" in got.why
+    with pytest.raises(X.Unknown, match="defined name 'Limit'"):
+        ev("Limit")
+    wb.active.add_table(Table(displayName="Tasks", ref="D1:E2"))
+    with pytest.raises(X.Unknown, match="table name 'Tasks'"):
+        ev("Tasks")  # a table name is not a defined name, but it is not #NAME? either
+    with pytest.raises(X.Unknown):
+        ev("Blocked", wb=None)  # without the workbook it cannot tell whether the name exists
+    cells[(2, 5)] = object()
+    with pytest.raises(X.Unknown, match="type object"):
+        ev("$E2>0")
+
+
+def test_defined_names_in_any_script_resolve():
+    from failbook import xlsx as X
+
+    wb = openpyxl.Workbook()
+    wb.active.title = "Lists"
+    wb.defined_names["状态列表"] = DefinedName("状态列表", attr_text="Lists!$A$1:$A$4")
+    assert X.resolve_range("状态列表", wb, "Lists") == ("Lists", 1, 1, 4, 1)
+    assert X.resolve_range("[0]!状态列表", wb, "Lists") == ("Lists", 1, 1, 4, 1)
+    assert X.resolve_range("lists!状态列表", wb, "Lists") == ("Lists", 1, 1, 4, 1)

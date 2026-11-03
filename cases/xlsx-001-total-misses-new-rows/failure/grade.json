@@ -12,6 +12,13 @@
       "detail": ""
     },
     {
+      "id": "new-rows-formatted",
+      "kind": "structure",
+      "title": "The new orders' Date, Unit Price and Amount have the number formats of the original order rows",
+      "status": "pass",
+      "detail": ""
+    },
+    {
       "id": "existing-orders-unchanged",
       "kind": "preserve",
       "title": "The original orders are unchanged and in their original order",

@@ -179,8 +179,23 @@ def _report(problems, checked, lead=""):
         raise problems[0]
 
 
+#: The "lines_changed" scenario raises, in a copy of the file, the k-th line's Qty by k (k = 1, 2,
+#: ...) and every Unit Price by PRICE_BUMP, so a Net or a Total Net that is a typed number no
+#: longer matches.
+PRICE_BUMP = 1.0
+
+
+def _changed_lines(meta):
+    return [dict(line, qty=line["qty"] + k, price=round(line["price"] + PRICE_BUMP, 2))
+            for k, line in enumerate(meta["lines"], start=1)]
+
+
 def scenarios(ctx):
-    return {"rate_up": {X.make_ref(SHEET, "B1"): _new_rate(ctx.meta)}}
+    lines = {}
+    for r, line in zip(_rows(ctx), _changed_lines(ctx.meta)):
+        lines[X.make_ref(SHEET, (r, 2))] = line["qty"]
+        lines[X.make_ref(SHEET, (r, 3))] = line["price"]
+    return {"rate_up": {X.make_ref(SHEET, "B1"): _new_rate(ctx.meta)}, "lines_changed": lines}
 
 
 @rule(
@@ -227,6 +242,40 @@ def vat_follows_rate(ctx):
 )
 def totals_correct(ctx):
     _report(*_check(ctx, ctx.meta["rate"], totals=True))
+
+
+@rule(
+    "net-still-calculated",
+    "Each line's Net still follows its Qty and Unit Price, and Total Net still follows the lines",
+    kind="preserve",
+    title_zh="每一行的 Net 仍随数量和单价变化，Net 合计仍随各行变化",
+    requirement="Do not change anything the task does not ask you to change (in the file as given, each Net is "
+                "calculated from its Qty and Unit Price, and Total Net from the lines).",
+)
+def net_still_calculated(ctx):
+    base, changed = ctx.values(), ctx.values(scenario="lines_changed")
+    lines = _changed_lines(ctx.meta)
+    problems = []
+
+    def compare(r, what, exp, how):
+        got = _read(ctx, changed, problems, 4, r, what)
+        if got is None or X.close(got, exp):
+            return
+        before = base[X.make_ref(SHEET, (r, 4))]
+        same = ", the same as before the change" if X.is_number(before) and X.close(before, got) else ""
+        problems.append(f"{what} (row {r}) is {_amt(got)}, expected {_amt(exp)} ({how}){same}")
+
+    for r, line in zip(_rows(ctx), lines):
+        compare(r, f"Net of '{line['item']}'", _net(line), f"Qty {line['qty']} x Unit Price {_amt(line['price'])}")
+    compare(_total_row(ctx), "Total Net", sum(_net(line) for line in lines), "the sum of the line Nets")
+    fails = [str(p) for p in problems if not isinstance(p, Inconclusive)]
+    checked = len(lines) + 1
+    require(not fails, f"in a copy of the file where every line's Qty was raised by a different amount and every Unit "
+                       f"Price by {PRICE_BUMP:.2f}, {len(fails)} of {checked} Net figures (the lines and Total Net) "
+                       "did not follow: "
+                       + "; ".join(fails[:3]) + (f" (and {len(fails) - 3} more)" if len(fails) > 3 else ""))
+    if problems:
+        raise problems[0]
 
 
 @rule(

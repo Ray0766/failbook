@@ -56,7 +56,7 @@ scripts/demo-evidence-chain.sh xlsx-001
 | [xlsx-004](cases/xlsx-004-sort-scrambles-formulas/) | 排序后，每个公式仍指向原来的行 | medium | 实时性, 数值 |
 | [xlsx-005](cases/xlsx-005-insert-column-stale-refs/) | 插入一列后，另一张工作表上的公式悄悄错位 | medium | 实时性, 数值 |
 | [xlsx-006](cases/xlsx-006-rename-sheet-breaks-refs/) | 重命名工作表后，所有引用它的公式都失效了 | easy | 实时性, 数值 |
-| [xlsx-007](cases/xlsx-007-imported-text-numbers/) | 导入的金额和日期被存成文本，汇总公式直接忽略了它们 | easy | 内容, 数值 |
+| [xlsx-007](cases/xlsx-007-imported-text-numbers/) | 导入的金额和日期被存成文本，汇总公式直接忽略了它们 | easy | 内容, 数值, 结构 |
 | [xlsx-008](cases/xlsx-008-percent-entered-as-whole-numbers/) | 百分比按整数录入，结果放大了 100 倍 | easy | 内容, 数值 |
 | [xlsx-009](cases/xlsx-009-lookup-approximate-match/) | 查找公式没有使用精确匹配，返回了别的产品的数据 | medium | 数值 |
 | [xlsx-010](cases/xlsx-010-grand-total-double-counts/) | 总计把小计也一起加了进去，所有数字都算了两遍 | medium | 实时性, 数值 |

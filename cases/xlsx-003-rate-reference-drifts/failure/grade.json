@@ -33,6 +33,13 @@
       "detail": "2 of 3 values are wrong, e.g. Total VAT (Invoice!E16) evaluates to #VALUE!; Total Gross (Invoice!F16) evaluates to #VALUE!. Exact amounts and amounts rounded to whole cents are both accepted."
     },
     {
+      "id": "net-still-calculated",
+      "kind": "preserve",
+      "title": "Each line's Net still follows its Qty and Unit Price, and Total Net still follows the lines",
+      "status": "pass",
+      "detail": ""
+    },
+    {
       "id": "invoice-unchanged",
       "kind": "preserve",
       "title": "Line items, quantities, prices and the rate are unchanged",

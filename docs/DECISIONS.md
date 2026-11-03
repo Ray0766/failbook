@@ -43,8 +43,9 @@ project's own repository, package metadata or installed source, as each note say
   The Harbor image uses Debian trixie, whose LibreOffice 25.2 supports XLOOKUP; Ubuntu 24.04's 24.2 does not.
 - **Validation.** Every reference solution also passes after LibreOffice re-saves it (`failbook verify`).
 - **The audit script follows the same rule.** `audit_xlsx.py` in the skill recalculates with the same profile
-  setting; when LibreOffice is unavailable it says so and, with `--no-recalc`, falls back to the stored values
-  with a `recalculation-skipped` warning instead of silently trusting them.
+  setting. When LibreOffice is unavailable, or with `--no-recalc`, it reports a `recalculation-unavailable` or
+  `recalculation-skipped` warning and does not check error values at all (it does not fall back to the values
+  cached in the file, which may be stale); the structural checks still run.
 
 ## D3. Deterministic rules that check the outcome, not the method
 

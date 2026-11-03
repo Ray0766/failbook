@@ -23,7 +23,7 @@
       "kind": "structure",
       "title": "Every task row, including the new ones, is highlighted in red exactly when its Status is 'Blocked'",
       "status": "fail",
-      "detail": "D15, D16 (Status 'Blocked') are not highlighted in red; for D15: no conditional format with a colour applies to it"
+      "detail": "D15, D16 (Status 'Blocked') are not highlighted in red; for D15: no conditional format that sets a colour applies to it"
     },
     {
       "id": "existing-unchanged",

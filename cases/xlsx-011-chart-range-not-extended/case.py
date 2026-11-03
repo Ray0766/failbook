@@ -1,3 +1,7 @@
+import posixpath
+import zipfile
+from xml.etree import ElementTree as ET
+
 import openpyxl
 from openpyxl.chart import LineChart, Reference
 
@@ -44,7 +48,11 @@ def build(meta, outdir):
 
 
 def _charts(ctx):
-    return [c for c in X.charts(ctx.path()) if c["sheet"] == SHEET]
+    charts = [c for c in X.charts(ctx.path()) if c["sheet"] == SHEET]
+    for chart, typed in zip(charts, _typed_labels(ctx.path()), strict=True):
+        for s, labels in zip(chart["series"], typed, strict=True):
+            s["cat_typed"] = labels
+    return charts
 
 
 def _titled_charts(ctx):
@@ -115,6 +123,8 @@ SERIES = ((2, "Revenue"), (3, "Costs"))
 
 
 def _check_chart(ctx, chart):
+    """Every series and the month labels are checked before anything is called inconclusive: a part the
+    checker cannot read never hides a part it can show to be wrong."""
     wb, vals = ctx.wb(), ctx.values().ws(SHEET)
     found, unresolved = {}, []
     for s in chart["series"]:
@@ -123,28 +133,50 @@ def _check_chart(ctx, chart):
             unresolved.append(_describe(wb, s["val"]))
         elif rng[0] == SHEET and rng[2] == rng[4]:
             found.setdefault(rng[2], (s, rng))
+    missing = [label for col, label in SERIES if col not in found]
+    if missing and not unresolved:
+        require(False, f"the chart has no {missing[0]} series (series: {[s['val'] for s in chart['series']]})")
+    require(len(missing) <= len(unresolved),
+            f"the chart has no series over the {' or '.join(missing)} column and only one series the checker "
+            f"cannot resolve ({'; '.join(unresolved)}); one series draws one line, so the chart cannot show both "
+            f"{' and '.join(missing)}")
+    open_points = []
+    if missing:
+        open_points.append(
+            f"no chart series resolves to a fixed range in the {' or '.join(missing)} column. The checker resolves "
+            "plain ranges and names that stand for a fixed range, not "
+            f"{'; '.join(unresolved)}, so whether {'that line shows' if len(missing) == 1 else 'those lines show'} "
+            "January to December is not checked")
     for col, label in SERIES:
-        if col not in found:
-            if unresolved:
-                raise Inconclusive(
-                    f"no chart series resolves to a fixed range in the {label} column. The checker resolves "
-                    "plain ranges and names that stand for a fixed range, not "
-                    f"{'; '.join(unresolved)}, so whether the chart shows January to December is not checked")
-            require(False, f"the chart has no {label} series (series: {[s['val'] for s in chart['series']]})")
-        s, (_, r1, _, r2, _) = found[col]
-        where = s["val"]
-        first = X.show(vals.cell(r1, col).value)
-        require(r1 == 2, f"the {label} series ({where}) starts at row {r1} ({first}"
-                + (", the header" if r1 == 1 else "") + "), not at row 2 (Jan)")
-        require(r2 >= 13, f"the {label} series covers rows {r1}-{r2}, not 2-13 (Jan-Dec)")
-        extra = [r for r in range(14, r2 + 1) if vals.cell(r, col).value not in (None, "")]
-        require(not extra, f"the {label} series ({where}) also plots row {extra[0] if extra else ''}, which is not a month")
-        _check_labels(wb, vals, label, s)
-        _check_name(ctx, wb, label, s)
+        if col in found:
+            s, rng = found[col]
+            _check_values(vals, label, col, s, rng)
+            _note_inconclusive(open_points, _check_name, ctx, wb, label, s)
+    _note_inconclusive(open_points, _check_labels, wb, vals, chart)
+    if open_points:
+        raise Inconclusive(". ".join(p[0].upper() + p[1:] for p in open_points))
+
+
+def _note_inconclusive(open_points, check, *args):
+    try:
+        check(*args)
+    except Inconclusive as exc:
+        open_points.append(str(exc))
+
+
+def _check_values(vals, label, col, s, rng):
+    _, r1, _, r2, _ = rng
+    where = s["val"]
+    first = X.show(vals.cell(r1, col).value)
+    require(r1 == 2, f"the {label} series ({where}) starts at row {r1} ({first}"
+            + (", the header" if r1 == 1 else "") + "), not at row 2 (Jan)")
+    require(r2 >= 13, f"the {label} series covers rows {r1}-{r2}, not 2-13 (Jan-Dec)")
+    extra = [r for r in range(14, r2 + 1) if vals.cell(r, col).value not in (None, "")]
+    require(not extra, f"the {label} series ({where}) also plots row {extra[0] if extra else ''}, which is not a month")
 
 
 def _describe(wb, ref):
-    """What an unresolved series reference is, for an inconclusive message."""
+    """What an unresolved chart reference is, for an inconclusive message."""
     if not ref:
         return "a series whose values are typed into the chart"
     name = ref.split("!", 1)[1] if ref.startswith("[0]!") else ref
@@ -154,25 +186,32 @@ def _describe(wb, ref):
     return ref
 
 
-def _check_labels(wb, vals, label, s):
-    if not s["cat"]:
-        require(False, f"the {label} series has no month labels")
-    cat = X.resolve_range(s["cat"], wb, SHEET)
+def _check_labels(wb, vals, chart):
+    """The month labels on the category axis. A line chart has one category axis, drawn from the first series
+    that has category labels (a range or labels typed into the chart); labels on later series are not drawn."""
+    source = next((s for s in chart["series"] if s["cat"] or s.get("cat_typed") is not None), None)
+    require(source, "no series of the chart has category labels, so the axis does not show the month names")
+    typed = source.get("cat_typed")
+    if typed is not None:
+        require([X.norm_text(v) for v in typed] == [X.norm_text(m) for m in MONTHS],
+                f"the month labels typed into the chart read {typed}, not Jan to Dec as in the Month column")
+        return
+    ref = source["cat"]
+    cat = X.resolve_range(ref, wb, SHEET)
     if cat is None:
-        raise Inconclusive(f"the month labels of the {label} series ({s['cat']}) do not resolve to a fixed range "
-                           "the checker can read; they are not checked")
+        raise Inconclusive(f"the month labels come from {_describe(wb, ref)}, which does not resolve to a fixed "
+                           "range the checker can read; they are not checked")
     sheet, c1_row, c1, c2_row, c2 = cat
-    require(sheet == SHEET, f"the month labels of the {label} series come from sheet {sheet!r}, not {SHEET}")
+    require(sheet == SHEET, f"the month labels ({ref}) come from sheet {sheet!r}, not {SHEET}")
     if c1 != c2:
-        raise Inconclusive(f"the month labels of the {label} series span several columns ({s['cat']}); "
-                           "multi-level labels are not checked")
-    require(c1_row == 2, f"the month labels of the {label} series ({s['cat']}) start at row {c1_row}, not row 2, "
+        raise Inconclusive(f"the month labels ({ref}) span several columns; multi-level labels are not checked")
+    require(c1_row == 2, f"the month labels ({ref}) start at row {c1_row}, not row 2, "
             "so they do not line up with the values")
-    require(c2_row >= 13, f"the month labels of the {label} series cover rows {c1_row}-{c2_row}, not 2-13 (Jan-Dec)")
+    require(c2_row >= 13, f"the month labels ({ref}) cover rows {c1_row}-{c2_row}, not 2-13 (Jan-Dec)")
     for r, month in enumerate(MONTHS, start=2):
         got = vals.cell(r, c1).value
         require(X.norm_text(got) == X.norm_text(month),
-                f"the month labels of the {label} series ({s['cat']}) read {X.show(got)} in row {r}, not {month!r}")
+                f"the month labels ({ref}) read {X.show(got)} in row {r}, not {month!r}")
 
 
 def _check_name(ctx, wb, label, s):
@@ -189,3 +228,69 @@ def _check_name(ctx, wb, label, s):
                 "(the original chart took the names from the header row)")
     require(X.norm_text(shown) == X.norm_text(label),
             f"the series that plots the {label} column is named {X.show(shown)} ({source}), not {label!r}")
+
+
+_NS = {
+    "main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+    "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+    "c": "http://schemas.openxmlformats.org/drawingml/2006/chart",
+}
+_REL = "{http://schemas.openxmlformats.org/package/2006/relationships}Relationship"
+
+
+def _typed_labels(path):
+    """Category labels typed into the chart (``c:cat/c:strLit`` or ``c:numLit``) for each series of each chart
+    on the sheet, in the order X.charts lists them; None for a series without. X.charts reports category ranges
+    only, so this walks the package the same way (workbook, sheet, drawing, chart parts)."""
+    out = []
+    with zipfile.ZipFile(path) as z:
+        names = set(z.namelist())
+
+        def rels(part):
+            base = posixpath.dirname(part)
+            rels_part = posixpath.join(base, "_rels", posixpath.basename(part) + ".rels")
+            if rels_part not in names:
+                return {}
+            found = {}
+            for rel in ET.fromstring(z.read(rels_part)).iter(_REL):
+                target = rel.get("Target", "")
+                if rel.get("TargetMode") != "External":
+                    found[rel.get("Id")] = (target.lstrip("/") if target.startswith("/")
+                                           else posixpath.normpath(posixpath.join(base, target)))
+            return found
+
+        wb_rels = rels("xl/workbook.xml")
+        for sheet in ET.fromstring(z.read("xl/workbook.xml")).iterfind("main:sheets/main:sheet", _NS):
+            part = wb_rels.get(sheet.get(f"{{{_NS['r']}}}id"))
+            if sheet.get("name") != SHEET or part not in names:
+                continue
+            sheet_rels = rels(part)
+            for drawing in ET.fromstring(z.read(part)).iterfind("main:drawing", _NS):
+                drawing_part = sheet_rels.get(drawing.get(f"{{{_NS['r']}}}id"))
+                if drawing_part not in names:
+                    continue
+                for chart_part in rels(drawing_part).values():
+                    if chart_part in names and "/charts/" in chart_part:
+                        out.append(_series_typed_labels(ET.fromstring(z.read(chart_part))))
+    return out
+
+
+def _series_typed_labels(root):
+    plot = root.find("c:chart/c:plotArea", _NS)
+    out = []
+    for group in plot if plot is not None else []:
+        if not group.tag.split("}")[-1].endswith("Chart"):
+            continue
+        for ser in group.findall("c:ser", _NS):
+            lit = ser.find("c:cat/c:strLit", _NS)
+            if lit is None:
+                lit = ser.find("c:cat/c:numLit", _NS)
+            if lit is None:
+                out.append(None)
+                continue
+            points = {int(pt.get("idx")): pt.findtext("c:v", "", _NS)
+                      for pt in lit.findall("c:pt", _NS) if (pt.get("idx") or "").isdigit()}
+            count = lit.find("c:ptCount", _NS)
+            n = int(count.get("val")) if count is not None and (count.get("val") or "").isdigit() else 0
+            out.append([points.get(i, "") for i in range(max(n, max(points, default=-1) + 1))])
+    return out

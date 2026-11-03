@@ -67,10 +67,12 @@ def _rows(ctx):
 
 
 def _replanned(meta):
-    """[(row, target, revenue, growth)] in the "replanned" scenario: in a copy of the file, every
-    region's 2024 Revenue and Growth Target are changed by a different amount, so a 2025 Target,
-    a total or an overall growth figure that is a typed number no longer matches."""
-    return [(r, t, t["revenue"] + 10_000 * k, round(0.1 + 0.01 * k, 2))
+    """[(row, target, revenue, growth)] in the "replanned" scenario: in a copy of the file, the k-th
+    region's 2024 Revenue is raised by 10,000 x k and its Growth Target set to its new target plus k
+    percentage points (k = 1, 2, ...), so every one of them differs from what the task asks for, by
+    a different amount per region, and a 2025 Target, a total or an overall growth figure that is a
+    typed number, or that has a region's growth typed into its formula, no longer matches."""
+    return [(r, t, t["revenue"] + 10_000 * k, round(t["pct"] / 100 + 0.01 * k, 4))
             for k, (r, t) in enumerate(zip(range(2, 2 + len(meta["targets"])), meta["targets"]), start=1)]
 
 
@@ -170,8 +172,9 @@ def targets_still_calculated(ctx):
         before = base[ref]
         same = ", the same as before the change" if X.is_number(before) and X.close(before, got) else ""
         wrong.append(f"{what} is {fmt(got)}, expected {fmt(exp)}{same}")
-    require(not wrong, "in a copy of the file where every 2024 Revenue and Growth Target was changed, "
-                       f"{len(wrong)} of {len(checks)} figures did not follow: " + "; ".join(wrong[:3])
+    require(not wrong, "in a copy of the file where every 2024 Revenue was raised by a different amount and every "
+                       "Growth Target set to its new target plus a different number of percentage points (1 to "
+                       f"{len(rows)}), {len(wrong)} of {len(checks)} figures did not follow: " + "; ".join(wrong[:3])
                        + (f" (and {len(wrong) - 3} more)" if len(wrong) > 3 else ""))
 
 

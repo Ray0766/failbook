@@ -33,7 +33,7 @@ Requirements:
 
 ## Expected
 
-The three orders sit directly above the Total row, and every order's Amount (new and original) is Qty × Unit Price and follows its Qty and Unit Price. Total Qty and Total Amount include every order and change when any order changes.
+The three orders sit directly above the Total row, formatted like the other order rows, and every order's Amount (new and original) is Qty × Unit Price and follows its Qty and Unit Price. Total Qty and Total Amount include every order and change when any order changes.
 
 ## Observed in the failure artifact
 
@@ -50,6 +50,7 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 | Rule | Kind | What it checks | Failure artifact |
 |---|---|---|---|
 | `new-orders-added` | content | Each new order appears once, with the given date, customer, qty and price | pass |
+| `new-rows-formatted` | structure | The new orders' Date, Unit Price and Amount have the number formats of the original order rows | pass |
 | `existing-orders-unchanged` | no collateral damage | The original orders are unchanged and in their original order | pass |
 | `amounts-correct` | value | Amount equals Qty x Unit Price on every order row | pass |
 | `amounts-are-live` | live | Every order's Amount follows its Qty and Unit Price (new rows and original rows) | pass |
@@ -83,7 +84,7 @@ failbook run xlsx-001 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-001 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-001 --seeds 3`): [`reference.py`](reference.py) and [`alt_subtotal.py`](alt_subtotal.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_data_only_roundtrip.py`](fail_data_only_roundtrip.py) and [`fail_typed_new_amounts.py`](fail_typed_new_amounts.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-001 --seeds 3`): [`reference.py`](reference.py), [`alt_format_spellings.py`](alt_format_spellings.py) and [`alt_subtotal.py`](alt_subtotal.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_data_only_roundtrip.py`](fail_data_only_roundtrip.py), [`fail_new_rows_unformatted.py`](fail_new_rows_unformatted.py) and [`fail_typed_new_amounts.py`](fail_typed_new_amounts.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -92,6 +93,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 ## Limitations
 
 - Liveness is tested in one changed copy of the file (every order's Qty raised by a different amount, every Unit Price by 1.00). Formula text is never inspected, so a formula that happens to give the right results for both the original and the changed inputs would pass.
+- "In the same format as the other order rows" is checked as the number formats of Date, Unit Price and Amount, the columns the original order rows format (yyyy-mm-dd, #,##0.00, #,##0.00). Spellings of one format count as the same (letter case, a literal written plainly, quoted or backslash-escaped, as LibreOffice saves it); any other difference, such as a time part in the date format, 0.00 instead of #,##0.00 or a locale tag, fails even where the cells happen to look the same. Order ID, Customer and Qty (General in the original rows), fonts, fills, borders and alignment are not compared.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
 Further reading:
@@ -128,7 +130,7 @@ Further reading:
 
 ### 预期结果
 
-三笔订单紧贴合计行上方；每笔订单（新的和原有的）的 Amount 都等于 Qty × Unit Price，并随数量和单价变化。合计的 Qty 与 Amount 包含全部订单，并随任一订单变化。
+三笔订单紧贴合计行上方，格式与其他订单行一致；每笔订单（新的和原有的）的 Amount 都等于 Qty × Unit Price，并随数量和单价变化。合计的 Qty 与 Amount 包含全部订单，并随任一订单变化。
 
 ### 失败产物中观察到的情况
 
@@ -145,6 +147,7 @@ Further reading:
 | 规则 | 类型 | 检查内容 | 失败产物的判定 |
 |---|---|---|---|
 | `new-orders-added` | 内容 | 每笔新订单出现且仅出现一次，日期、客户、数量和单价正确 | pass |
+| `new-rows-formatted` | 结构 | 新订单的 Date、Unit Price 和 Amount 与原有订单行的数字格式相同 | pass |
 | `existing-orders-unchanged` | 无连带破坏 | 原有订单保持不变，顺序不变 | pass |
 | `amounts-correct` | 数值 | 每一行的 Amount 都等于 Qty × Unit Price | pass |
 | `amounts-are-live` | 实时性 | 每笔订单（新行和原有行）的 Amount 都随 Qty 和 Unit Price 变化 | pass |
@@ -169,4 +172,5 @@ Further reading:
 ### 限制
 
 - 实时性只在一个修改过的副本中检验（每笔订单的数量各加上不同的值，每个单价加 1.00）。检查不读公式文本，因此若某个公式恰好在原始输入和修改后的输入下都给出正确结果，也会通过。
+- “格式与其他订单行保持一致”按数字格式检查：比较 Date、Unit Price 和 Amount 三列，即原有订单行设置了格式的列（yyyy-mm-dd、#,##0.00、#,##0.00）。同一格式的不同写法视为相同（字母大小写，字面字符直接写、加引号或用反斜杠转义，如 LibreOffice 保存的写法）；其他差异，例如日期格式带时间部分、用 0.00 代替 #,##0.00 或带地区标记，即使单元格碰巧显示相同也判为失败。Order ID、Customer 和 Qty（原有行为 General）以及字体、填充、边框和对齐不作比较。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

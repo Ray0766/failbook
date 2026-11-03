@@ -1,5 +1,6 @@
 """The audit shipped with spreadsheet-verify-skill: no errors on ordinary correct edits, errors kept
-on real breakage, recalculation that is forced and fails softly, and the skill installed whole."""
+on real breakage, recalculation that is forced and fails softly, unreadable or oversized inputs
+handled without a traceback, and the skill installed whole."""
 
 import os
 import re
@@ -177,6 +178,266 @@ def test_renamed_row_label_is_a_warning_and_deleted_rows_an_error(tmp_path):
     assert not _errors(found)
     assert "warning" in _levels(found, "reference-label-changed")
     assert "error" in _levels(audit(case.failure_dir / name, before, recalc=False), "reference-meaning-changed")
+
+
+# -- correct edits from the second review: no error; the wrong variants still get one ----------
+def _book(path, rows, title="Sheet", extra=None):
+    """A one-sheet workbook from a list of rows; ``extra`` maps cells to values."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = title
+    for row in rows:
+        ws.append(row)
+    for cell, value in (extra or {}).items():
+        ws[cell] = value
+    wb.save(path)
+    return path
+
+
+def _edit(src, dest, change):
+    wb = openpyxl.load_workbook(src)
+    change(wb)
+    wb.save(dest)
+    return dest
+
+
+def _findings(after, before=None):
+    return [f for f in audit(after, before, recalc=False) if f.check != "recalculation-skipped"]
+
+
+def _ledger(path):
+    """A cash ledger with a running balance: D_r = D_(r-1) + C_r."""
+    items = [("Opening", 1000), ("Rent", -400), ("Invoice 17", 650), ("Fuel", -60), ("Invoice 18", 300),
+             ("Phone", -45), ("Bank fee", -5), ("Invoice 19", 820)]
+    rows = [["Date", "Description", "Amount", "Balance"]]
+    rows += [[f"2024-03-{r:02d}", d, a, "=C2" if r == 2 else f"=D{r - 1}+C{r}"] for r, (d, a) in enumerate(items, start=2)]
+    return _book(path, rows, "Ledger")
+
+
+def test_workbook_with_a_chart_sheet_is_compared(tmp_path):
+    from openpyxl.chart import BarChart, Reference
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Data"
+    ws.append(["Month", "Revenue"])
+    for i in range(1, 7):
+        ws.append([f"M{i}", 100 * i])
+    ws["A8"], ws["B8"] = "Total", "=SUM(B2:B7)"
+    chart = BarChart()
+    chart.add_data(Reference(ws, min_col=2, min_row=1, max_row=7), titles_from_data=True)
+    wb.create_chartsheet("Chart").add_chart(chart)
+    before = tmp_path / "before.xlsx"
+    wb.save(before)
+    after = _edit(before, tmp_path / "after.xlsx", lambda w: w["Data"].__setitem__("B3", 250))
+    assert _findings(after, before) == []
+    assert main([str(after), "--before", str(before), "--no-recalc"]) == 0
+    gone = _edit(before, tmp_path / "gone.xlsx", lambda w: w.remove(w["Chart"]))
+    assert [(f.level, f.check, f.where) for f in _findings(gone, before)] == [("error", "sheet-removed", "Chart")]
+
+
+def test_sort_that_breaks_single_cell_references_is_an_error(tmp_path):
+    rows = [["Product", "Category", "Price", "Unit", "Supplier"]]
+    rows += [[p, "Fruit", x, "kg", "Acme"] for p, x in [("Apple", 2.1), ("Banana", 1.2), ("Kiwi", 3.4), ("Mango", 2.9)]]
+    before = _book(tmp_path / "before.xlsx", rows, "Prices")
+    wb = openpyxl.load_workbook(before)
+    summary = wb.create_sheet("Summary")
+    summary["A1"], summary["B1"] = "Apple price", "=Prices!C2"
+    wb.save(before)
+
+    def sort(w):  # rows written back sorted by price; =Prices!C2 left alone, so it now shows Kiwi's price
+        ws = w["Prices"]
+        data = sorted(([c.value for c in r] for r in ws.iter_rows(min_row=2)), key=lambda r: -r[2])
+        for r, values in enumerate(data, start=2):
+            for col, v in enumerate(values, start=1):
+                ws.cell(r, col, v)
+
+    found = _findings(_edit(before, tmp_path / "after.xlsx", sort), before)
+    assert [(f.level, f.check, f.where) for f in found] == [("error", "reference-meaning-changed", "Summary!B1")]
+    assert "'Apple' is now in row 4" in found[0].message
+    assert not any("stayed the same" in f.message for f in found)
+
+
+@pytest.mark.parametrize("edit", ["append", "sort", "title"])
+def test_renamed_sheet_that_was_also_extended_sorted_or_titled_is_a_rename(tmp_path, edit):
+    reps = ["Ana", "Ben", "Cai", "Dee", "Eli", "Fay", "Gus", "Hal", "Ivy", "Jon", "Kim", "Lou"]
+    rows = [["Region", "Rep", "Revenue"]] + [["North" if i % 2 else "South", r, 1000 + 137 * ((i * 7) % 12)]
+                                             for i, r in enumerate(reps)]
+    before = _book(tmp_path / "before.xlsx", rows, "Data")
+    wb = openpyxl.load_workbook(before)
+    wb.create_sheet("Summary")["B2"] = "=SUM(Data!C2:C13)"
+    wb.save(before)
+
+    def change(w):
+        ws = w["Data"]
+        ws.title = "Sales 2024"
+        first = 2
+        if edit == "append":
+            for i in range(15):
+                ws.append(["North" if i % 3 else "South", f"New{i}", 900 + 11 * i])
+        elif edit == "sort":
+            data = sorted(([c.value for c in r] for r in ws.iter_rows(min_row=2)), key=lambda r: -r[2])
+            for r, values in enumerate(data, start=2):
+                for col, v in enumerate(values, start=1):
+                    ws.cell(r, col, v)
+        else:
+            ws.insert_rows(1)
+            ws["A1"] = "Sales by rep, 2024"
+            first = 3
+        w["Summary"]["B2"] = f"=SUM('Sales 2024'!C{first}:C{ws.max_row})"
+
+    found = _findings(_edit(before, tmp_path / "after.xlsx", change), before)
+    assert "sheet-removed" not in {f.check for f in found}
+    assert not _errors(found)
+
+
+def test_inserted_column_or_spacer_row_keeps_correct_unchanged_formulas(tmp_path):
+    rows = [["Item", "Qty", "Price", "Total"]]
+    rows += [[it, q, p, f"=B{r}*C{r}"] for r, (it, q, p) in enumerate([("Pen", 10, 1.5), ("Pad", 4, 3.2), ("Ink", 2, 12.0)], start=2)]
+    before = _book(tmp_path / "orders.xlsx", rows + [["Total", None, None, "=SUM(D2:D4)"]], "Orders")
+
+    def insert_column(w):  # a Notes column before Total: Excel keeps =B2*C2, now in column E
+        ws = w.active
+        ws.insert_cols(4)
+        ws["D1"], ws["E5"] = "Notes", "=SUM(E2:E4)"
+
+    assert _findings(_edit(before, tmp_path / "inscol.xlsx", insert_column), before) == []
+    sales = _book(tmp_path / "sales.xlsx", [["Month", "Revenue"]] + [[f"M{r - 1}", 100 * r] for r in range(2, 11)],
+                  "Sales", {"A11": "Total", "B11": "=SUM(B2:B10)"})
+    spaced = _edit(sales, tmp_path / "gap.xlsx", lambda w: w.active.insert_rows(11))  # Excel keeps =SUM(B2:B10)
+    assert _findings(spaced, sales) == []
+
+
+def test_formulas_moved_with_the_rows_they_read_are_still_an_error(tmp_path):
+    before = _ledger(tmp_path / "before.xlsx")
+
+    def insert(w):  # openpyxl moves the formulas down as text; =D5+C6 now sits in row 7 and reads row 6
+        ws = w.active
+        ws.insert_rows(6)
+        ws["A6"], ws["B6"], ws["C6"] = "2024-03-05", "Refund", 25
+
+    found = _findings(_edit(before, tmp_path / "after.xlsx", insert), before)
+    assert [(f.level, f.check) for f in found] == [("error", "formula-moved-as-text")]
+    case = load_case("xlsx-004")
+    name = case.outputs[0]
+    assert "error" in _levels(audit(case.failure_dir / name, case.input_dir / name, recalc=False), "formula-moved-as-text")
+
+
+def test_running_balance_refilled_after_an_inserted_row_is_clean(tmp_path):
+    before = _ledger(tmp_path / "before.xlsx")
+
+    def insert(w):  # the correct final state: every row r has =D(r-1)+C(r)
+        ws = w.active
+        ws.insert_rows(6)
+        ws["A6"], ws["B6"], ws["C6"] = "2024-03-05", "Refund", 25
+        for r in range(3, ws.max_row + 1):
+            ws.cell(r, 4, f"=D{r - 1}+C{r}")
+
+    assert _findings(_edit(before, tmp_path / "after.xlsx", insert), before) == []
+    # An absolute row ($5) in the same layout does not follow the rows: still an error.
+    rows = [["Item", "Base", "Qty", "Cost"]] + [[f"I{r}", 10 * r, r, f"=B$5*C{r}"] for r in range(2, 10)]
+    anchored = _book(tmp_path / "anchored.xlsx", rows, "Calc")
+
+    def insert_above(w):
+        ws = w.active
+        ws.insert_rows(3)
+        ws["A3"], ws["B3"], ws["C3"] = "new", 7, 1
+        for r in range(2, 11):
+            ws.cell(r, 4, f"=B$5*C{r}")
+
+    found = _findings(_edit(anchored, tmp_path / "anchored-after.xlsx", insert_above), anchored)
+    assert _errors(found) and {f.check for f in _errors(found)} == {"reference-meaning-changed"}
+
+
+def test_half_year_sums_below_a_total_are_not_omitted_data(tmp_path):
+    rows = [["Month", "Revenue"]] + [[f"2024-{r - 1:02d}", 100 + 10 * r] for r in range(2, 14)]
+    before = _book(tmp_path / "before.xlsx", rows, "Sales", {"A14": "Total", "B14": "=SUM(B2:B13)"})
+    halves = _edit(before, tmp_path / "halves.xlsx", lambda w: [w.active.__setitem__(k, v) for k, v in
+                                                                 {"A15": "H1", "B15": "=SUM(B2:B7)",
+                                                                  "A16": "H2", "B16": "=SUM(B8:B13)"}.items()])
+    assert _findings(halves, before) == []
+    # A part that does not split the total exactly is a question, not a verdict.
+    first_half = _edit(before, tmp_path / "h1.xlsx", lambda w: w.active.__setitem__("B15", "=SUM(B2:B7)"))
+    assert _levels(_findings(first_half, before), "range-omits-adjacent-cells") == ["warning"]
+
+
+def test_chart_that_leaves_out_the_total_row_is_clean(tmp_path):
+    from openpyxl.chart import BarChart, Reference
+
+    def chart_book(path, months, last):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Revenue"
+        ws.append(["Month", "Revenue"])
+        for i, m in enumerate(months):
+            ws.append([m, 1000 + 75 * i])
+        ws.cell(len(months) + 2, 1, "Total")
+        ws.cell(len(months) + 2, 2, f"=SUM(B2:B{len(months) + 1})")
+        chart = BarChart()
+        chart.add_data(Reference(ws, min_col=2, min_row=1, max_row=last), titles_from_data=True)
+        ws.add_chart(chart, "D2")
+        wb.save(path)
+        return path
+
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+    assert _findings(chart_book(tmp_path / "ok.xlsx", months, 7)) == []
+    # Jul and Aug typed above the total, chart not extended: the warning stops at the last month.
+    found = _findings(chart_book(tmp_path / "short.xlsx", months + ["Jul", "Aug"], 7))
+    assert [f.level for f in found] == ["warning"] and "data continues to row 9" in found[0].message
+
+
+def test_no_recalc_help_says_error_values_are_not_checked(capsys):
+    from failbook.cli import main as failbook_main
+
+    for run in (lambda: failbook_main(["audit", "--help"]), lambda: main(["--help"])):
+        with pytest.raises(SystemExit) as exit_info:
+            run()
+        assert exit_info.value.code == 0
+        text = " ".join(capsys.readouterr().out.split())
+        assert audit_mod.NO_RECALC_HELP in text and "saved in the file" not in text
+        assert "3 a workbook could not be read" in text
+
+
+def test_stray_formatted_cell_far_down_does_not_inflate_the_work(tmp_path):
+    from openpyxl.styles import Font
+
+    rows = [["Item", "Qty", "Price", "Total"]] + [[f"I{r}", r, 1.5, f"=B{r}*C{r}"] for r in range(2, 22)]
+    before = _book(tmp_path / "before.xlsx", rows, "Data", {"A22": "Total", "D22": "=SUM(D2:D21)"})
+    wb = openpyxl.load_workbook(before)
+    wb.active["H1048576"].font = Font(bold=True)  # styled, empty: the used range now ends at row 1048576
+    wb.save(before)
+    after = _edit(before, tmp_path / "after.xlsx", lambda w: w.active.__setitem__("B3", 7))
+    old, new = openpyxl.load_workbook(before), openpyxl.load_workbook(after)
+    stored = len(new.active._cells), len(old.active._cells)
+    found = audit_mod._static_checks(new, after)
+    audit_mod.compare(old, new, found)
+    check_errors(new, new, found)
+    assert not _errors(found)
+    # The checks visited only stored cells; iter_rows() would have created about 8.4 million.
+    assert (len(new.active._cells), len(old.active._cells)) == stored
+
+
+def test_unreadable_workbook_is_a_message_and_exit_code_3(tmp_path, capsys):
+    good = load_case("xlsx-001").input_dir / "sales.xlsx"
+    truncated = tmp_path / "truncated.xlsx"
+    truncated.write_bytes(good.read_bytes()[:3000])
+    encrypted = tmp_path / "encrypted.xlsx"
+    encrypted.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + bytes(4000))  # the OLE container of an encrypted file
+    cases = [([str(truncated)], "truncated"), ([str(encrypted)], "password-protected"),
+             ([str(tmp_path / "missing.xlsx")], "No such file"), ([str(good), "--before", str(truncated)], "--before")]
+    for argv, reason in cases:
+        assert main(argv + ["--no-recalc"]) == 3
+        captured = capsys.readouterr()
+        assert captured.out == "" and "Traceback" not in captured.err and reason in captured.err
+
+
+def test_fallback_chart_reader_takes_the_title_not_the_axis_titles():
+    from failbook.xlsx import charts
+
+    path = load_case("xlsx-011").failure_dir / "monthly.xlsx"
+    full = [c["title"] for c in charts(path)]
+    assert full and all(full)
+    assert [c["title"] for c in audit_mod._charts_fallback(path)] == full
 
 
 # -- error values --------------------------------------------------------------------------------

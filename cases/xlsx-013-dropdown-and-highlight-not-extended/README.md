@@ -49,7 +49,7 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 |---|---|---|---|
 | `tasks-added` | content | The new tasks are appended after the existing ones with the given values | pass |
 | `dropdown-covers-new-rows` | structure | The Status dropdown applies to every task row, including the new ones | **FAIL**: the Status dropdown does not cover D14, D15, D16, D17, D18 |
-| `highlight-covers-new-rows` | structure | Every task row, including the new ones, is highlighted in red exactly when its Status is 'Blocked' | **FAIL**: D15, D16 (Status 'Blocked') are not highlighted in red; for D15: no conditional format with a colour applies to it |
+| `highlight-covers-new-rows` | structure | Every task row, including the new ones, is highlighted in red exactly when its Status is 'Blocked' | **FAIL**: D15, D16 (Status 'Blocked') are not highlighted in red; for D15: no conditional format that sets a colour applies to it |
 | `existing-unchanged` | no collateral damage | The existing tasks are unchanged | pass |
 
 Files: [`failure/tracker.xlsx`](failure/tracker.xlsx) (graded in [`failure/grade.json`](failure/grade.json)); the steps that produced it: [`failure.py`](failure.py).
@@ -78,7 +78,7 @@ failbook run xlsx-013 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-013 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-013 --seeds 3`): [`reference.py`](reference.py), [`alt_begins_with.py`](alt_begins_with.py), [`alt_named_status_list.py`](alt_named_status_list.py) and [`alt_whole_column.py`](alt_whole_column.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_absolute_ref.py`](fail_absolute_ref.py), [`fail_green_highlight.py`](fail_green_highlight.py) and [`fail_offset_formula.py`](fail_offset_formula.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-013 --seeds 3`): [`reference.py`](reference.py), [`alt_begins_with.py`](alt_begins_with.py), [`alt_chinese_list_name.py`](alt_chinese_list_name.py), [`alt_due_date_in_formula.py`](alt_due_date_in_formula.py), [`alt_named_status_list.py`](alt_named_status_list.py), [`alt_sheet_name_lowercase.py`](alt_sheet_name_lowercase.py) and [`alt_whole_column.py`](alt_whole_column.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_absolute_ref.py`](fail_absolute_ref.py), [`fail_error_alert_off.py`](fail_error_alert_off.py), [`fail_fill_pattern_none.py`](fail_fill_pattern_none.py), [`fail_green_highlight.py`](fail_green_highlight.py), [`fail_hidden_dropdown.py`](fail_hidden_dropdown.py), [`fail_offset_formula.py`](fail_offset_formula.py), [`fail_stop_if_true_first.py`](fail_stop_if_true_first.py) and [`fail_unquoted_status.py`](fail_unquoted_status.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -86,8 +86,8 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 ## Limitations
 
-- The highlight rule evaluates the conditional formats on each Status cell for the current Status and for each of the four statuses. It understands cell-value rules, text rules (contains, begins with, ends with) and formula rules built from cell references, text, comparisons and a few functions (AND, OR, NOT, IF, EXACT, SEARCH, FIND, LEFT, RIGHT, LEN, TRIM, ISNUMBER, ISERROR ...). Other rule types and functions, and colours it cannot resolve, make the rule inconclusive. "Red" is judged by hue, so light red fills such as FFC7CE count. A cell's own fill is not considered, only conditional formatting.
-- A dropdown whose options come from a range or from a defined name that stands for a fixed range is resolved; other sources (INDIRECT, OFFSET) make the dropdown rule inconclusive.
+- The highlight rule evaluates the conditional formats on each Status cell for the current Status and for each of the four statuses. It understands cell-value rules, text rules (contains, begins with, ends with) and formula rules built from cell references, text, comparisons and a few functions (AND, OR, NOT, IF, EXACT, SEARCH, FIND, LEFT, RIGHT, LEN, TRIM, ISNUMBER, ISERROR ...). Dates compare as serial numbers, sheet names match in any letter case, and a name the workbook does not define gives #NAME?, so its rule does not apply. Other rule types and functions, defined names, and colours it cannot resolve make the rule inconclusive. A colour counts as red when its hue is between 340 and 15 degrees, its saturation (HSV) is at least 15% and its brightness at least 25%, so light red fills such as FFC7CE count; a paler red (saturation 5 to 15%, such as F2DCDB, the theme colour "Red, Accent 2, Lighter 80%") makes the rule inconclusive. A conditional fill with patternType "none" is no fill. A conditional fill that gives only a pattern colour (fgColor) and no pattern type is inconclusive too: LibreOffice paints nothing for it, and what Excel paints is not established. A cell's own fill is not considered, only conditional formatting.
+- A dropdown whose options come from a range or from a defined name (in any script) that stands for a fixed range is resolved; other sources (INDIRECT, OFFSET) make the dropdown rule inconclusive. A list validation with showDropDown="1" hides the in-cell list, so its cells count as having no dropdown. The original validation refuses other entries (a "Stop" error alert), so every Status cell must still do so; an alert that is off, or of style Warning or Information, lets other text through and fails the rule.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
 ---
@@ -136,7 +136,7 @@ Status 下拉列表和 'Blocked' 红色高亮覆盖所有任务行（含五个�
 |---|---|---|---|
 | `tasks-added` | 内容 | 新任务按给定内容追加在现有任务之后 | pass |
 | `dropdown-covers-new-rows` | 结构 | Status 下拉列表覆盖所有任务行（含新行） | **FAIL**: the Status dropdown does not cover D14, D15, D16, D17, D18 |
-| `highlight-covers-new-rows` | 结构 | 所有任务行（含新行）在且仅在 Status 为 'Blocked' 时显示红色高亮 | **FAIL**: D15, D16 (Status 'Blocked') are not highlighted in red; for D15: no conditional format with a colour applies to it |
+| `highlight-covers-new-rows` | 结构 | 所有任务行（含新行）在且仅在 Status 为 'Blocked' 时显示红色高亮 | **FAIL**: D15, D16 (Status 'Blocked') are not highlighted in red; for D15: no conditional format that sets a colour applies to it |
 | `existing-unchanged` | 无连带破坏 | 原有任务保持不变 | pass |
 
 ### 解释
@@ -155,6 +155,6 @@ Status 下拉列表和 'Blocked' 红色高亮覆盖所有任务行（含五个�
 
 ### 限制
 
-- 高亮规则针对每个 Status 单元格，分别在当前状态和四种状态下计算条件格式的效果。它能理解"单元格值"规则、文本规则（包含、开头是、结尾是），以及由单元格引用、文本、比较和少数函数（AND、OR、NOT、IF、EXACT、SEARCH、FIND、LEFT、RIGHT、LEN、TRIM、ISNUMBER、ISERROR 等）组成的公式规则。其他规则类型、函数或无法解析的颜色会使该规则判为"无法判定"。"红色"按色相判断，因此 FFC7CE 这类浅红填充也算。只考虑条件格式，不考虑单元格本身的填充色。
-- 下拉列表的选项来自区域或指向固定区域的命名区域时会被解析；其他来源（INDIRECT、OFFSET）会使下拉列表规则判为"无法判定"。
+- 高亮规则针对每个 Status 单元格，分别在当前状态和四种状态下计算条件格式的效果。它能理解"单元格值"规则、文本规则（包含、开头是、结尾是），以及由单元格引用、文本、比较和少数函数（AND、OR、NOT、IF、EXACT、SEARCH、FIND、LEFT、RIGHT、LEN、TRIM、ISNUMBER、ISERROR 等）组成的公式规则。日期按序列号比较；工作表名不区分大小写；工作簿中未定义的名称得到
+- 下拉列表的选项来自区域或指向固定区域的命名区域（名称可用任何文字）时会被解析；其他来源（INDIRECT、OFFSET）会使下拉列表规则判为"无法判定"。showDropDown="1" 的列表验证会隐藏单元格内的下拉列表，因此其覆盖的单元格视为没有下拉列表。原有验证会拒绝列表以外的输入（"停止"样式的出错警告），所以每个 Status 单元格仍须如此；关闭出错警告，或改用"警告""信息"样式，都会放行其他文本，判为不通过。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

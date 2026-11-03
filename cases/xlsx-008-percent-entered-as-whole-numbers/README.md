@@ -88,7 +88,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 ## Limitations
 
 - A value stored as the text '12%' is reported as not a number; the rule does not try to interpret text.
-- Whether the 2025 Target column, the Total row and the overall growth are still calculated is tested in one changed copy of the file (every 2024 Revenue and Growth Target changed by a different amount); formula text is never inspected.
+- Whether the 2025 Target column, the Total row and the overall growth are still calculated is tested in one changed copy of the file (the k-th region's 2024 Revenue raised by 10,000 × k and its Growth Target set to its new target plus k percentage points, k = 1 to 5); formula text is never inspected.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
 ---
@@ -158,5 +158,5 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 ### 限制
 
 - 以文本 '12%' 存储的值会被判为非数字，规则不尝试解析文本。
-- 2025 Target 列、Total 行和整体增长率是否仍随收入和增长率变化，只在一个修改过的副本中检验（每个 2024 Revenue 和 Growth Target 各改为不同的值）；检查不读公式文本。
+- 2025 Target 列、Total 行和整体增长率是否仍随收入和增长率变化，只在一个修改过的副本中检验（第 k 个区域的 2024 Revenue 加 10,000 × k，其 Growth Target 设为新目标加 k 个百分点，k = 1 至 5）；检查不读公式文本。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

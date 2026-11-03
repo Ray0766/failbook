@@ -432,13 +432,15 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--out", default="docs/evidence")
     sp.set_defaults(func=cmd_ablation)
 
-    sp = sub.add_parser("audit", help="check an edited workbook for silent spreadsheet mistakes (case-agnostic)")
+    from .audit import EXIT_CODES as AUDIT_EXIT_CODES, NO_RECALC_HELP as AUDIT_NO_RECALC_HELP
+
+    sp = sub.add_parser("audit", help="check an edited workbook for silent spreadsheet mistakes (case-agnostic)",
+                        epilog=AUDIT_EXIT_CODES)
     sp.add_argument("after")
     sp.add_argument("--before", help="the original workbook, to detect collateral damage")
     sp.add_argument("--recalculated", metavar="COPY.xlsx",
                     help="also save the copy LibreOffice recalculated (read it with openpyxl data_only=True)")
-    sp.add_argument("--no-recalc", action="store_true",
-                    help="skip LibreOffice and read the values saved in the file (reported as a warning: they may be stale)")
+    sp.add_argument("--no-recalc", action="store_true", help=AUDIT_NO_RECALC_HELP)
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=cmd_audit)
 

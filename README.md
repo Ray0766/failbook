@@ -68,7 +68,7 @@ untouched input must fail (`failbook verify --seeds 3`).
 | [xlsx-004](cases/xlsx-004-sort-scrambles-formulas/) | Sorting rows leaves each formula pointing at its old row | medium | live, value |
 | [xlsx-005](cases/xlsx-005-insert-column-stale-refs/) | Inserting a column silently breaks formulas on another sheet | medium | live, value |
 | [xlsx-006](cases/xlsx-006-rename-sheet-breaks-refs/) | Renaming a sheet breaks every formula that referred to it | easy | live, value |
-| [xlsx-007](cases/xlsx-007-imported-text-numbers/) | Imported amounts and dates are stored as text, so totals ignore them | easy | content, value |
+| [xlsx-007](cases/xlsx-007-imported-text-numbers/) | Imported amounts and dates are stored as text, so totals ignore them | easy | content, structure, value |
 | [xlsx-008](cases/xlsx-008-percent-entered-as-whole-numbers/) | Percentages typed as whole numbers become 100 times too large | easy | content, value |
 | [xlsx-009](cases/xlsx-009-lookup-approximate-match/) | A lookup without exact match returns another product's data | medium | value |
 | [xlsx-010](cases/xlsx-010-grand-total-double-counts/) | A grand total sums the subtotals as well, counting everything twice | medium | live, value |

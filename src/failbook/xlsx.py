@@ -291,11 +291,41 @@ def parse_range(ref: str) -> tuple[str, int, int, int, int] | None:
 _LOCAL_RANGE_RE = re.compile(r"^\$?[A-Za-z]{1,3}\$?\d+(?::\$?[A-Za-z]{1,3}\$?\d+)?$")
 
 
+#: A defined name: a letter of any script, ``_`` or ``\`` first, then letters, digits, ``_ . \ ?`` (as Excel allows).
+_NAME_RE = re.compile(r"(?:[^\W\d]|\\)[\w.\\?]*")
+
+
+def sheet_named(wb, name: str | None) -> str | None:
+    """The workbook's sheet called ``name``, matched case-insensitively as Excel does; None if there is none."""
+    if not name:
+        return None
+    want = name.casefold()
+    return next((s for s in wb.sheetnames if s.casefold() == want), None)
+
+
+def _split_name(text: str, sheet: str | None) -> tuple[str | None, str] | None:
+    """``"[0]!Revenue"`` / ``"'My sheet'!Revenue"`` / ``"Revenue"`` -> (scope sheet or None, name), or None."""
+    scope, name = sheet, text
+    if text.startswith("[0]!"):  # a workbook-level name, as charts write it
+        name, scope = text[4:], None
+    elif "!" in text:
+        sheet_part, name = text.rsplit("!", 1)
+        if sheet_part.startswith("'") and sheet_part.endswith("'"):
+            sheet_part = sheet_part[1:-1].replace("''", "'")
+        if sheet_part.startswith("["):
+            return None  # another workbook
+        scope = sheet_part
+    if not _NAME_RE.fullmatch(name):
+        return None
+    return scope, name
+
+
 def _defined_name(wb, name: str, sheet: str | None):
     """The defined name ``name`` as seen from ``sheet``: a sheet-scoped name first, then a workbook name."""
     want = name.casefold()
     scopes = []
-    if sheet and sheet in wb.sheetnames:
+    sheet = sheet_named(wb, sheet)
+    if sheet:
         scopes.append((sheet, getattr(wb[sheet], "defined_names", {}) or {}))
     scopes.append((None, wb.defined_names))
     for scope, names in scopes:
@@ -328,19 +358,10 @@ def resolve_range(ref: str | None, wb=None, sheet: str | None = None,
         return parse_range(f"{quote_sheet(sheet)}!{text}")
     if wb is None or _depth > 5:
         return None
-    scope = sheet
-    name = text
-    if text.startswith("[0]!"):  # a workbook-level name, as charts write it
-        name, scope = text[4:], None
-    elif "!" in text:
-        sheet_part, name = text.rsplit("!", 1)
-        if sheet_part.startswith("'") and sheet_part.endswith("'"):
-            sheet_part = sheet_part[1:-1].replace("''", "'")
-        if sheet_part.startswith("["):
-            return None  # another workbook
-        scope = sheet_part
-    if not re.fullmatch(r"[A-Za-z_\\][\w.\\]*", name):
+    split = _split_name(text, sheet)
+    if split is None:
         return None
+    scope, name = split
     found = _defined_name(wb, name, scope)
     if found is None:
         return None
@@ -412,23 +433,75 @@ def colour_rgb(color, wb=None) -> str | None:
     return None
 
 
+#: Saturation (HSV) from which a red hue counts as red, and below which down to PALE_SATURATION it is a pale red.
+RED_SATURATION, PALE_SATURATION = 0.15, 0.05
+
+
 def is_red(rgb: str | None) -> bool | None:
-    """Whether a colour reads as red (light red fills such as FFC7CE included); None if unknown."""
+    """Whether a colour reads as red: a hue from 340 to 15 degrees, HSV saturation at least 15%, value at least 25%.
+
+    Light red fills such as FFC7CE (Excel's "Light Red Fill") count. None if the colour is
+    unknown, or if it is a pale red (saturation 5-15%, such as F2DCDB, the theme colour
+    "Red, Accent 2, Lighter 80%"), which the checker does not judge either way.
+    """
     if rgb is None:
         return None
     r, g, b = (int(rgb[i:i + 2], 16) / 255 for i in (0, 2, 4))
     h, s, v = colorsys.rgb_to_hsv(r, g, b)
     hue = h * 360
-    return (hue >= 340 or hue <= 15) and s >= 0.15 and v >= 0.25
+    if not (hue >= 340 or hue <= 15) or v < 0.25 or s < PALE_SATURATION:
+        return False
+    return True if s >= RED_SATURATION else None
 
 
-def dxf_colours(dxf, wb=None) -> dict[str, Any]:
+class Unresolved(str):
+    """``"?"``: a colour the checker does not resolve; ``why`` says what it is and why."""
+
+    def __new__(cls, why: str):
+        obj = super().__new__(cls, "?")
+        obj.why = why
+        return obj
+
+
+def dxf_fill_patterns(path: str | Path) -> list[str | None]:
+    """The ``patternType`` of each conditional-format style's fill as written in the file, by dxf index.
+
+    openpyxl reads ``patternType="none"`` as None, the same as an absent attribute, but the
+    two differ: no pattern type is how Excel writes a solid conditional fill, ``"none"`` is
+    no fill. Entries are None when the attribute (or the fill) is absent.
+    """
+    try:
+        with zipfile.ZipFile(path) as z:
+            names = set(z.namelist())
+            part, rels = "xl/styles.xml", "xl/_rels/workbook.xml.rels"
+            for rel in ET.fromstring(z.read(rels)).findall("rel:Relationship", _NS) if rels in names else []:
+                if rel.get("Type", "").endswith("/styles") and rel.get("TargetMode") != "External":
+                    target = rel.get("Target", "")
+                    part = target.lstrip("/") if target.startswith("/") else posixpath.normpath(f"xl/{target}")
+            if part not in names:
+                return []
+            root = ET.fromstring(z.read(part))
+    except (OSError, zipfile.BadZipFile, ET.ParseError):
+        return []
+    out = []
+    for dxf in root.findall("main:dxfs/main:dxf", _NS):
+        pattern = dxf.find("main:fill/main:patternFill", _NS)
+        out.append(pattern.get("patternType") if pattern is not None else None)
+    return out
+
+
+def dxf_colours(dxf, wb=None, raw_pattern: str | None = None) -> dict[str, Any]:
     """The colours a conditional format's style sets: ``{"fill": "RRGGBB" | "?", "font": "RRGGBB" | "?"}``.
 
-    A key is absent when the style does not set that property, ``"?"`` when it sets it
-    in a way that is not resolved here (a gradient, an automatic or unknown colour).
-    Excel stores a conditional format's solid fill colour as ``bgColor``; ``fgColor`` is
-    used when that is all there is, and a fill whose two colours disagree about being red is "?".
+    A key is absent when the style does not set that property, and an :class:`Unresolved`
+    ``"?"`` when it sets it in a way that is not resolved here (a gradient, an automatic or
+    unknown colour). ``raw_pattern`` is the fill's ``patternType`` as written in the file
+    (:func:`dxf_fill_patterns`); pass it so that an explicit ``"none"`` reads as no fill.
+    Excel writes a conditional format's solid fill as ``bgColor`` with no pattern type, and
+    LibreOffice paints that; with no pattern type and only ``fgColor`` LibreOffice paints
+    nothing and what Excel paints is not established, so that is "?". With a pattern type,
+    ``fgColor`` is used when that is all there is. A fill whose two colours disagree about
+    being red is "?".
     """
     out: dict[str, Any] = {}
     if dxf is None:
@@ -436,19 +509,26 @@ def dxf_colours(dxf, wb=None) -> dict[str, Any]:
     fill = getattr(dxf, "fill", None)
     if fill is not None:
         if fill.__class__.__name__ != "PatternFill":
-            out["fill"] = "?"
-        elif fill.patternType != "none":
+            out["fill"] = Unresolved("its fill is a gradient")
+        elif raw_pattern != "none" and fill.patternType != "none":
             bg, fg = colour_rgb(fill.bgColor, wb), colour_rgb(fill.fgColor, wb)
             set_bg = getattr(fill.bgColor, "rgb", None) != "00000000" or fill.bgColor.type != "rgb"
             set_fg = getattr(fill.fgColor, "rgb", None) != "00000000" or fill.fgColor.type != "rgb"
-            if set_bg or set_fg:
-                if (set_bg and bg is None) or (set_fg and fg is None) or (bg and fg and is_red(bg) != is_red(fg)):
-                    out["fill"] = "?"
-                else:
-                    out["fill"] = bg or fg
+            if (set_bg and bg is None) or (set_fg and fg is None):
+                out["fill"] = Unresolved("its fill colour is automatic or not in the workbook's theme")
+            elif bg and fg and is_red(bg) != is_red(fg):
+                out["fill"] = Unresolved(f"its fill has a pattern colour {fg} and a background colour {bg} that "
+                                         "disagree about being red")
+            elif fill.patternType is None and fg and not bg:
+                out["fill"] = Unresolved(f"its fill gives only a pattern colour ({fg}) and no pattern type; "
+                                         "LibreOffice paints no fill for it, and the checker does not know what "
+                                         "Excel paints")
+            elif bg or fg:
+                out["fill"] = bg or fg
     font = getattr(dxf, "font", None)
     if font is not None and font.color is not None:
-        out["font"] = colour_rgb(font.color, wb) or "?"
+        out["font"] = colour_rgb(font.color, wb) or Unresolved("its font colour is automatic or not in the "
+                                                               "workbook's theme")
     return out
 
 
@@ -458,7 +538,26 @@ class Unknown(Exception):
 
 
 class _Err(str):
-    """An Excel error value (``#VALUE!``) inside the evaluator."""
+    """An Excel error value (``#VALUE!``) inside the evaluator; ``why`` says where it came from, if known."""
+
+    why: str | None = None
+
+
+def _err(code: str, why: str | None = None) -> _Err:
+    e = _Err(code)
+    e.why = why
+    return e
+
+
+def _scalar(v: Any, epoch=None) -> Any:
+    """A cell value as the evaluator handles it: dates and times become Excel serial numbers."""
+    if v is None or isinstance(v, (bool, str)) or is_number(v):
+        return v
+    if isinstance(v, (_dt.datetime, _dt.date, _dt.time, _dt.timedelta)):
+        from openpyxl.utils.datetime import WINDOWS_EPOCH, to_excel
+
+        return float(to_excel(v, epoch or WINDOWS_EPOCH))
+    raise Unknown(f"a cell value of type {type(v).__name__} ({v!r}) is not supported")
 
 
 _FORMULA_REF = re.compile(r"^(?:(?:'((?:[^']|'')+)'|([^'!:]+))!)?(\$?)([A-Za-z]{1,3})(\$?)(\d+)$")
@@ -496,7 +595,13 @@ def _compare(a: Any, b: Any, op: str) -> Any:
         b = "" if isinstance(a, str) else (False if isinstance(a, bool) else 0.0)
 
     def rank(v):
-        return 2 if isinstance(v, bool) else 1 if isinstance(v, str) else 0
+        if isinstance(v, bool):
+            return 2
+        if isinstance(v, str):
+            return 1
+        if is_number(v):
+            return 0
+        raise Unknown(f"comparing a value of type {type(v).__name__} is not supported")
 
     ka, kb = rank(a), rank(b)
     if ka != kb:
@@ -517,7 +622,8 @@ class _Formula:
     tell" instead of guessing.
     """
 
-    def __init__(self, formula: str, sheet: str, origin: tuple[int, int], target: tuple[int, int], value_at):
+    def __init__(self, formula: str, sheet: str, origin: tuple[int, int], target: tuple[int, int], value_at,
+                 wb=None):
         self.T = Token
         try:
             items = Tokenizer("=" + str(formula).lstrip("=")).items
@@ -526,6 +632,7 @@ class _Formula:
         self.toks = [t for t in items if t.type != Token.WSPACE]
         self.i = 0
         self.sheet, self.origin, self.target, self.value_at = sheet, origin, target, value_at
+        self.wb = wb
 
     def run(self) -> Any:
         if not self.toks:
@@ -647,7 +754,7 @@ class _Formula:
     def ref(self, text: str):
         m = _FORMULA_REF.match(text.lstrip("@"))
         if not m:
-            raise Unknown(f"the reference {text!r} is not a single cell, which is not supported")
+            return self.name(text)
         sheet = (m.group(1) or "").replace("''", "'") or m.group(2) or self.sheet
         col = column_index_from_string(m.group(4).upper())
         row = int(m.group(6))
@@ -660,7 +767,26 @@ class _Formula:
         v = self.value_at(sheet, row, col)
         if isinstance(v, str) and is_error(v):
             return _Err(v.strip().upper())
-        return v
+        return _scalar(v, getattr(self.wb, "epoch", None))
+
+    def name(self, text: str):
+        """A defined name: ``#NAME?`` if the workbook does not define it, as in Excel."""
+        split = _split_name(text.lstrip("@"), self.sheet)
+        if split is None:
+            raise Unknown(f"the reference {text!r} is not a single cell, which is not supported")
+        if self.wb is None:
+            raise Unknown(f"{text!r} is a name, which is not looked up without the workbook")
+        scope, name = split
+        if scope is not None and sheet_named(self.wb, scope) is None:
+            raise Unknown(f"the sheet {scope!r} in {text!r} does not exist")
+        found = _defined_name(self.wb, name, scope)
+        if found is None:
+            tables = {str(t).casefold() for ws in self.wb.worksheets for t in getattr(ws, "tables", {})}
+            if name.casefold() in tables:
+                raise Unknown(f"the table name {name!r} is not evaluated by the checker")
+            return _err("#NAME?", f"the name {name!r} is not defined in the workbook")
+        defn = getattr(found[1], "attr_text", None)
+        raise Unknown(f"the defined name {name!r} (= {defn}) is not evaluated by the checker")
 
 
 def _args(n_min, n_max):
@@ -735,14 +861,17 @@ _FUNCS = {
 }
 
 
-def eval_cf_formula(formula: str, sheet: str, origin: tuple[int, int], target: tuple[int, int], value_at) -> Any:
+def eval_cf_formula(formula: str, sheet: str, origin: tuple[int, int], target: tuple[int, int], value_at,
+                    wb=None) -> Any:
     """Evaluate a conditional-format formula for the cell ``target`` (row, col).
 
     Relative references are shifted from ``origin``, the top-left cell of the rule's
     range, as Excel and LibreOffice do. ``value_at(sheet, row, col)`` supplies cell
-    values. Raises :class:`Unknown` for formulas outside the supported subset.
+    values; dates in them are compared as Excel serial numbers. With the openpyxl
+    workbook ``wb``, a name the workbook does not define gives ``#NAME?``. Raises
+    :class:`Unknown` for formulas outside the supported subset.
     """
-    return _Formula(formula, sheet, origin, target, value_at).run()
+    return _Formula(formula, sheet, origin, target, value_at, wb).run()
 
 
 _CELL_IS = {"equal": "=", "notEqual": "<>", "greaterThan": ">", "lessThan": "<",
@@ -769,7 +898,8 @@ def _truthy(v: Any) -> bool:
     raise Unknown(f"the formula returns text ({v!r}), not TRUE or FALSE")
 
 
-def cf_rule_applies(cf_rule, sheet: str, origin: tuple[int, int], target: tuple[int, int], value_at) -> bool:
+def cf_rule_applies(cf_rule, sheet: str, origin: tuple[int, int], target: tuple[int, int], value_at,
+                    wb=None) -> bool:
     """Whether an openpyxl conditional-format rule applies its style to the cell ``target``.
 
     Handles ``cellIs``, ``expression``, the text rules (contains / does not contain /
@@ -777,35 +907,61 @@ def cf_rule_applies(cf_rule, sheet: str, origin: tuple[int, int], target: tuple[
     types (top 10, above average, duplicates, dates ...) and for formulas outside the
     subset :func:`eval_cf_formula` supports.
     """
-    kind = cf_rule.type
-    formulas = [str(f) for f in (cf_rule.formula or [])]
+    return cf_rule_outcome(cf_rule, sheet, origin, target, value_at, wb)[0]
+
+
+def cf_rule_outcome(cf_rule, sheet: str, origin: tuple[int, int], target: tuple[int, int], value_at,
+                    wb=None) -> tuple[bool, str | None]:
+    """:func:`cf_rule_applies`, plus a note when the rule does not apply because it gives an
+    error value there (Excel and LibreOffice then do not apply the format); otherwise None."""
+    errors: list[_Err] = []
 
     def ev(f):
-        return eval_cf_formula(f, sheet, origin, target, value_at)
+        return eval_cf_formula(f, sheet, origin, target, value_at, wb)
 
-    if kind in _NO_DXF_RULES:
-        return False  # colour scales, data bars and icon sets apply no differential style
+    def truthy(v):
+        if isinstance(v, _Err):
+            errors.append(v)
+        return _truthy(v)
+
+    if cf_rule.type in _NO_DXF_RULES:
+        return False, None  # colour scales, data bars and icon sets apply no differential style
     value = value_at(sheet, *target)
     if isinstance(value, str) and is_error(value):
         value = _Err(value.strip().upper())
+    else:
+        value = _scalar(value, getattr(wb, "epoch", None))
+    applies = _rule_applies(cf_rule, value, ev, truthy)
+    if applies or not errors:
+        return applies, None
+    err = errors[0]
+    return False, f"gives {err} there{f' ({err.why})' if err.why else ''}, so it does not apply"
+
+
+def _rule_applies(cf_rule, value, ev, truthy) -> bool:
+    kind = cf_rule.type
+    formulas = [str(f) for f in (cf_rule.formula or [])]
     if kind == "cellIs":
         op = cf_rule.operator
         if op in _CELL_IS and formulas:
-            return _truthy(_compare(value, ev(formulas[0]), _CELL_IS[op]))
+            return truthy(_compare(value, ev(formulas[0]), _CELL_IS[op]))
         if op in ("between", "notBetween") and len(formulas) >= 2:
             lo, hi = ev(formulas[0]), ev(formulas[1])
-            inside = (_truthy(_compare(value, lo, ">=")) and _truthy(_compare(value, hi, "<="))) or (
-                _truthy(_compare(value, hi, ">=")) and _truthy(_compare(value, lo, "<=")))
+            err = _first_err(value, lo, hi)
+            if err:
+                return truthy(err)  # an error applies neither "between" nor "not between"
+            inside = (truthy(_compare(value, lo, ">=")) and truthy(_compare(value, hi, "<="))) or (
+                truthy(_compare(value, hi, ">=")) and truthy(_compare(value, lo, "<=")))
             return inside if op == "between" else not inside
         raise Unknown(f"the cell-value operator {op!r} is not supported")
     if kind == "expression":
         if not formulas:
             raise Unknown("it is a formula rule without a formula")
-        return _truthy(ev(formulas[0]))
+        return truthy(ev(formulas[0]))
     if kind in _TEXT_RULES:
         if not formulas:
             raise Unknown(f"it is a {kind} rule without a formula")
-        by_formula = _truthy(ev(formulas[0]))
+        by_formula = truthy(ev(formulas[0]))
         text = getattr(cf_rule, "text", None)
         if text not in (None, "") and not isinstance(value, _Err):
             by_text = _TEXT_RULES[kind](_as_text(value), str(text))
@@ -814,7 +970,7 @@ def cf_rule_applies(cf_rule, sheet: str, origin: tuple[int, int], target: tuple[
         return by_formula
     if kind in ("containsBlanks", "notContainsBlanks", "containsErrors", "notContainsErrors"):
         if formulas:
-            return _truthy(ev(formulas[0]))
+            return truthy(ev(formulas[0]))
         if kind.endswith("Blanks"):
             blank = _as_text(value).strip() == ""
             return blank if kind == "containsBlanks" else not blank

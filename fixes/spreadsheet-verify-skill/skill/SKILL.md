@@ -55,7 +55,10 @@ behave like a spreadsheet application: most of them never rewrite formulas for y
    needs it (for example, a total that must now update), otherwise leave it and mention it in your
    report. The script does not know your task, so a clean result is
    necessary, not sufficient. If it reports `recalculation-unavailable`, the values were not
-   checked: say so in your report.
+   checked: say so in your report. Exit codes: 0 no `[error]` (warnings may remain), 1 at least
+   one `[error]`, 2 invalid command line, 3 a workbook could not be read (missing, truncated,
+   password-protected or not an .xlsx/.xlsm file): nothing was checked, so fix or replace the file,
+   or report that it could not be verified.
 2. Read the results from the recalculated copy with
    `openpyxl.load_workbook("/tmp/recalc/data.xlsx", data_only=True)`. (openpyxl writes formulas
    without results, so reading your own output with `data_only=True` shows `None`, not the value.)

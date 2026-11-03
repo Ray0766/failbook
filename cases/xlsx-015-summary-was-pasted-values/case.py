@@ -1,4 +1,5 @@
 import openpyxl
+from openpyxl.utils import get_column_letter
 
 from failbook import kit
 from failbook import xlsx as X
@@ -107,16 +108,31 @@ def summary_grand_total(ctx):
 
 @rule(
     "summary-layout-kept",
-    "Summary keeps its departments in the same order, followed by Total",
+    "Summary keeps its headers, its departments in the same order and Total, with nothing added around the table",
     kind="preserve",
-    title_zh="Summary 部门顺序不变，末尾为 Total",
-    requirement="Keep the Summary layout (department order and labels) as it is.",
+    title_zh="Summary 的表头、部门顺序和 Total 行不变，表格外没有新增内容",
+    requirement="Keep the Summary layout (department order and labels) as it is. "
+                "Do not change anything the task does not ask you to change.",
 )
 def summary_layout_kept(ctx):
     ws = ctx.ws(SUMMARY)
     got = [ws.cell(r, 1).value for r in range(1, 3 + len(ctx.meta["depts"]))]
     exp = ["Department", *ctx.meta["depts"], "Total"]
     require([X.norm_text(v) for v in got] == [X.norm_text(v) for v in exp], f"Summary column A is {got}, expected {exp}")
+    # Every label of the input Summary (header row and column A) stays as it was; only the totals may change.
+    before = _filled(ctx.input_wb(data_only=False)[SUMMARY])
+    for r, c, label in before:
+        now = ws.cell(r, c).value
+        require(not isinstance(label, str) or X.norm_text(now) == X.norm_text(label),
+                f"Summary {get_column_letter(c)}{r} changed from {label!r} to {X.show(now)}")
+    last_row, last_col = max(r for r, _, _ in before), max(c for _, c, _ in before)
+    extra = [f"{get_column_letter(c)}{r}" for r, c, _ in _filled(ws) if r > last_row or c > last_col]
+    require(not extra, f"the Summary sheet has new content outside the table A1:{get_column_letter(last_col)}{last_row}: "
+            f"{', '.join(extra[:5])}" + (f" and {len(extra) - 5} more" if len(extra) > 5 else ""))
+
+
+def _filled(ws):
+    return [(r, c, v) for r, c, v in X.used_cells(ws) if not (isinstance(v, str) and not v.strip())]
 
 
 @rule(

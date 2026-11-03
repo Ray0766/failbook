@@ -98,16 +98,25 @@ def _amt(x, places=2, sign=False):
 def _reshuffled(meta):
     """[(row, original expense, new date, new category, new amount)] in the "reshuffled" scenario.
 
-    In a copy of the file, every existing expense gets a different amount (20,000 or more, so
-    every total moves), and the existing rows are spread over every category and every month
-    (Jan, Feb, Mar), so each Summary total has rows whose change it must follow. The new rows the
-    agent appended are left as they are, so the change of each total does not depend on them.
+    In a copy of the file, every existing expense gets a different amount (20,000 or more), a
+    category other than its own and a month other than its own (same day), so every total a row
+    leaves or joins moves. The existing expenses (at least six in January and six in February)
+    alternate, per month, between the two other months, so Jan, Feb and Mar all get rows; each row
+    takes, in turn, a category that is not its own, preferring one no row has yet, so every
+    category gets rows too (checked for seeds 0-1999). The new rows the agent appended are left as
+    they are, so the change of each total does not depend on them.
     """
-    out = []
+    out, not_given, per_month = [], list(CATEGORIES), {}
     for i, e in enumerate(meta["existing"]):
-        day = kit.from_iso(e["date"]).day
-        month = MONTHS[i % len(MONTHS)][1]
-        out.append((2 + i, e, dt.date(2024, month, day), CATEGORIES[i % len(CATEGORIES)], 20000 + 37.25 * (i + 1)))
+        old = kit.from_iso(e["date"])
+        months = [m for _, m in MONTHS if m != old.month]
+        k = per_month[old.month] = per_month.get(old.month, -1) + 1
+        turn = CATEGORIES[i % len(CATEGORIES):] + CATEGORIES[:i % len(CATEGORIES)]
+        choices = [c for c in turn if c != e["category"]]
+        category = next((c for c in choices if c in not_given), choices[0])
+        if category in not_given:
+            not_given.remove(category)
+        out.append((2 + i, e, dt.date(2024, months[k % len(months)], old.day), category, 20000 + 37.25 * (i + 1)))
     return out
 
 
@@ -141,6 +150,34 @@ def _summary_refs(ctx):
         require(hit, f"Summary label {label!r} is missing")
         refs[label] = X.make_ref(SUM, (hit[0], 2))
     return refs
+
+
+#: Characters a number format shows as themselves without quotes; written plainly, quoted or
+#: backslash-escaped they are the same format.
+_PLAIN_LITERALS = set("$-+/():!^&'~{}<>= ")
+
+
+def _format_key(fmt):
+    """A number format with differences of spelling removed: letter case outside quotes, and
+    whether a literal character is written plainly, in quotes or after a backslash. So
+    'yyyy-mm-dd', 'YYYY-MM-DD', 'yyyy"-"mm"-"dd' and 'yyyy\\-mm\\-dd' (as LibreOffice saves it)
+    are one format; 'yyyy-mm-dd h:mm:ss', '0.00' or a locale tag such as '[$-409]' make another."""
+    fmt = fmt or "General"
+    out, i = [], 0
+    while i < len(fmt):
+        ch = fmt[i]
+        if ch == "\\" and i + 1 < len(fmt):
+            out.append(("text", fmt[i + 1]))
+            i += 2
+        elif ch == '"':
+            end = fmt.find('"', i + 1)
+            end = len(fmt) if end < 0 else end
+            out.extend(("text", c) for c in fmt[i + 1:end])
+            i = end + 1
+        else:
+            out.append(("text", ch) if ch in _PLAIN_LITERALS else ("code", ch.lower()))
+            i += 1
+    return tuple(out)
 
 
 def _new_rows(ctx):
@@ -210,6 +247,36 @@ def dates_are_dates(ctx):
         elif X.as_date(got) != kit.from_iso(e["date"]):
             bad.append(f"row {r}: {X.show(got)} instead of {e['date']}")
     require(not bad, "dates are wrong: " + "; ".join(bad[:3]))
+
+
+@rule(
+    "new-rows-formatted",
+    "The new dates and amounts have the number formats of the existing rows",
+    kind="structure",
+    title_zh="新记录的日期和金额与现有行的数字格式相同",
+    requirement="Store the dates as real dates and the amounts as real numbers (not text), formatted like the "
+                "existing rows.",
+)
+def new_rows_formatted(ctx):
+    rows = _new_rows(ctx)
+    ws, given = ctx.ws(EXP), ctx.input_wb()[EXP]
+    # In the file as given the existing expenses are rows 2 onwards, all formatted alike. Columns
+    # they leave in General (Category, Description) are not compared.
+    general = _format_key("General")
+    wanted = {c: X.number_format(given, 2, c) for c in range(1, 5)}
+    wanted = {c: f for c, f in wanted.items() if _format_key(f) != general}
+    names = {c: given.cell(1, c).value for c in wanted}
+    wrong = []
+    for r, e in rows:
+        diff = [f"{names[c]} '{X.number_format(ws, r, c)}'" for c, f in wanted.items()
+                if _format_key(X.number_format(ws, r, c)) != _format_key(f)]
+        if diff:
+            wrong.append(f"row {r} ({e['description']}) has " + ", ".join(diff))
+    given_text = ", ".join(f"{names[c]} '{f}'" for c, f in wanted.items())
+    require(not wrong, f"{len(wrong)} of {len(rows)} new rows are not formatted like the existing rows: "
+                       + "; ".join(wrong[:3]) + (f" (and {len(wrong) - 3} more)" if len(wrong) > 3 else "")
+                       + f". In {ctx.case.inputs[0]} as given, the existing rows have {given_text} "
+                       "(differences of letter case, quotes or backslash escapes are ignored).")
 
 
 @rule(
