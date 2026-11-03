@@ -1,0 +1,15 @@
+id: spreadsheet-verify-skill
+kind: skill
+status: candidate   # candidate: no retest results yet. Submit some!
+title: Spreadsheet editing checklist with recalculate-and-verify
+title_zh: 表格编辑检查清单：改完后重新计算并验证
+applies_to: all
+author: Failbook maintainers
+description: >
+  An Agent Skill that lists the structural pitfalls behind the spreadsheet cases (formulas that
+  library calls do not rewrite, text-typed numbers, percentages, lookups, subtotals, collateral
+  damage) and requires the agent to recalculate the workbook and check results before claiming
+  it is done.
+description_zh: >
+  一个 Agent Skill：列出表格类案例背后的结构性陷阱（库函数不会改写的公式、文本型数字、百分比、查找、小计、连带破坏），
+  并要求智能体在声称完成之前重新计算工作簿、核对结果。
