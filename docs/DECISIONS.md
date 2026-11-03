@@ -49,7 +49,7 @@ project's own repository, package metadata or installed source, as each note say
 
 ## D3. Deterministic rules that check the outcome, not the method
 
-- **Decision.** Each case has 3 to 7 rules in Python. Every rule quotes the sentence of the task it checks.
+- **Decision.** Each case has 3 to 8 rules in Python. Every rule quotes the sentence of the task it checks.
   Rules have a *kind*: content, value, **live** (change an input in a copy, recalculate, check that results
   follow), **preserve** (the specific data and structures a case protects are unchanged, each rule names what it
   covers) and structure (charts, validation, formats). No LLM judge:
@@ -136,7 +136,7 @@ project's own repository, package metadata or installed source, as each note say
   task-agnostic audit script (`scripts/audit_xlsx.py`, generated from `src/failbook/audit.py`) that compares
   the edited file with the original.
 - **Validation** ([evidence/fix-self-check.md](evidence/fix-self-check.md)): the script flags 13 of the 15
-  failure artifacts (9 with an error-level finding) and reports no error on any of the 30 correct solutions
+  failure artifacts (9 with an error-level finding) and reports no error on any of the 41 correct solutions
   (one warning on a valid "static values" alternative, a symptom the original file already had). It misses
   xlsx-002 and xlsx-008, which leave no generic symptom.
 - **Corrected after the review (D9).** The audit raised errors on ordinary correct edits (stacked summary
@@ -144,6 +144,21 @@ project's own repository, package metadata or installed source, as each note say
   function LibreOffice lacks) and crashed when LibreOffice could not start. Those are now warnings or a
   stated `recalculation-unavailable` finding; real breakage (a shifted column, deleted rows, a stale sheet
   name) is still an error. Each case is a test in `tests/test_audit_more.py`.
+- **Corrected after the second review and its re-checks (D9).** Correct edits that no longer get an error:
+  a workbook with a chart sheet; a renamed sheet that was also extended, sorted or given a title row (or a
+  renamed chart sheet); a column inserted before computed columns; a running balance refilled after rows
+  were inserted or deleted (0 of 80 random refilled ledgers get an error; 55 did after the first fix round); H1/H2 or
+  quarter sums with or without a covering total; a chart or highlight that stops above a total row. Wrong
+  edits that are errors: a sort that breaks single-cell references (no longer called a rename); a partial
+  aggregate left behind when the total was extended, when the original shows both covered the same rows; a
+  data sheet replaced by another. Unreadable files exit with code 3 and a message instead of a traceback, and
+  the work no longer scales with a sheet's used range (a stray formatted cell far away took 177 s and 3.6 GB;
+  now under 1 s). With `--no-recalc` or without LibreOffice, error values are not checked (D2).
+- **How the audit was kept from regressing.** Its rules are heuristics, and early fix rounds traded one false
+  finding for another. From the third fix round on, every change was run on a corpus of before/after workbook
+  pairs collected from the reviews (1,587 pairs: 217 hand-made ones, each labelled with its intended outcome,
+  and three random families), against the two previous versions, and accepted only if no pair got worse. The corpus stayed outside the repository; the pairs that pin a
+  decision are tests. What the script cannot tell is listed in the skill's SKILL.md.
 - **Limits.** The checks were written with these failures in view, so this is coverage, not generalisation.
   **Whether agents do better with the skill is a hypothesis** until runs with and without it are recorded.
 
@@ -179,10 +194,26 @@ project's own repository, package metadata or installed source, as each note say
   its own table.
 - **Handling.** Each was fixed in the file group that owns it. Wrong solutions the reviewers wrote became
   `fail_*.py` regression fixtures and valid ones `alt_*.py`, so `failbook verify` keeps checking them.
+- **Second review.** A fresh review then attacked the fixed code with four lenses (conditional formats and
+  xlsx-013; charts and cases 009-015; cases 001-008; the audit script, skill and CLI), again with a skeptic per
+  lens: 33 findings, 28 confirmed and 5 rejected with a stated reason (for example, a chart range extended to
+  the end of the sheet is valid). Confirmed examples: a hidden in-cell list (`showDropDown`) or a switched-off
+  error alert passed the dropdown rule; xlsx-003 passed with every Net typed in; xlsx-001 and xlsx-007 did not
+  check the number formats the task asks for; the audit crashed on a workbook with a chart sheet and called a
+  sort that broke references a rename.
+- **Re-checks until they converge.** Each fix group was followed by a skeptical agent that re-ran the
+  reproductions, tried nearby variants and compared with the previous commit. The re-checks found 21 problems
+  after the first fix round, 14 after the second and 11 after the third, most of them small (a message that
+  said more than was established, an edge case the fix had broken). From the second re-check on, a re-check
+  reported only regressions and false verdicts caused by the round it checked; every other gap became a
+  stated limitation. For the audit script, a corpus of before/after workbook pairs from all rounds, each
+  labelled with its intended outcome, was run against the two previous versions before the last changes were
+  accepted: no probe got worse.
 - **Limits.** The reviewers are models, not ground truth; their findings were accepted only with a reproduced
-  failure. After the fixes, each finding's reproduction was run again (wrong solutions now fail, valid ones
-  pass or are inconclusive with a stated reason; logs were kept outside the repository). A fresh,
-  independent review of the fixed code has not been run.
+  failure. After each fix, the reproductions were run again (wrong solutions fail, valid ones pass or are
+  inconclusive with a stated reason). Logs and the audit corpus were kept outside the repository; the probes
+  that pin a decision are tests in `tests/`. No further fresh review was run on the final code. Known gaps
+  are listed under each case's Limitations and in the skill's "What the audit script cannot tell".
 
 ## D10. Grading policies made explicit by the review
 
@@ -191,15 +222,22 @@ each backed by an `alt_*.py` (accepted) or `fail_*.py` (rejected) fixture that `
 
 | Policy | Cases | Fixture |
 |---|---|---|
-| Liveness checks change many inputs at once (every row in most cases; a different row per quarter in xlsx-010; the rate in xlsx-003) and check every dependent figure, so a partly typed answer does not pass | 001, 002, 003, 005, 006, 007, 008, 009, 010, 014 | e.g. `fail_partial_values.py`, `fail_typed_new_amounts.py` |
+| Liveness checks change many inputs at once (every row in most cases; a different row per quarter in xlsx-010; in xlsx-003 the rate in one copy and every Qty and Unit Price in a second) and check every dependent figure, so a partly typed answer does not pass | 001, 002, 003, 005, 006, 007, 008, 009, 010, 014 | e.g. `fail_partial_values.py`, `fail_typed_new_amounts.py`, `fail_total_net_typed.py`, `fail_vat_typed_net.py` |
 | Money may be rounded to whole cents per line (at most 1 cent from exact) if the totals agree with those lines; the tasks do not forbid it and it is common accounting practice | 003, 005 | `alt_round_cents.py` |
-| A ratio the task says not to round must not be rounded (the task text now says so in both languages) | 002 | `fail_rounded_margin.py` |
-| A valid form the checker cannot read (a chart series over an `OFFSET` name, a conditional-format type the evaluator does not implement) is **inconclusive** with the exact reason, never fail | 011, 013 | `alt_named_range.py`, `alt_begins_with.py` |
-| What the user sees is checked, not only that something exists: chart series start at the first data row, carry the column's legend name and month labels; conditional formats are evaluated per cell (priority, `stopIfTrue`, colour resolved to a hue) | 011, 013 | `fail_header_in_values.py`, `fail_green_highlight.py` |
+| A ratio the task says not to round must not be rounded (the task text now says so in both languages). Margins are compared within 0.000001, so rounding to 6 or more decimals (`ROUND(…, 6)`) cannot be told apart and passes | 002 | `fail_rounded_margin.py` |
+| New rows the task says to format like the existing ones must have the same number formats. Spellings that LibreOffice shows alike count as the same (letter case, quoted or escaped literals, a trailing `@` section, a bare locale tag on a date that keeps its separators); a time part, General or another grouping fails | 001, 007 | `alt_format_spellings.py`, `alt_equivalent_formats.py`, `fail_new_rows_unformatted.py`, `fail_dates_with_time.py` |
+| "Change nothing else" covers the layout of a sheet the task touches: a renamed header or an added note fails | 015 | `fail_summary_header_renamed.py`, `fail_summary_note_added.py` |
+| A valid form the checker cannot read (a chart series over an `OFFSET` name, a conditional-format type the evaluator does not implement) is **inconclusive** with the exact reason, never fail, and only after every part it can read was checked: a definite error elsewhere fails | 011, 013 | `alt_named_range.py`, `alt_begins_with.py`, `fail_offset_revenue_stale_costs.py` |
+| What the user sees is checked, not only that something exists. Charts: series start at the first data row and carry the column's legend name; month labels come from the category axis (the first series that has labels; a typed Jan to Dec list counts); sheet names match in any letter case, and a name on a missing sheet fails. Dropdowns: a hidden in-cell list or an error alert that no longer refuses other entries fails. Conditional formats are evaluated per cell (priority, `stopIfTrue`, `#NAME?` for an undefined name, TRUE and FALSE in any case) | 011, 013 | `fail_header_in_values.py`, `alt_categories_on_first_series.py`, `alt_lowercase_sheet_refs.py`, `fail_hidden_dropdown.py`, `fail_error_alert_off.py`, `fail_unquoted_status.py` |
+| "Red" is a hue of 340 to 15 degrees with saturation of at least 15% and brightness of at least 25%. A pale red (saturation 5 to 15%, brightness at least 80%) and a fill that gives only a pattern colour without a pattern type are inconclusive; `patternType="none"` is no fill | 013 | `fail_green_highlight.py`, `fail_grey_brown_highlight.py`, `fail_fill_pattern_none.py` |
 
-- **Cross-check of the conditional-format evaluator.** For 10 solutions of xlsx-013 (seed 0) the checker's
-  per-cell "red or not" agreed with the background colour LibreOffice paints when it exports HTML on 170 of
-  170 cells. This is agreement with one engine, not with Excel.
+- **Cross-check of the conditional-format evaluator.** For 49 solutions of xlsx-013 at seed 0 (the reference,
+  the failure, the 8 `alt_` and 9 `fail_` fixtures, and 30 reviewer variants and colour probes), the
+  checker's per-cell "red or not" for the current Status agreed with what LibreOffice paints when it exports
+  HTML (background or text red) on 798 of 833 Status cells; the other 35 are inconclusive by design (pale
+  reds and fills without a pattern type) and none disagree. LibreOffice's painted colour is classified with
+  the checker's own red test, so this confirms which rules apply and which colour is painted, not where red
+  ends. It is agreement with one engine, not with Excel.
 - **Case versions stay at 1.** Every rule and task change above was made before the first release, and no
   result record references any case version, so there is nothing that a version bump would keep apart. From
   the first release on, a change to a task or a rule bumps the version ([DATASHEET.md](DATASHEET.md)).

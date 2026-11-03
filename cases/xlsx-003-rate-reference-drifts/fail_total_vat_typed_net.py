@@ -1,7 +1,8 @@
 """A wrong solution: every line's VAT (=D4*$B$1) and Gross (=D4+E4) are right, but the Total row's VAT
-and Gross (=SUM(E4:E15) and =SUM(F4:F15) in the file as given) are replaced by formulas on a typed copy
-of the Net total (=33184.88*$B$1 and =33184.88+E16). Today's totals are right and follow B1, but change
-a Qty or a Unit Price and Total Net moves while Total VAT and Total Gross keep the old Net total.
+and Gross (=SUM(E4:E15) and =SUM(F4:F15) in the file as given, for seed 0) are replaced by formulas on a
+typed copy of the Net total (=21655.63*$B$1 and =21655.63+E16 for seed 0). Today's totals are right and
+follow B1, but change a Qty or a Unit Price and Total Net moves while Total VAT and Total Gross keep the
+old Net total.
 """
 
 import openpyxl

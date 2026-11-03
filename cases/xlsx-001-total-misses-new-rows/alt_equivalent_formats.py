@@ -1,8 +1,9 @@
 """A valid alternative: the new rows get formats that differ from the other order rows' only in ways
-that change no shown value: the date as '[$-409]yyyy-mm-dd' (a locale tag, which cannot change a date
-of digits only), Unit Price as '#,##0.00;-#,##0.00' (a negative section that is how '#,##0.00' shows
-negatives anyway) and Amount as '#,##0.00;@' (a text section that shows text as typed). In
-LibreOffice every cell shows the same as with the formats of the other order rows.
+that change no value these columns hold: the date as '[$-409]yyyy-mm-dd' (a locale tag on a date of
+digits and '-', which it does not change), Unit Price as '#,##0.00;-#,##0.00' (a negative section that
+shows every negative price of a cent or more as '#,##0.00' does; the prices are positive) and Amount as
+'#,##0.00;@' (a text section that shows text as typed). In LibreOffice every cell shows the same as with
+the formats of the other order rows.
 """
 
 import openpyxl

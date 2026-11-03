@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-03T05:37:45+00:00",
+  "generated_at": "2026-11-03T13:27:11+00:00",
   "failbook_version": "0.1.0",
   "engine": "LibreOffice 24.2.7.2 420(Build:2)",
   "seed": 0,
@@ -32,6 +32,7 @@
       "expected": "fail",
       "failed_rules": [
         "new-orders-added",
+        "new-rows-formatted",
         "totals-include-all-orders"
       ],
       "inconclusive_rules": []
@@ -231,6 +232,7 @@
         "vat-correct",
         "gross-correct",
         "vat-follows-rate",
+        "vat-gross-follow-net",
         "totals-correct"
       ],
       "inconclusive_rules": []
@@ -271,6 +273,7 @@
         "vat-correct",
         "gross-correct",
         "vat-follows-rate",
+        "vat-gross-follow-net",
         "totals-correct"
       ],
       "inconclusive_rules": []
@@ -646,6 +649,7 @@
         "rows-appended",
         "amounts-are-numbers",
         "dates-are-dates",
+        "new-rows-formatted",
         "summary-includes-new"
       ],
       "inconclusive_rules": []
@@ -687,6 +691,7 @@
       "failed_rules": [
         "amounts-are-numbers",
         "dates-are-dates",
+        "new-rows-formatted",
         "summary-includes-new"
       ],
       "inconclusive_rules": []

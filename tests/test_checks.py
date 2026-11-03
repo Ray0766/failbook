@@ -371,11 +371,14 @@ def test_dropdown_list_on_a_sheet_in_another_letter_case_resolves():
 
 
 # Each pair below was checked in LibreOffice 24.2 by exporting dates, positive, negative and zero numbers
-# and text "as shown" to CSV (the formats of xlsx-001 and xlsx-007 are 'yyyy-mm-dd' and '#,##0.00').
+# and text "as shown" to CSV (the formats of xlsx-001 and xlsx-007 are 'yyyy-mm-dd' and '#,##0.00'). The
+# one exception is marked: '#,##0.00;-#,##0.00' shows -0.004 as -0.00 where '#,##0.00' shows 0.00.
 @pytest.mark.parametrize("fmt", [
     "yyyy-mm-dd", "YYYY-MM-DD", 'yyyy"-"mm"-"dd', "yyyy\\-mm\\-dd",  # spellings; LibreOffice saves the last
     "yyyy-mm-dd;@", "yyyy\\-mm\\-dd;@",  # a text section that shows text as typed
-    "[$-409]yyyy-mm-dd", "[$-407]yyyy\\-mm\\-dd",  # a locale tag cannot change a date of digits only
+    "[$-409]yyyy-mm-dd", "[$-407]yyyy\\-mm\\-dd",  # a locale tag does not change a date of digits and '-'
+    # Under these tags an unquoted '/' showed '-' (LibreOffice re-saves '[$-41D]yyyy-mm-dd' this way).
+    "[$-41D]yyyy/mm/dd", "[$-41d]YYYY/MM/DD", "[$-41D]yyyy/mm/dd;@", "[$-439]yyyy/mm/dd", "[$-1009]yyyy/mm/dd",
 ])
 def test_number_format_key_same_date_format(fmt):
     from failbook import xlsx as X
@@ -388,6 +391,8 @@ def test_number_format_key_same_date_format(fmt):
     "yyyy/mm/dd", "dd-mm-yyyy", "General", "yyyy-mm-dd;",  # an empty negative section hides negatives
     "yyyy-mm-dd;;;@", 'yyyy-mm-dd;"x"@',  # negatives and zeros hidden; text shown as xabc
     "[$-F800]yyyy-mm-dd",  # the system long date: Saturday, March 2, 2024
+    "yyyy-mm-dd;-yyyy-mm-dd", "yyyy-mm-dd;-yyyy-mm-dd;yyyy-mm-dd",  # -1766.34 shows -1904-10-31, not 1895-02-27
+    "[$-409]yyyy/mm/dd", "[$-412]yyyy/mm/dd", "[$-407]yyyy/mm/dd",  # the tag's separator: 2024/03/02, 2024.03.02
 ])
 def test_number_format_key_other_date_format(fmt):
     from failbook import xlsx as X
@@ -396,8 +401,10 @@ def test_number_format_key_other_date_format(fmt):
 
 
 @pytest.mark.parametrize("fmt", [
-    "#,##0.00", "#,##0.00;-#,##0.00", "#,##0.00;\\-#,##0.00",  # the negative section '-' and the first one
-    "#,##0.00;@", "#,##0.00;-#,##0.00;@", "#,##0.00;-#,##0.00;#,##0.00", "#,##0.00;-#,##0.00;#,##0.00;@",
+    "#,##0.00", "#,##0.00;@", "#,##0.00;-#,##0.00;#,##0.00;@",
+    # The exception: a negative section that is '-' and the first one shows a negative number that rounds
+    # to zero as -0.00 (xlsx-001 and xlsx-007 compare it only on positive amounts).
+    "#,##0.00;-#,##0.00", "#,##0.00;\\-#,##0.00", "#,##0.00;-#,##0.00;@", "#,##0.00;-#,##0.00;#,##0.00",
 ])
 def test_number_format_key_same_money_format(fmt):
     from failbook import xlsx as X
@@ -424,3 +431,30 @@ def test_number_format_key_locale_tag_kept_on_names_and_general():
     assert X.number_format_key("[$-409]General") != X.number_format_key("General")
     assert X.number_format_key(None) == X.number_format_key("General") == X.number_format_key("general")
     assert X.number_format_key("@") != X.number_format_key("General")  # the Text format is not a text section
+    # Under a tag an unquoted '/' shows the tag's date separator ([$-41D]: 2024-03-02); a quoted one shows '/'.
+    assert X.number_format_key("[$-41D]yyyy/mm/dd") != X.number_format_key("yyyy/mm/dd")
+    assert X.number_format_key("[$-409]yyyy/mm/dd") == X.number_format_key("yyyy/mm/dd")
+    assert X.number_format_key('[$-41D]yyyy"/"mm"/"dd') == X.number_format_key("yyyy/mm/dd")
+
+
+# For a tag whose date separator was not tried in LibreOffice the checker cannot tell what its '/' shows.
+@pytest.mark.parametrize("fmt", [
+    "[$-41E]yyyy/mm/dd", "[$-41e]YYYY/MM/DD", "[$-415]yyyy/mm/dd;@", "[$-80A]yyyy/mm/dd",
+])
+def test_number_format_unsure_about_a_slash_under_a_locale_tag(fmt):
+    from failbook import xlsx as X
+
+    assert "date separator" in X.number_format_unsure(fmt, "yyyy\\-mm\\-dd")
+
+
+@pytest.mark.parametrize("fmt", [
+    "yyyy-mm-dd", "[$-409]yyyy-mm-dd",  # the same key: nothing to be unsure about
+    "yyyy/mm/dd", '[$-41D]yyyy"/"mm"/"dd',  # no tag, or a quoted '/': shows '/', a different format
+    "[$-41D]yyyy/mm/dd hh:mm", "[$-41D]dd/mm/yyyy", "[$-F800]yyyy/mm/dd",  # differ in more than '/'
+    "[$-41D]yyyy/mm/dd", "[$-409]yyyy/mm/dd", "[$-407]yyyy/mm/dd",  # tried tags: a definite answer
+])
+def test_number_format_unsure_only_about_the_separator(fmt):
+    from failbook import xlsx as X
+
+    assert X.number_format_unsure(fmt, "yyyy\\-mm\\-dd") is None
+    assert X.number_format_unsure("[$-41D]yyyy/mm/dd", "#,##0.00") is None

@@ -6,7 +6,7 @@ import openpyxl
 
 from failbook import kit
 from failbook import xlsx as X
-from failbook.checks import require, rule
+from failbook.checks import Inconclusive, require, rule
 
 EXP, SUM = "Expenses", "Summary"
 CATEGORIES = ["Travel", "Meals", "Office", "Software", "Training"]
@@ -153,9 +153,13 @@ def _summary_refs(ctx):
 
 
 #: What X.number_format_key counts as one format, as the format messages say it.
-_SAME_FORMAT = ("(formats that show every value alike count as the same, for example ones that differ only in "
-                "letter case, quotes or backslash escapes, a text section that is only '@', a negative section that "
-                "is '-' and the first section, or a locale tag such as [$-409] on a date of digits only).")
+_SAME_FORMAT = ("(formats count as the same when they differ only in letter case, quotes or backslash escapes, a "
+                "text section that is only '@', a zero section equal to the first, a negative section of '-' and a "
+                "first section of digits such as #,##0.00;-#,##0.00 (it shows -0.00 instead of 0.00 only for a "
+                "negative number that rounds to zero, and the task's amounts are all positive), or a locale tag "
+                "such as [$-409] on a date of digits; under such a tag an unquoted '/' counts as the date "
+                "separator LibreOffice 24.2 shows for it: [$-41D]yyyy/mm/dd shows 2024-03-02, [$-409]yyyy/mm/dd "
+                "2024/03/02 and [$-407]yyyy/mm/dd 2024.03.02).")
 
 
 def _new_rows(ctx):
@@ -244,16 +248,31 @@ def new_rows_formatted(ctx):
     wanted = {c: X.number_format(given, 2, c) for c in range(1, 5)}
     wanted = {c: f for c, f in wanted.items() if X.number_format_key(f) != general}
     names = {c: given.cell(1, c).value for c in wanted}
-    wrong = []
+    wrong, unsure, why = [], [], {}  # why: column -> why the checker cannot compare it
     for r, e in rows:
-        diff = [f"{names[c]} '{X.number_format(ws, r, c)}'" for c, f in wanted.items()
-                if X.number_format_key(X.number_format(ws, r, c)) != X.number_format_key(f)]
+        diff, maybe = [], []
+        for c, f in wanted.items():
+            got = X.number_format(ws, r, c)
+            if X.number_format_key(got) != X.number_format_key(f):
+                reason = X.number_format_unsure(got, f)  # '/' under a locale tag: the separator is unknown
+                (maybe if reason else diff).append(f"{names[c]} '{got}'")
+                if reason:
+                    why[c] = reason
         if diff:
             wrong.append(f"row {r} ({e['description']}) has " + ", ".join(diff))
+        elif maybe:
+            unsure.append(f"row {r} ({e['description']}) has " + ", ".join(maybe))
     given_text = ", ".join(f"{names[c]} '{f}'" for c, f in wanted.items())
     require(not wrong, f"{len(wrong)} of {len(rows)} new rows are not formatted like the existing rows: "
                        + "; ".join(wrong[:3]) + (f" (and {len(wrong) - 3} more)" if len(wrong) > 3 else "")
                        + f". In {ctx.case.inputs[0]} as given, the existing rows have {given_text} {_SAME_FORMAT}")
+    if unsure:
+        reason = next(iter(why.values()))
+        raise Inconclusive(f"{len(unsure)} of {len(rows)} new rows have a format that matches the existing rows' "
+                           "except for '/' under a locale tag: " + "; ".join(unsure[:3])
+                           + (f" (and {len(unsure) - 3} more)" if len(unsure) > 3 else "")
+                           + f". {reason[0].upper()}{reason[1:]}, so it cannot tell whether these cells show like "
+                           + ", ".join(f"{names[c]} '{wanted[c]}'" for c in why) + " in the existing rows")
 
 
 @rule(

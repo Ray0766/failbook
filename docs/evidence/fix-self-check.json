@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-03T05:39:03+00:00",
+  "generated_at": "2026-11-03T13:24:28+00:00",
   "failbook_version": "0.1.0",
   "engine": "LibreOffice 24.2.7.2 420(Build:2)",
   "rows": [
@@ -18,12 +18,6 @@
           "check": "range-omits-adjacent-cells",
           "where": "Orders!F15",
           "message": "F2:F11 stops at row 11, but rows 12-14 between it and the formula hold values"
-        },
-        {
-          "level": "error",
-          "check": "formula-moved-as-text",
-          "where": "Orders!D15",
-          "message": "2 formula(s) were moved without updating their references, e.g. =SUM(D2:D11) was at D12"
         }
       ],
       "warnings": []
@@ -31,6 +25,18 @@
     {
       "case": "xlsx-001",
       "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-001",
+      "output": "alt_equivalent_formats",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-001",
+      "output": "alt_format_spellings",
       "errors": [],
       "warnings": []
     },
@@ -115,7 +121,7 @@
           "level": "error",
           "check": "formula-moved-as-text",
           "where": "Staff!E2",
-          "message": "15 formula(s) were moved without updating their references, e.g. =C6*D6 was at E6"
+          "message": "15 formula(s) were moved without updating their references, although the cells they read moved with them, e.g. =C6*D6 was at E6"
         }
       ],
       "warnings": []
@@ -240,6 +246,12 @@
     {
       "case": "xlsx-007",
       "output": "reference",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-007",
+      "output": "alt_equivalent_formats",
       "errors": [],
       "warnings": []
     },
@@ -614,6 +626,24 @@
     },
     {
       "case": "xlsx-011",
+      "output": "alt_categories_on_first_series",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-011",
+      "output": "alt_helper_sheet",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-011",
+      "output": "alt_lowercase_sheet_refs",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-011",
       "output": "alt_named_range",
       "errors": [],
       "warnings": []
@@ -701,7 +731,37 @@
     },
     {
       "case": "xlsx-013",
+      "output": "alt_bool_literal_case",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "alt_chinese_list_name",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "alt_due_date_in_formula",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "alt_list_sheet_lowercase",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-013",
       "output": "alt_named_status_list",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "case": "xlsx-013",
+      "output": "alt_sheet_name_lowercase",
       "errors": [],
       "warnings": []
     },
@@ -743,7 +803,7 @@
           "level": "error",
           "check": "formula-moved-as-text",
           "where": "Stock!F3",
-          "message": "15 formula(s) were moved without updating their references, e.g. =D4*E4 was at F4"
+          "message": "15 formula(s) were moved without updating their references, although the cells they read moved with them, e.g. =D4*E4 was at F4"
         },
         {
           "level": "error",

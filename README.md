@@ -105,7 +105,7 @@ not run. Submit every attempt as described in [results/README.md](results/README
 
 [spreadsheet-verify-skill](fixes/spreadsheet-verify-skill/) is an Agent Skill: a checklist plus
 `audit_xlsx.py`, a task-agnostic audit of an edited workbook against its original. The audit flags 13 of the
-15 failure artifacts and raises no error on 30 correct solutions ([evidence](docs/evidence/fix-self-check.md)).
+15 failure artifacts and raises no error on 41 correct solutions ([evidence](docs/evidence/fix-self-check.md)).
 Whether agents do better with the skill is **not yet measured**; retest with `--fix spreadsheet-verify-skill`
 or with SkillEvaluator (`failbook export skillevaluator --fix spreadsheet-verify-skill --out dist/se`).
 

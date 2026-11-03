@@ -1,8 +1,9 @@
 """A valid alternative: real dates and real numbers, formatted in ways that differ from the existing
-rows' formats only where no shown value changes: the dates as 'yyyy-mm-dd;@' (a text section that
-shows text as typed, as a format without one does) and the amounts as '#,##0.00;-#,##0.00' (a
-negative section that is how '#,##0.00' shows negatives anyway). In LibreOffice every cell shows the
-same as with the existing rows' formats.
+rows' formats only where no value these columns hold shows differently: the dates as 'yyyy-mm-dd;@' (a
+text section that shows text as typed, as a format without one does) and the amounts as
+'#,##0.00;-#,##0.00' (a negative section that shows every negative amount of a cent or more as
+'#,##0.00' does; the amounts are positive). In LibreOffice every cell shows the same as with the
+existing rows' formats.
 """
 
 import csv

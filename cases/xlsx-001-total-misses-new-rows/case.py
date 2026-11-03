@@ -4,7 +4,7 @@ import openpyxl
 
 from failbook import kit
 from failbook import xlsx as X
-from failbook.checks import Fail, require, rule
+from failbook.checks import Fail, Inconclusive, require, rule
 
 SHEET = "Orders"
 HEADERS = ["Order ID", "Date", "Customer", "Qty", "Unit Price", "Amount"]
@@ -89,9 +89,13 @@ def _amt(x, sign=False):
 
 
 #: What X.number_format_key counts as one format, as the format messages say it.
-_SAME_FORMAT = ("(formats that show every value alike count as the same, for example ones that differ only in "
-                "letter case, quotes or backslash escapes, a text section that is only '@', a negative section that "
-                "is '-' and the first section, or a locale tag such as [$-409] on a date of digits only).")
+_SAME_FORMAT = ("(formats count as the same when they differ only in letter case, quotes or backslash escapes, a "
+                "text section that is only '@', a zero section equal to the first, a negative section of '-' and a "
+                "first section of digits such as #,##0.00;-#,##0.00 (it shows -0.00 instead of 0.00 only for a "
+                "negative number that rounds to zero, and the task's prices and amounts are all positive), or a "
+                "locale tag such as [$-409] on a date of digits; under such a tag an unquoted '/' counts as the "
+                "date separator LibreOffice 24.2 shows for it: [$-41D]yyyy/mm/dd shows 2024-03-02, "
+                "[$-409]yyyy/mm/dd 2024/03/02 and [$-407]yyyy/mm/dd 2024.03.02).")
 
 
 #: The "bump" scenario changes, in a copy of the file, every order's Qty (by a different
@@ -163,16 +167,30 @@ def new_rows_formatted(ctx):
     wanted = {h: f for h, f in wanted.items() if X.number_format_key(f) != general}
     found = [(o, r) for o in ctx.meta["new"] for r in rows.get(o["id"], [])]
     require(found, "none of the new orders is in the sheet, so no new row's format can be compared")
-    wrong = []
+    wrong, unsure, why = [], [], {}  # why: column -> why the checker cannot compare it
     for o, r in found:
-        diff = [f"{h} '{X.number_format(ws, r, cols[h])}'" for h, f in wanted.items()
-                if X.number_format_key(X.number_format(ws, r, cols[h])) != X.number_format_key(f)]
+        diff, maybe = [], []
+        for h, f in wanted.items():
+            got = X.number_format(ws, r, cols[h])
+            if X.number_format_key(got) != X.number_format_key(f):
+                reason = X.number_format_unsure(got, f)  # '/' under a locale tag: the separator is unknown
+                (maybe if reason else diff).append(f"{h} '{got}'")
+                if reason:
+                    why[h] = reason
         if diff:
             wrong.append(f"{o['id']} (row {r}) has " + ", ".join(diff))
+        elif maybe:
+            unsure.append(f"{o['id']} (row {r}) has " + ", ".join(maybe))
     given_text = ", ".join(f"{h} '{f}'" for h, f in wanted.items())
     require(not wrong, f"{len(wrong)} of {len(found)} new order rows are not formatted like the original order rows: "
                        + "; ".join(wrong[:3]) + f". In {ctx.case.inputs[0]} as given, the original order rows have "
                        f"{given_text} {_SAME_FORMAT}")
+    if unsure:
+        reason = next(iter(why.values()))
+        raise Inconclusive(f"{len(unsure)} of {len(found)} new order rows have a format that matches the original "
+                           "order rows' except for '/' under a locale tag: " + "; ".join(unsure[:3])
+                           + f". {reason[0].upper()}{reason[1:]}, so it cannot tell whether these cells show like "
+                           + ", ".join(f"{h} '{wanted[h]}'" for h in why) + " in the original order rows")
 
 
 @rule(

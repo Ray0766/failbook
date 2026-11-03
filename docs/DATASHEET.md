@@ -11,7 +11,7 @@ method reference, not a recent result.
 
 ## Composition
 
-- 15 cases (`cases/xlsx-001` to `xlsx-015`), each: a task in English and Chinese, input workbook(s), 3 to 7
+- 15 cases (`cases/xlsx-001` to `xlsx-015`), each: a task in English and Chinese, input workbook(s), 3 to 8
   rules, a reference solution, a failure reproduction (`failure.py`) with its artifact and grading, optional
   alternative solutions, limitations.
 - **Data.** Synthetic and fictional: names, companies and products come from short lists in

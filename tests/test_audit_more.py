@@ -398,7 +398,7 @@ def test_partial_aggregate_left_behind_by_an_extended_total_is_an_error(tmp_path
     stale = _edit(before, tmp_path / "stale.xlsx", add_two_months("=AVERAGE(B2:B13)"))
     found = [f for f in _findings(stale, before) if f.check == "range-omits-adjacent-cells"]
     assert [(f.level, f.where) for f in found] == [("error", "Sales!B17")]
-    assert "in the original file both ended at row 13" in found[0].message
+    assert "in the original file both covered rows 2-13 (the total was in row 14: =SUM(B2:B13))" in found[0].message
     # Without the original nothing shows that the shorter range is stale: a warning.
     assert _levels(_findings(stale), "range-omits-adjacent-cells") == ["warning"]
     assert _findings(_edit(before, tmp_path / "ok.xlsx", add_two_months("=AVERAGE(B2:B15)")), before) == []
@@ -605,6 +605,375 @@ def test_sort_under_a_repeated_category_label_is_found_by_the_row_values(tmp_pat
     assert _findings(_edit(before, tmp_path / "more.xlsx", lambda w: w["Prices"].append(["Fruit", "Pear", 1.8, "kg", "Acme"])),
                      before) == []
     assert _findings(_edit(before, tmp_path / "price.xlsx", lambda w: w["Prices"].__setitem__("C2", 2.3)), before) == []
+
+
+# -- fourth review: the round-3 rules tightened where correct edits share the shape ------------
+def _chart_sheet_book(path, sheet, series, title=None, kind="bar", data="Data"):
+    """A data sheet (M, R, C, P) and one chart sheet ``sheet`` whose series read the columns ``series``."""
+    from openpyxl.chart import BarChart, Reference, ScatterChart, Series
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = data
+    ws.append(["M", "R", "C", "P"])
+    for i in range(1, 8):
+        ws.append([i, i * i, 7 - i, 2 * i])
+    if kind == "scatter":  # scatter series keep their values in yVal (and xVal), not in val
+        chart = ScatterChart()
+        for col in series:
+            chart.series.append(Series(Reference(ws, min_col=col, min_row=2, max_row=8), Reference(ws, min_col=1, min_row=2, max_row=8)))
+    else:
+        chart = BarChart()
+        for col in series:
+            chart.add_data(Reference(ws, min_col=col, min_row=1, max_row=8), titles_from_data=True)
+    if title:
+        chart.title = title
+    wb.create_chartsheet(sheet).add_chart(chart)
+    wb.save(path)
+    return path
+
+
+def test_renamed_chart_sheet_matches_scatter_series_and_added_series(tmp_path):
+    for kind in ("scatter", "bar"):
+        before = _chart_sheet_book(tmp_path / f"{kind}_b.xlsx", "Chart1", [2], kind=kind)
+        assert _findings(_chart_sheet_book(tmp_path / f"{kind}_ren.xlsx", "Growth", [2], kind=kind), before) == []
+    # An untitled chart renamed and given a Cost series; a titled one renamed, retitled and extended.
+    before = _chart_sheet_book(tmp_path / "b.xlsx", "Chart1", [2])
+    assert _findings(_chart_sheet_book(tmp_path / "add.xlsx", "Revenue and cost", [2, 3]), before) == []
+    before = _chart_sheet_book(tmp_path / "bt.xlsx", "Revenue chart", [2], title="Revenue")
+    assert _findings(_chart_sheet_book(tmp_path / "title.xlsx", "Sales chart", [2, 3], title="Revenue and cost"), before) == []
+    # Another chart in its place (no title, no column in common) is still a removed chart sheet.
+    found = _findings(_chart_sheet_book(tmp_path / "other.xlsx", "Profit chart", [4], title="Profit"), before)
+    assert [(f.level, f.check, f.where) for f in found] == [("error", "sheet-removed", "Revenue chart")]
+    # The skill's fallback chart reader (no failbook package) reads scatter values too.
+    from failbook.xlsx import charts
+
+    scatter = _chart_sheet_book(tmp_path / "scatter_b.xlsx", "Chart1", [2], kind="scatter")
+    assert [s["val"] for c in audit_mod._charts_fallback(scatter) for s in c["series"]] == ["'Data'!$B$2:$B$8"]
+    assert [s["val"] for c in charts(scatter) for s in c["series"]] == ["'Data'!$B$2:$B$8"]
+
+
+def test_part_kept_below_an_extended_total_is_a_warning_and_a_stale_full_range_an_error(tmp_path):
+    months = [f"2024-{m:02d}" for m in range(1, 13)] + ["2025-01", "2025-02"]
+
+    def sales(path, extra, n=12):
+        rows = [["Month", "Revenue"]] + [[months[r - 2], 100 + 10 * r] for r in range(2, n + 2)]
+        return _book(path, rows, "Sales", extra)
+
+    # 'Q4 2024' and 'H1/H2 2024' keep their range under an all-time total: correct edits do that too.
+    before = sales(tmp_path / "qb.xlsx", {"A14": "Total", "B14": "=SUM(B2:B13)", "A15": "Q4 2024", "B15": "=SUM(B11:B13)"})
+    q4 = sales(tmp_path / "q4.xlsx", {"A16": "Total", "B16": "=SUM(B2:B15)", "A17": "Q4 2024", "B17": "=SUM(B11:B13)"}, 14)
+    assert [f.level for f in _findings(q4, before)] == ["warning"]
+    before = sales(tmp_path / "hb.xlsx", {"A14": "Total", "B14": "=SUM(B2:B13)", "A15": "H1 2024", "B15": "=SUM(B2:B7)",
+                                          "A16": "H2 2024", "B16": "=SUM(B8:B13)"})
+    halves = sales(tmp_path / "h.xlsx", {"A16": "Total", "B16": "=SUM(B2:B15)", "A17": "H1 2024", "B17": "=SUM(B2:B7)",
+                                         "A18": "H2 2024", "B18": "=SUM(B8:B13)"}, 14)
+    assert [f.level for f in _findings(halves, before)] == ["warning", "warning"]
+    # Average and Max that covered the whole year, left behind: errors that cite the original total.
+    before = sales(tmp_path / "mb.xlsx", {"A14": "Total", "B14": "=SUM(B2:B13)", "A15": "Average", "B15": "=AVERAGE(B2:B13)",
+                                          "A16": "Max", "B16": "=MAX(B2:B13)"})
+    stale = sales(tmp_path / "m.xlsx", {"A16": "Total", "B16": "=SUM(B2:B15)", "A17": "Average", "B17": "=AVERAGE(B2:B13)",
+                                        "A18": "Max", "B18": "=MAX(B2:B13)"}, 14)
+    found = _findings(stale, before)
+    assert [(f.level, f.where) for f in found] == [("error", "Sales!B17"), ("error", "Sales!B18")]
+    assert all(f.message.endswith("(the total was in row 14: =SUM(B2:B13))") for f in found)
+
+
+def test_total_left_behind_by_a_new_sum_of_the_added_rows_is_a_warning_with_the_original(tmp_path):
+    rows = [["Month", "Revenue"]] + [[f"2024-{r - 1:02d}", 100 + 10 * r] for r in range(2, 14)]
+    before = _book(tmp_path / "before.xlsx", rows, "Sales", {"A14": "Total", "B14": "=SUM(B2:B13)"})
+    grown = rows + [["2025-01", 300], ["2025-02", 310]]
+    after = _book(tmp_path / "after.xlsx", grown, "Sales", {"A16": "Total", "B16": "=SUM(B2:B13)",
+                                                            "A17": "Jan-Feb 2025", "B17": "=SUM(B14:B15)"})
+    found = _findings(after, before)
+    assert [(f.level, f.check, f.where) for f in found] == [("warning", "range-omits-adjacent-cells", "Sales!B16")]
+    assert "was the total of the whole block, rows 2-13" in found[0].message
+    # Without the original the same shape is a year split (2024 / 2025): nothing to report.
+    assert _findings(after) == []
+
+
+def test_data_sheet_replaced_by_its_formula_texts_is_removed_not_renamed(tmp_path):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Data"
+    ws.append(["Month", "Revenue"])
+    for i in range(12):
+        ws.append([f"2024-{i + 1:02d}", 100 + 7 * i])
+    ws["D1"], ws["D2"], ws["D3"] = "=SUM(B2:B13)", "=AVERAGE(B2:B13)", "=MAX(B2:B13)"
+    wb.create_sheet("Report").append(["Total", "=Data!D1"])
+    before = tmp_path / "before.xlsx"
+    wb.save(before)
+
+    def replace(w):  # the data is gone; a new sheet holds only the three formula texts
+        del w["Data"]
+        figures = w.create_sheet("Figures")
+        figures["A1"], figures["A2"], figures["A3"] = "=SUM(B2:B13)", "=AVERAGE(B2:B13)", "=MAX(B2:B13)"
+        w["Report"]["B1"] = "=Figures!A1"
+
+    found = _findings(_edit(before, tmp_path / "after.xlsx", replace), before)
+    assert [(f.level, f.check, f.where) for f in found] == [("error", "sheet-removed", "Data")]
+    assert "renamed" not in found[0].message
+
+
+def _random_ledger_edits(seed, same_day):
+    """The round-4 checker's random valid edits: 1-3 inserts or deletes, the balance refilled."""
+    import random
+
+    rnd = random.Random(seed)
+    items = [(f"2024-03-{((i + 1) // 2) if same_day else i:02d}", f"tx{i}", rnd.randint(-99, 99)) for i in range(1, 16)]
+    new = list(items)
+    for k in range(rnd.randint(1, 3)):
+        if rnd.random() < 0.5 and len(new) > 3:
+            del new[rnd.randint(1, len(new) - 1)]
+        else:
+            j = rnd.randint(1, len(new))
+            new.insert(j, (new[j - 1][0], f"new{k}", rnd.randint(-99, 99)))
+    return items, new
+
+
+def test_running_balance_with_repeated_dates_is_not_an_error(tmp_path):
+    day = [("2024-03-01", "Opening", 1000), ("2024-03-01", "Rent", -400), ("2024-03-02", "Invoice 17", 650),
+           ("2024-03-02", "Fuel", -60), ("2024-03-03", "Invoice 18", 300), ("2024-03-03", "Phone", -45),
+           ("2024-03-04", "Bank fee", -5), ("2024-03-04", "Invoice 19", 820), ("2024-03-05", "Coffee", -12)]
+    before = _ledger(tmp_path / "day.xlsx", day)
+    same_day = day[:4] + [("2024-03-02", "Refund", 25)] + day[4:]  # inserted after Fuel, same date
+    assert _findings(_ledger(tmp_path / "same_day.xlsx", same_day), before) == []
+    items = [(f"2024-03-{r:02d}", d, a) for r, (d, a) in enumerate(LEDGER + [("Coffee", -12), ("Invoice 20", 410)], start=2)]
+    before = _ledger(tmp_path / "ledger.xlsx", items)
+    mixed = items[:3] + items[4:7] + [("2024-03-08", "Refund", 15)] + items[7:]  # Fuel deleted, Refund inserted
+    assert _findings(_ledger(tmp_path / "mixed.xlsx", mixed), before) == []
+    for same in (False, True):
+        for seed in range(40):
+            old, new = _random_ledger_edits(seed, same)
+            b, a = _ledger(tmp_path / f"b{seed}.xlsx", old), _ledger(tmp_path / f"a{seed}.xlsx", new)
+            assert not _errors(_findings(a, b)), (seed, same)
+    # Sorted by amount and refilled: right when the order was the task, so a warning, not an error.
+    srt = _ledger(tmp_path / "sorted.xlsx", sorted(items, key=lambda x: x[2]))
+    found = _findings(srt, before)
+    assert [(f.level, f.check) for f in found] == [("warning", "reference-meaning-changed")]
+    # Not refilled after an openpyxl insert: the moved balances still read the wrong rows.
+    wrong = _edit(before, tmp_path / "wrong.xlsx", lambda w: w.active.insert_rows(6))
+    assert [f.check for f in _errors(_findings(wrong, before))] == ["formula-moved-as-text"]
+
+
+def test_whole_column_formulas_moved_by_an_inserted_row_are_not_moved_as_text(tmp_path):
+    rows = [["Region", "Amount", None, "Total"]] + [[r, a] for r, a in [("N", 10), ("S", 20), ("N", 30), ("E", 40), ("S", 50)]]
+    before = _book(tmp_path / "before.xlsx", rows, "S", {"E2": "=SUM(B:B)", "E3": '=SUMIF(A:A,"N",B:B)'})
+
+    def insert(w):  # a whole row inserted, as Excel does: E2/E3 move to E3/E4 with the same text
+        ws = w.active
+        ws.insert_rows(2)
+        ws["A2"], ws["B2"] = "W", 5
+
+    assert _findings(_edit(before, tmp_path / "after.xlsx", insert), before) == []
+
+
+def test_chart_over_a_computed_series_still_warns_when_it_stops_early(tmp_path):
+    from openpyxl.chart import LineChart, Reference
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "R"
+    ws.append(["M", "Cum"])
+    ws.append(["M1", 5])
+    for r in range(3, 12):  # each row adds the two above it: data, not a total row
+        ws.append([f"M{r - 1}", f"=B{r - 1}+B{r - 2}" if r > 3 else "=B2+B2"])
+    chart = LineChart()
+    chart.add_data(Reference(ws, min_col=2, min_row=1, max_row=6), titles_from_data=True)
+    ws.add_chart(chart, "D2")
+    wb.save(tmp_path / "fib.xlsx")
+    found = _findings(tmp_path / "fib.xlsx")
+    assert [f.level for f in found] == ["warning"] and "data continues to row 11" in found[0].message
+
+
+# -- fifth review: the round-4 leniencies narrowed to the cases they were meant for -------------
+MONTHS = [f"2024-{m:02d}" for m in range(1, 13)] + ["2025-01", "2025-02"]
+
+
+def _sales(path, extra, n=12):
+    """Months in A2:B(n+1) of a 'Sales' sheet, with ``extra`` cells (totals) below them."""
+    rows = [["Month", "Revenue"]] + [[MONTHS[r - 2], 100 + 10 * r] for r in range(2, n + 2)]
+    return _book(path, rows, "Sales", extra)
+
+
+def test_one_off_formula_reading_an_overwritten_neighbour_row_is_an_error(tmp_path):
+    # VAT =B14*0.2 under the Total: a new month written over the Total row, the Total re-added below.
+    before = _sales(tmp_path / "vat_b.xlsx", {"A14": "Total", "B14": "=SUM(B2:B13)", "A15": "VAT", "B15": "=B14*0.2"})
+    after = _book(tmp_path / "vat.xlsx", [["Month", "Revenue"]] + [[MONTHS[r - 2], 100 + 10 * r] for r in range(2, 14)]
+                  + [["2025-01", 300]], "Sales", {"A15": "VAT", "B15": "=B14*0.2", "A16": "Total", "B16": "=SUM(B2:B14)"})
+    found = _findings(after, before)
+    assert [(f.level, f.check, f.where) for f in found] == [("error", "reference-meaning-changed", "Sales!B15")]
+    assert "'Total' is now in row 16" in found[0].message
+    # Profit =B2-B3: a 'Marketing' line written over the Cost row, Cost moved below Profit.
+    before = _book(tmp_path / "pl_b.xlsx", [["Item", "Amount"], ["Revenue", 1000], ["Cost", 600], ["Profit", "=B2-B3"]], "PL")
+    after = _book(tmp_path / "pl.xlsx", [["Item", "Amount"], ["Revenue", 1000], ["Marketing", 50], ["Profit", "=B2-B3"],
+                                         ["Cost", 600]], "PL")
+    assert [(f.level, f.where) for f in _findings(after, before)] == [("error", "PL!B4")]
+    # A change column filled down keeps its leniency: a month's row corrected in place stays clean.
+    rows = [["Month", "Sales", "Change"]] + [[m, 100 + 13 * i % 40, f"=B{i + 2}-B{i + 1}" if i else None]
+                                            for i, m in enumerate(MONTHS[:12])]
+    before = _book(tmp_path / "chg_b.xlsx", rows, "Sales")
+    fixed = _edit(before, tmp_path / "chg.xlsx", lambda w: (w.active.__setitem__("A7", "2024-06 (rev.)"),
+                                                            w.active.__setitem__("B7", 999)))
+    assert _findings(fixed, before) == []
+
+
+def test_whole_column_formulas_moved_by_a_row_and_a_column_insert_are_moved_as_text(tmp_path):
+    rows = [["Region", "Amount", None, "Total"]] + [[r, a] for r, a in [("N", 10), ("S", 20), ("N", 30), ("E", 40), ("S", 50)]]
+    before = _book(tmp_path / "before.xlsx", rows, "S", {"E2": "=SUM(B:B)", "E3": '=SUMIF(A:A,"N",B:B)'})
+
+    def insert(w):  # openpyxl moves E2/E3 to F3/F4 with their texts kept; B is now the new, empty 'Code' column
+        ws = w.active
+        ws.insert_rows(1)
+        ws["A1"] = "Sales by region"
+        ws.insert_cols(2)
+        ws["B2"] = "Code"
+
+    stale = _edit(before, tmp_path / "stale.xlsx", insert)
+    found = _findings(stale, before)
+    assert [(f.level, f.check, f.where) for f in found] == [("error", "formula-moved-as-text", "S!F3")]
+    fixed = _edit(stale, tmp_path / "fixed.xlsx", lambda w: (w.active.__setitem__("F3", "=SUM(C:C)"),
+                                                             w.active.__setitem__("F4", '=SUMIF(A:A,"N",C:C)')))
+    assert _findings(fixed, before) == []
+
+
+def test_stale_aggregate_error_names_the_original_total_only_when_identified(tmp_path):
+    # The total changed from SUBTOTAL to SUM and moved down by a spacer: identified by its 'Total' label.
+    before = _sales(tmp_path / "sp_b.xlsx", {"A14": "Total", "B14": "=SUBTOTAL(9,B2:B13)", "A15": "Average",
+                                             "B15": "=AVERAGE(B2:B13)", "A16": "Max", "B16": "=MAX(B2:B13)"})
+    after = _sales(tmp_path / "sp.xlsx", {"A17": "Total", "B17": "=SUM(B2:B15)", "A18": "Average", "B18": "=AVERAGE(B2:B13)",
+                                          "A19": "Max", "B19": "=MAX(B2:B13)"}, 14)
+    found = _findings(after, before)
+    assert [(f.level, f.where) for f in found] == [("error", "Sales!B18"), ("error", "Sales!B19")]
+    assert all(f.message.endswith("(the total was in row 14: =SUBTOTAL(9,B2:B13))") for f in found)
+    # The original had no total (Max, Average) and the Total is new: no row named, nothing 'extended'.
+    before = _sales(tmp_path / "nt_b.xlsx", {"A14": "Max", "B14": "=MAX(B2:B13)", "A15": "Average", "B15": "=AVERAGE(B2:B13)"})
+    after = _sales(tmp_path / "nt.xlsx", {"A16": "Total", "B16": "=SUM(B2:B15)", "A17": "Max", "B17": "=MAX(B2:B15)",
+                                          "A18": "Average", "B18": "=AVERAGE(B2:B13)"}, 14)
+    found = _findings(after, before)
+    assert [(f.level, f.where) for f in found] == [("error", "Sales!B18")]
+    assert "row 16 (=SUM(B2:B15)) covers them, but this formula does not" in found[0].message
+    assert "extended" not in found[0].message and "the total was in row" not in found[0].message
+
+
+def test_year_split_that_keeps_a_covering_total_is_clean_with_the_original(tmp_path):
+    before = _sales(tmp_path / "before.xlsx", {"A14": "Total", "B14": "=SUM(B2:B13)"})
+    parts = {"2024": "=SUM(B2:B13)", "2025": "=SUM(B14:B15)", "Total": "=SUM(B2:B15)"}
+    for order in (["2024", "2025", "Total"], ["Total", "2024", "2025"]):
+        extra = {}
+        for r, label in enumerate(order, start=16):
+            extra[f"A{r}"], extra[f"B{r}"] = label, parts[label]
+        assert _findings(_sales(tmp_path / f"{order[0]}.xlsx", extra, 14), before) == [], order
+    # A 'total' that misses a row covers nothing: the old total's warning stays.
+    short = _sales(tmp_path / "short.xlsx", {"A16": "2024", "B16": "=SUM(B2:B13)", "A17": "2025", "B17": "=SUM(B14:B15)",
+                                             "A18": "Total", "B18": "=SUM(B3:B15)"}, 14)
+    assert [(f.level, f.where) for f in _findings(short, before)] == [("warning", "Sales!B16")]
+
+
+def test_plus_total_under_a_numeric_header_ends_the_data_for_charts(tmp_path):
+    from openpyxl.chart import LineChart, Reference
+
+    def book(path, last):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Y"
+        ws.append(["Month", 2024])  # the header of column B is a number
+        for i in range(6):
+            ws.append([f"M{i + 1}", 10 + i])
+        ws.append(["Total", "=B2+B3+B4+B5+B6+B7"])
+        chart = LineChart()
+        chart.add_data(Reference(ws, min_col=2, min_row=2, max_row=last))
+        ws.add_chart(chart, "D2")
+        wb.save(path)
+        return path
+
+    assert _findings(book(tmp_path / "all.xlsx", 7)) == []
+    found = _findings(book(tmp_path / "short.xlsx", 6))
+    assert [f.level for f in found] == ["warning"] and "data continues to row 7" in found[0].message
+
+
+def _named_chart_book(path, sheets, names, local=False):
+    """A data sheet (M, R, C, P), defined ``names`` ((name, text), workbook-wide unless ``local``) and
+    chart sheets ``(sheet, series, title)``; a series is a column number or a reference such as Data!Rev."""
+    from openpyxl.chart import BarChart, Reference
+    from openpyxl.workbook.defined_name import DefinedName
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Data"
+    ws.append(["M", "R", "C", "P"])
+    for i in range(1, 8):
+        ws.append([f"M{i}", i * i, 7 - i, 2 * i])
+    for name, text in names:
+        (ws if local else wb).defined_names[name] = DefinedName(name, attr_text=text)
+    for sheet, series, title in sheets:
+        chart = BarChart()
+        for s in series:
+            if isinstance(s, str):
+                chart.add_data(Reference(ws, min_col=2, min_row=2, max_row=8))
+                chart.series[-1].val.numRef.f = s
+            else:
+                chart.add_data(Reference(ws, min_col=s, min_row=1, max_row=8), titles_from_data=True)
+        if title:
+            chart.title = title
+        wb.create_chartsheet(sheet).add_chart(chart)
+    wb.save(path)
+    return path
+
+
+def test_chart_sheet_over_a_defined_name_is_compared_by_the_range_it_names(tmp_path):
+    rev = [("Revenue", "Data!$B$2:$B$8")]
+    before = _named_chart_book(tmp_path / "b.xlsx", [("Chart1", ["Data!Revenue"], None)], rev)
+    renamed = _named_chart_book(tmp_path / "renamed.xlsx", [("Revenue", ["Data!Revenue"], None)], rev)
+    assert _findings(renamed, before) == []
+    direct = _named_chart_book(tmp_path / "direct.xlsx", [("Revenue chart", [2], None)], rev)  # the range itself
+    assert _findings(direct, before) == []
+    replaced = _named_chart_book(tmp_path / "replaced.xlsx", [("Profit", [4], "Profit")], rev)
+    assert [(f.level, f.check, f.where) for f in _findings(replaced, before)] == [("error", "sheet-removed", "Chart1")]
+    local = [("Rev", "Data!$B$2:$B$8")]  # a name of the data sheet itself
+    before = _named_chart_book(tmp_path / "lb.xlsx", [("Chart1", ["Data!Rev"], None)], local, local=True)
+    replaced = _named_chart_book(tmp_path / "lr.xlsx", [("Profit", [4], None)], local, local=True)
+    assert [f.level for f in _findings(replaced, before)] == ["error"]
+    # A dynamic name (no plain range) pairs only the same name; another chart in its place is a warning.
+    dyn = [("DynRev", "OFFSET(Data!$B$2,0,0,COUNT(Data!$B:$B),1)")]
+    before = _named_chart_book(tmp_path / "db.xlsx", [("Chart1", ["Data!DynRev"], None)], dyn)
+    assert _findings(_named_chart_book(tmp_path / "dr.xlsx", [("Revenue", ["Data!DynRev"], None)], dyn), before) == []
+    found = _findings(_named_chart_book(tmp_path / "dx.xlsx", [("Profit", [4], "Profit")], dyn), before)
+    assert [(f.level, f.check, f.where) for f in found] == [("warning", "sheet-removed", "Chart1")]
+    assert "'Profit' may be it under a new name" in found[0].message
+    gone = _findings(_named_chart_book(tmp_path / "dg.xlsx", [], dyn), before)
+    assert [(f.level, f.check) for f in gone] == [("error", "sheet-removed")]
+
+
+def test_chart_without_identity_does_not_take_another_charts_renamed_sheet(tmp_path):
+    for names, ref, level in (([("Revenue", "Data!$B$2:$B$8")], "Data!Revenue", "error"),
+                              ([("DynRev", "OFFSET(Data!$B$2,0,0,COUNT(Data!$B:$B),1)")], "Data!DynRev", "warning")):
+        before = _named_chart_book(tmp_path / "b.xlsx", [("Chart1", [ref], None), ("Chart2", [3], None)], names)
+        # Chart2 renamed 'Costs' (same series); Chart1 replaced by 'Profit'.
+        after = _named_chart_book(tmp_path / "a.xlsx", [("Costs", [3], None), ("Profit", [4], None)], names)
+        found = _findings(after, before)
+        assert [(f.level, f.check, f.where) for f in found] == [(level, "sheet-removed", "Chart1")], ref
+        assert "'Costs'" not in found[0].message
+
+
+def test_cleared_ledger_row_is_an_error_and_a_cleared_date_alone_a_plain_warning(tmp_path):
+    items = [(f"2024-03-{i:02d}", f"tx{i}", (-1) ** i * (10 * i + 3)) for i in range(1, 11)]
+    before = _ledger(tmp_path / "before.xlsx", items)
+
+    def clear(cols):
+        def change(w):
+            for col in cols:
+                w.active[f"{col}7"] = None
+        return change
+
+    # A7:D7 cleared: D8 =D7+C8 now reads an empty balance, so every later balance restarts at 0.
+    found = _findings(_edit(before, tmp_path / "abcd.xlsx", clear("ABCD")), before)
+    assert [(f.level, f.check, f.where) for f in found] == [("error", "reference-meaning-changed", "Ledger!D8")]
+    assert "D7, which it reads, held '=D6+C7' and is now empty too" in found[0].message
+    # A7:C7 cleared, the balance in D7 kept: the balances stay right. A warning that claims no reordering.
+    found = _findings(_edit(before, tmp_path / "abc.xlsx", clear("ABC")), before)
+    assert [(f.level, f.where) for f in found] == [("warning", "Ledger!D8")]
+    assert "is now empty" in found[0].message and "reordered" not in found[0].message
 
 
 def test_no_recalc_help_says_error_values_are_not_checked(capsys):

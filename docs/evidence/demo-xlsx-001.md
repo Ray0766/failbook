@@ -15,6 +15,7 @@ $ failbook grade xlsx-001 $WORK/attempt
 xlsx-001  New orders inserted above the Total row are left out of the total
 verdict: FAIL   (seed 0, engine: LibreOffice 24.2.7.2 420(Build:2))
   [PASS] new-orders-added: Each new order appears once, with the given date, customer, qty and price
+  [PASS] new-rows-formatted: The new orders' Date, Unit Price and Amount have the number formats of the original order rows
   [PASS] existing-orders-unchanged: The original orders are unchanged and in their original order
   [PASS] amounts-correct: Amount equals Qty x Unit Price on every order row
   [PASS] amounts-are-live: Every order's Amount follows its Qty and Unit Price (new rows and original rows)
@@ -27,7 +28,6 @@ verdict: FAIL   (seed 0, engine: LibreOffice 24.2.7.2 420(Build:2))
 $ failbook audit $WORK/attempt/sales.xlsx --before $WORK/original/sales.xlsx
 [error] range-omits-adjacent-cells at Orders!D15: D2:D11 stops at row 11, but rows 12-14 between it and the formula hold values
 [error] range-omits-adjacent-cells at Orders!F15: F2:F11 stops at row 11, but rows 12-14 between it and the formula hold values
-[error] formula-moved-as-text at Orders!D15: 2 formula(s) were moved without updating their references, e.g. =SUM(D2:D11) was at D12
 
 $ failbook solve xlsx-001 $WORK/fixed --kind reference
 Applied the reference solution of xlsx-001 to $WORK/fixed
@@ -36,6 +36,7 @@ $ failbook grade xlsx-001 $WORK/fixed
 xlsx-001  New orders inserted above the Total row are left out of the total
 verdict: PASS   (seed 0, engine: LibreOffice 24.2.7.2 420(Build:2))
   [PASS] new-orders-added: Each new order appears once, with the given date, customer, qty and price
+  [PASS] new-rows-formatted: The new orders' Date, Unit Price and Amount have the number formats of the original order rows
   [PASS] existing-orders-unchanged: The original orders are unchanged and in their original order
   [PASS] amounts-correct: Amount equals Qty x Unit Price on every order row
   [PASS] amounts-are-live: Every order's Amount follows its Qty and Unit Price (new rows and original rows)

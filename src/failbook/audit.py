@@ -53,6 +53,7 @@ from pathlib import Path
 
 import openpyxl
 from openpyxl.formula.tokenizer import Token, Tokenizer
+from openpyxl.formula.translate import Translator
 from openpyxl.utils.cell import column_index_from_string, get_column_letter
 
 ERRORS = {"#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A"}
@@ -399,17 +400,20 @@ def _column_aggregate(ws, row: int, col: int):
 
 def _adds_above(ws, row: int, col: int) -> bool:
     """True when the cell is a formula that only adds cells above it in its own column, like
-    =B2+B3+B4+B5 or =SUM(B2:B4)+SUM(B5:B7): a total written without one aggregate."""
+    =B2+B3+B4+B5 or =SUM(B2:B4)+SUM(B5:B7): a total written without one aggregate. The cells must
+    be the whole block above it, from its first value (below a label, a blank or the header row,
+    whatever the header holds) to the last one (blank spacer rows aside), so a column of =B5+B6
+    steps (a computed series) is data, not totals."""
     f = _formula(_value(ws, row, col))
     if not f:
         return False
-    cells = 0
+    spans = []
     for tok in _tokens(f):
         if tok.type == Token.OPERAND and tok.subtype == Token.RANGE:
             rng = parse_range(tok.value, ws.title)
             if not rng or rng[0] != ws.title or rng[1] != col or rng[3] != col or rng[4] is None or rng[4] >= row:
                 return False
-            cells += rng[4] - rng[2] + 1
+            spans.append((rng[2], rng[4]))
         elif tok.type == Token.OP_IN and tok.value == "+":
             continue
         elif tok.type == Token.FUNC and tok.value.upper() in ("SUM(", ")"):
@@ -418,7 +422,18 @@ def _adds_above(ws, row: int, col: int) -> bool:
             continue
         else:
             return False
-    return cells >= 2
+    spans.sort()
+    if not spans:
+        return False
+    top, bottom = spans[0]
+    for lo, hi in spans[1:]:
+        if lo > bottom + 1:
+            return False  # a hole between the added cells
+        bottom = max(bottom, hi)
+    if bottom - top < 1 or row - bottom > 4 or any(_has_value(ws, r, col) for r in range(bottom + 1, row)):
+        return False
+    above = _value(ws, top - 1, col)
+    return top <= 2 or not (_formula(above) or (isinstance(above, (int, float)) and not isinstance(above, bool)))
 
 
 def _summary_rows(ws, col: int, r1: int, r2: int, rows: list[int]) -> set[int]:
@@ -453,13 +468,11 @@ def _closing_total(ws, col: int, r1: int, gap: list[int], below: int):
     return None
 
 
-def _splits_block(ws, col: int, row: int, agg: str) -> bool:
-    """True when the ``agg`` formula in ``row`` is one of consecutive parts that split the data
-    block above them exactly, like H1 =SUM(B2:B7) and H2 =SUM(B8:B13) below data ending in row 13.
-
-    The parts sit in a run of adjacent aggregate rows of the column (a covering total such as
-    Year =SUM(B2:B13) may be among them, above or below the parts, or absent), and the block they
-    split ends right above that run (blank spacer rows aside)."""
+def _aggregate_run(ws, col: int, row: int) -> tuple[int | None, list[tuple[str, int, int, int]]]:
+    """(end, run) for the run of adjacent aggregate rows of the column that holds ``row``: ``end`` is
+    the last row of the data block right above the run (blank spacer rows aside), and ``run`` the
+    (function, first row, last row, row) of each aggregate in it; (None, []) when no data block ends
+    right above the run."""
     first = row
     while first > 1 and row - first < 100 and _column_aggregate(ws, first - 1, col):
         first -= 1
@@ -467,14 +480,27 @@ def _splits_block(ws, col: int, row: int, agg: str) -> bool:
     while end > 1 and first - end <= 3 and not _has_value(ws, end, col):
         end -= 1
     if not _has_value(ws, end, col) or _column_aggregate(ws, end, col):
-        return False
+        return None, []
     run = []
     for t in range(first, first + 100):
         a = _column_aggregate(ws, t, col)
         if not a:
             break
-        if a[0] == agg and a[2] <= end:
-            run.append((a[1], a[2], t))
+        run.append((a[0], a[1], a[2], t))
+    return end, run
+
+
+def _splits_block(ws, col: int, row: int, agg: str) -> bool:
+    """True when the ``agg`` formula in ``row`` is one of consecutive parts that split the data
+    block above them exactly, like H1 =SUM(B2:B7) and H2 =SUM(B8:B13) below data ending in row 13.
+
+    The parts sit in a run of adjacent aggregate rows of the column (a covering total such as
+    Year =SUM(B2:B13) may be among them, above or below the parts, or absent), and the block they
+    split ends right above that run (blank spacer rows aside)."""
+    end, aggregates = _aggregate_run(ws, col, row)
+    if end is None:
+        return False
+    run = [(lo, hi, t) for a, lo, hi, t in aggregates if a == agg and hi <= end]
     # A part that contains another part is a covering total, not a part.
     parts = sorted(p for p in run if not any(q is not p and p[0] <= q[0] and q[1] <= p[1] for q in run))
     if len(parts) < 2 or parts[-1][1] != end or row not in {t for _lo, _hi, t in parts}:
@@ -482,21 +508,49 @@ def _splits_block(ws, col: int, row: int, agg: str) -> bool:
     return all(b[0] == a[1] + 1 for a, b in zip(parts, parts[1:]))
 
 
-def _grown_total(b_ws, positions: dict, col: int, row: int, f: str, r2: int, closing) -> tuple[int, str] | None:
-    """Evidence from the original that a partial aggregate is stale: the same formula ``f`` (its
-    range ending at ``r2``) was there before, below a total whose range also ended at ``r2``, and
-    that total (``closing``, now ending lower) was extended while ``f`` was not. Returns (row, text)
-    of the original total."""
-    _t, (_agg, lo, hi, _text) = closing
+def _grown_total(b_ws, ws, positions: dict, col: int, row: int, f: str, r1: int, r2: int, closing) -> tuple | None:
+    """Evidence from the original that an aggregate below an extended total is stale: the same
+    formula ``f`` (rows ``r1``-``r2``) was there before, below a total over exactly the same rows,
+    and that total (``closing``, which starts at ``r1`` too and now ends lower) was extended while
+    ``f`` was not. A part that starts lower (a 'Q4 2024' or 'H2 2024' kept below an all-time total)
+    gives no evidence, as such parts also keep their range in correct edits.
+
+    Returns (row, text) of the original total: the aggregate of those rows with the closing total's
+    function, else the one whose column-A label is the closing total's label in ``ws`` (the edited
+    sheet); (None, None) when the original has an aggregate of those rows but neither identifies the
+    total (the closing total may be new); None without evidence."""
+    t, (agg, lo, hi, _text) = closing
     rows = [r for r, cc in positions.get(f, []) if cc == col]
-    if hi <= r2 or not rows:
+    if hi <= r2 or r1 != lo or not rows:
         return None
     s0 = min(rows, key=lambda r: (abs(r - row), r))
+    found = []
     for u in range(s0 - 1, max(r2, s0 - 100), -1):
         a = _column_aggregate(b_ws, u, col)
-        if a and a[1] == lo and a[2] == r2:
-            return u, a[3]
-    return None
+        if a and a[1] == lo and a[2] == r2 and a[3] != f:
+            found.append((u, a))
+    if not found:
+        return None
+    name = _value(ws, t, 1)
+    same = [(u, a) for u, a in found if a[0] == agg] or [(u, a) for u, a in found
+                                                         if not _blank(name) and _value(b_ws, u, 1) == name]
+    return (same[0][0], same[0][1][3]) if same else (None, None)
+
+
+def _was_block_total(b_ws, positions: dict, col: int, row: int, f: str, r1: int, r2: int) -> int | None:
+    """The row of the original where the same formula ``f`` was the total of the whole data block
+    above it: its rows ``r1``-``r2`` were that block, from its first value (below a label or a blank)
+    to its last one, which sat right above the formula (blank spacer rows aside)."""
+    rows = [r for r, cc in positions.get(f, []) if cc == col and r > r2]
+    if not rows:
+        return None
+    s0 = min(rows, key=lambda r: (abs(r - row), r))
+    if any(_has_value(b_ws, r, col) for r in range(r2 + 1, s0)) or s0 - r2 > 4:
+        return None
+    above = _value(b_ws, r1 - 1, col)
+    if r1 > 1 and (_formula(above) or (isinstance(above, (int, float)) and not isinstance(above, bool))):
+        return None
+    return s0 if all(_has_value(b_ws, r, col) for r in _spread(r1, r2, 200)) else None
 
 
 def _formula_positions(cells) -> dict[str, list[tuple[int, int]]]:
@@ -561,11 +615,26 @@ def check_formulas(wb, findings, before=None):
                     filled = [r for r in range(r2 + 1, c.row) if _has_value(ws, r, c1)]
                     summary = _summary_rows(ws, c1, r1, r2, filled)
                     gap = [r for r in filled if r not in summary]
-                    # H1/H2 or quarters that split the block above them exactly are parts, not omissions.
-                    if gap and not _splits_block(ws, c1, c.row, agg):
-                        rows_text = f"rows {gap[0]}-{gap[-1]}" if gap[-1] - gap[0] == len(gap) - 1 else \
-                            "rows " + ", ".join(map(str, gap[:8])) + (", ..." if len(gap) > 8 else "")
-                        message = f"{text} stops at row {r2}, but {rows_text} between it and the formula hold values"
+                    rows_text = "" if not gap else f"rows {gap[0]}-{gap[-1]}" if gap[-1] - gap[0] == len(gap) - 1 else \
+                        "rows " + ", ".join(map(str, gap[:8])) + (", ..." if len(gap) > 8 else "")
+                    message = f"{text} stops at row {r2}, but {rows_text} between it and the formula hold values"
+                    # H1/H2 or quarters that split the block above them exactly are parts, not omissions,
+                    # unless the original shows that this formula was the total of the whole block,
+                    # which has grown since (a stale total followed by a new sum of the added rows), and
+                    # no aggregate in the same run totals the grown block (2024 / 2025 / Total).
+                    if gap and _splits_block(ws, c1, c.row, agg):
+                        end, run = _aggregate_run(ws, c1, c.row)
+                        totalled = any(a == agg and lo <= r1 and hi >= end for a, lo, hi, _t in run)
+                        if b_ws is not None and positions is None and not totalled:
+                            positions = _formula_positions(_filled(b_ws))
+                        was = (_was_block_total(b_ws, positions, c1, c.row, f, r1, r2)
+                               if b_ws is not None and not totalled else None)
+                        if was is not None:
+                            findings.append(Finding("warning", "range-omits-adjacent-cells", where,
+                                                    f"{message}; in the original file this formula (row {was}) was the "
+                                                    f"total of the whole block, rows {r1}-{r2}, which has grown since, so "
+                                                    "check that it should not cover the new rows"))
+                    elif gap:
                         # Below a total that covers the omitted rows, a shorter range may be deliberate,
                         # unless the original shows that it used to end with that total.
                         closing = _closing_total(ws, c1, r1, gap, c.row)
@@ -574,13 +643,20 @@ def check_formulas(wb, findings, before=None):
                         else:
                             if b_ws is not None and positions is None:
                                 positions = _formula_positions(_filled(b_ws))
-                            grown = _grown_total(b_ws, positions, c1, c.row, f, r2, closing) if b_ws is not None else None
-                            if grown:
+                            grown = (_grown_total(b_ws, ws, positions, c1, c.row, f, r1, r2, closing)
+                                     if b_ws is not None else None)
+                            if grown and grown[0] is not None:
                                 findings.append(Finding("error", "range-omits-adjacent-cells", where,
                                                         f"{message}; the total in row {closing[0]} was extended to "
                                                         f"them ({closing[1][3]}), but this formula was not, although "
-                                                        f"in the original file both ended at row {r2} (row {grown[0]}: "
-                                                        f"{grown[1]})"))
+                                                        f"in the original file both covered rows {r1}-{r2} (the total "
+                                                        f"was in row {grown[0]}: {grown[1]})"))
+                            elif grown:  # the original's total is not identified: the one here may be new
+                                findings.append(Finding("error", "range-omits-adjacent-cells", where,
+                                                        f"{message}; row {closing[0]} ({closing[1][3]}) covers them, "
+                                                        "but this formula does not, although in the original file it "
+                                                        f"covered the same rows ({r1}-{r2}) as another aggregate of "
+                                                        "the column"))
                             else:
                                 findings.append(Finding("warning", "range-omits-adjacent-cells", where,
                                                         f"{message}; row {closing[0]} ({closing[1][3]}) covers them, "
@@ -686,7 +762,8 @@ def _charts_fallback(path):
                     if title_el is not None:
                         title = "".join(t.text or "" for t in title_el.iter(f"{{{ns['a']}}}t"))
                         title = title or title_el.findtext("c:tx/c:strRef/c:f", "", ns)
-                    series = [{"val": (ser.find("c:val/c:numRef/c:f", ns).text if ser.find("c:val/c:numRef/c:f", ns) is not None else None)}
+                    series = [{"val": next((el.text for el in (ser.find("c:val/c:numRef/c:f", ns), ser.find("c:yVal/c:numRef/c:f", ns))
+                                            if el is not None), None)}  # yVal: scatter and bubble charts
                               for ser in root.iter(f"{{{ns['c']}}}ser")]
                     found.append({"sheet": sh.get("name"), "title": title, "series": series})
     return found
@@ -750,6 +827,8 @@ def _range_evidence(b_ws, a_ws, rng, dr: int, dc: int, last_row: int, sample: in
     row, and large ranges are read at ``sample`` evenly spaced rows (and at most 50 columns)."""
     _sheet, c1, r1, c2, r2 = rng
     moved = stayed = 0
+    if r2 is None and dr and not dc:
+        return 0, 0  # a whole column reads the same cells wherever its rows moved: no evidence either way
     for r in _spread(r1, min(r2, last_row) if r2 is not None else last_row, sample):
         for col in _spread(c1, c2, 50):
             old = _value(b_ws, r, col)
@@ -769,7 +848,9 @@ def _moved_with(b_ws, a_ws, refs, dr: int, dc: int, last_row: int | None = None,
     """True when the cells a moved formula reads moved by the same offset (dr, dc): their old values
     are now at the shifted position and other values sit at the referenced one, so the unchanged
     references are stale. When those cells stayed in place (a row or column was inserted between
-    them and the formula), unchanged references are what a spreadsheet application keeps.
+    them and the formula), unchanged references are what a spreadsheet application keeps. A whole
+    column (B:B) reads the same cells after rows moved, so it is no evidence for a formula moved only
+    up or down; a formula that reads only whole columns is never moved-as-text by a row shift alone.
 
     ``cache`` (one per pair of sheets) keeps the evidence of each range, so formulas sharing a range
     (=SUMIF(A:A,A2,B:B) filled down) read it once."""
@@ -790,14 +871,15 @@ def _renames(before, after) -> tuple[dict[str, str], dict[str, tuple[str, float]
     values (counted with repeats, wherever they are) are found in the new sheet, so a renamed sheet
     that was also extended, sorted or given a title row still matches. Also returns, for every
     other removed sheet, the most similar new sheet and that share. Constants are compared with
-    constants; when either sheet holds none (a sheet of formulas), formula texts with formula texts."""
+    constants; only when the old sheet holds none (a sheet of formulas) are formula texts compared,
+    so a sheet whose constants all vanished is removed even if its formula texts reappear elsewhere."""
     def content(ws):
         values = [c.value for c in _filled(ws)]
         return (Counter(v for v in values if not _formula(v)), Counter(_formula(v) for v in values if _formula(v)))
 
     def similarity(old, new):
         (old_k, old_f), (new_k, new_f) = old, new
-        old, new = (old_k, new_k) if old_k and new_k else (old_f, new_f)
+        old, new = (old_k, new_k) if old_k else (old_f, new_f)
         total = sum(old.values())
         return sum((old & new).values()) / total if total and new else 0.0
 
@@ -819,11 +901,43 @@ def _renames(before, after) -> tuple[dict[str, str], dict[str, tuple[str, float]
     return renames, closest
 
 
-def _chart_identity(chartsheet, renames: dict[str, str]) -> tuple[set[str], frozenset]:
+#: Marks a chart series over a defined name that is no plain range ("[" cannot start a sheet name).
+NAMED = "[name]"
+
+
+def _defined_name(wb, ref: str) -> tuple[str, str, str | None]:
+    """(scope, name, text) of the defined name a chart series reads (``Data!Revenue``,
+    ``[0]!Revenue`` or ``Revenue``). A name of the sheet itself comes first (scope: that sheet),
+    then the workbook's (scope ""); ``text`` is what the name stands for, None when there is no such
+    name (scope: the sheet as written)."""
+    sheet, _, name = ref.rpartition("!")
+    sheet = sheet[1:-1].replace("''", "'") if sheet.startswith("'") and sheet.endswith("'") else sheet
+    scopes = [(sheet, getattr(wb[sheet], "defined_names", {}))] if sheet in _worksheets(wb) else []
+    scopes.append(("", wb.defined_names))
+    for scope, names in scopes:
+        items = names.items() if hasattr(names, "items") else ((d.name, d) for d in getattr(names, "definedName", []))
+        for key, d in items:
+            if str(key).lower() == name.lower():
+                return scope, name.lower(), d.attr_text
+    return sheet, name.lower(), None
+
+
+def _chart_identity(chartsheet, renames: dict[str, str], wb=None) -> tuple[set[str], frozenset]:
     """(titles, series columns) of the charts on a chart sheet: the title texts, and the
-    (sheet, first column, last column) of every series' values, with renamed sheets under their new
-    name. Row extents are left out, so a series extended to new rows is still the same chart."""
+    (sheet, first column, last column) of every series' values (``val``, or ``yVal`` in scatter and
+    bubble charts; ``xVal`` only for a series without either), with renamed sheets under their new
+    name. Row extents are left out, so a series extended to new rows is still the same chart. A
+    series over a defined name of ``wb`` counts by the range the name stands for or, when that is no
+    plain range (an OFFSET formula), as (NAMED, scope, name), which pairs the same name only."""
     titles, columns = set(), set()
+
+    def ref_of(data):
+        for kind in ("numRef", "strRef"):
+            f = getattr(getattr(data, kind, None), "f", None)
+            if f:
+                return f
+        return None
+
     for chart in getattr(chartsheet, "_charts", []):
         try:
             tx = chart.title.tx if chart.title is not None else None
@@ -834,10 +948,17 @@ def _chart_identity(chartsheet, renames: dict[str, str]) -> tuple[set[str], froz
         except AttributeError:
             pass
         for s in getattr(chart, "series", []):
-            ref = getattr(getattr(getattr(s, "val", None), "numRef", None), "f", None)
-            rng = parse_range(ref or "", "")
-            if rng:
-                columns.add((renames.get(rng[0], rng[0]), rng[1], rng[3]))
+            refs = [ref_of(getattr(s, kind, None)) for kind in ("val", "yVal")]
+            refs = [r for r in refs if r] or [ref_of(getattr(s, "xVal", None))]
+            for ref in refs:
+                rng = parse_range(ref or "", "")
+                if rng is None and ref and wb is not None and re.fullmatch(r"(?:.+!)?[A-Za-z_\\][\w.]*", ref):
+                    scope, key, text = _defined_name(wb, ref)
+                    rng = parse_range(text or "", "")
+                    if rng is None:
+                        columns.add((NAMED, renames.get(scope, scope), key))
+                if rng:
+                    columns.add((renames.get(rng[0], rng[0]), rng[1], rng[3]))
     return titles - {""}, frozenset(columns)
 
 
@@ -863,22 +984,44 @@ def compare(before, after, findings):
         if stale:
             findings.append(Finding("error", "stale-sheet-reference", stale[0],
                                     f"sheet '{name}' was renamed to '{renamed_to}', but {len(stale)} formula(s)/name(s) still refer to '{name}'"))
-    # Chart sheets hold no cells. One that is gone counts as renamed only when a new chart sheet shows
-    # the same chart (the same title, or series over the same columns); otherwise it was removed.
+    # Chart sheets hold no cells. One that is gone counts as renamed when a new chart sheet shows the
+    # same chart: the same title, or series over at least one of the same columns or defined names (a
+    # series may have been added or removed). It was removed when it has a title or a series over a
+    # cell range and no new chart sheet matches. An old chart with neither (its series read no range,
+    # or a name that is no plain range) may be any new chart sheet left over, which is a warning;
+    # such charts are paired last, so they cannot take another chart's renamed sheet.
     old_charts, new_charts = [cs.title for cs in before.chartsheets], [cs.title for cs in after.chartsheets]
-    added = {cs.title: _chart_identity(cs, {}) for cs in after.chartsheets if cs.title not in old_charts}
-    for cs in before.chartsheets:
-        if cs.title in new_charts:
-            continue
-        name, (titles, columns) = cs.title, _chart_identity(cs, renames)
-        same = next((n for n, (t, cols) in added.items() if (titles & t) or (columns and columns == cols)), None)
+    added = {cs.title: _chart_identity(cs, {}, after) for cs in after.chartsheets if cs.title not in old_charts}
+    gone = [(cs.title, _chart_identity(cs, renames, before)) for cs in before.chartsheets if cs.title not in new_charts]
+    removed, unknown = [], []
+
+    def known(identity):
+        titles, columns = identity
+        return bool(titles) or any(c[0] != NAMED for c in columns)
+
+    for name, (titles, columns) in sorted(gone, key=lambda g: not known(g[1])):
+        same = next((n for n, (t, cols) in added.items() if (titles & t) or (columns & cols)), None)
         if same is not None:
             del added[same]
-            continue
+        elif known((titles, columns)):
+            removed.append(name)
+        else:
+            unknown.append(name)
+    for name in removed:
         hint = (f" (the new chart sheet{'s' if len(added) > 1 else ''} "
                 f"{', '.join(repr(n) for n in added)} show{'' if len(added) > 1 else 's'} another chart: "
-                "neither the title nor the columns its series read match)") if added else ""
+                "its title and the columns its series read all differ)") if added else ""
         findings.append(Finding("error", "sheet-removed", name, f"chart sheet '{name}' existed before and is gone{hint}"))
+    for name in unknown:
+        if not added:
+            findings.append(Finding("error", "sheet-removed", name, f"chart sheet '{name}' existed before and is gone"))
+            continue
+        other = next(iter(added))
+        del added[other]
+        findings.append(Finding("warning", "sheet-removed", name,
+                                f"chart sheet '{name}' is gone; the new chart sheet '{other}' may be it under a new "
+                                "name, but the old chart has no title and its series read no cell range, so the audit "
+                                "cannot tell; check that it was not deleted"))
     # Sheets present before and after (under the same or a new name).
     pairs = [(n, n) for n in old_names if n in new_names] + list(renames.items())
     back = {a: b for b, a in renames.items()}
@@ -992,7 +1135,30 @@ def compare(before, after, findings):
         distance apart in the original: a relative reference refilled after rows were inserted or
         deleted between other rows still reads the same neighbour."""
         o_idx, o_own = origin(b_ws, a_ws, idx), origin(b_ws, a_ws, own)
-        return o_idx is not None and o_own is not None and idx - o_idx == own - o_own
+        if o_idx is None or o_own is None:
+            return False
+        if idx - o_idx == own - o_own:
+            return True
+        # Now next to each other, in the same order as before, and every row that was between them
+        # is gone from the sheet: the rows between were deleted.
+        lo, hi = sorted((o_idx, o_own))
+        return (abs(idx - own) == 1 and (idx < own) == (o_idx < o_own) and hi - lo <= 1000
+                and all(gone(b_ws, a_ws, r) for r in range(lo + 1, hi)))
+
+    def gone(b_ws, a_ws, r):
+        """True when row ``r`` of the original was blank, or held two or more constants (unique in
+        the original) that no row of the edited sheet holds together any more."""
+        values = row_values(b_ws)[0].get(r)
+        if values is None:
+            return not any(_has_value(b_ws, r, col) for col in range(1, min(extent(b_ws)[1], 500) + 1))
+        return len(values) >= 2 and unique_row(b_ws, values) == r and not row_values(a_ws)[1].get(values)
+
+    def new_row(b_ws, a_ws, idx):
+        """True when row ``idx`` holds two or more constants, unique in the edited sheet, that no row
+        of the original held together: a row that was inserted (or rewritten)."""
+        values = row_values(a_ws)[0].get(idx)
+        return (values is not None and len(values) >= 2 and unique_row(a_ws, values) == idx
+                and not row_values(b_ws)[1].get(values))
 
     def content_moved(b_ws, a_ws, idx):
         """Where the content of row ``idx`` of the original now is, when it is now at another row
@@ -1002,6 +1168,33 @@ def compare(before, after, findings):
             return None
         j = unique_row(a_ws, values)
         return j if j is not None and j != idx else None
+
+    def filled_down(ws, row, col, f):
+        """True when the cell above or below holds the same formula filled down its column (=D6+C7
+        above =D7+C8): a running balance or change column, not a one-off formula."""
+        key = ("filled", id(ws), row, col)
+        if key not in cache:
+            here, found = f"{get_column_letter(col)}{row}", False
+            for r in (row - 1, row + 1):
+                other = _formula(_value(ws, r, col))
+                if other:
+                    try:
+                        found = Translator(f, origin=here).translate_formula(f"{get_column_letter(col)}{r}") == other
+                    except Exception:  # a formula the translator cannot read is not evidence
+                        found = False
+                if found:
+                    break
+            cache[key] = found
+        return cache[key]
+
+    def emptied(b_ws, a_ws, row, c1, c2):
+        """The text of the first cell of ``row``, columns c1..c2, that held something in the original,
+        when every one of those cells is now empty; None otherwise."""
+        cols = range(c1, min(c2, c1 + 49) + 1)
+        if any(not _blank(_value(a_ws, row, col)) for col in cols):
+            return None
+        return next((f"{get_column_letter(col)}{row}, which it reads, held {_value(b_ws, row, col)!r}"
+                     for col in cols if not _blank(_value(b_ws, row, col))), None)
 
     def preview(values):
         shown = ", ".join(repr(v) for v in values[:4])
@@ -1037,6 +1230,7 @@ def compare(before, after, findings):
         return cache[key]
 
     relabelled: dict[tuple, list[str]] = {}
+    neighbours: dict[tuple, dict[str, str]] = {}
     for bname, name in pairs:
         for c in _filled(after[name]):
             f = _formula(c.value)
@@ -1074,13 +1268,39 @@ def compare(before, after, findings):
                             broken = True
                             break
                         continue
+                    # The row next to the formula (=D6+C7 in row 7), read without $ on its own sheet by
+                    # a formula filled down its column: a running balance or change column. A new row
+                    # there, or the row that was next to it before, is the same neighbour; anything
+                    # else is a warning, since a sort, or an insert or delete the audit cannot follow,
+                    # gives the same picture in a correct edit (a balance refilled after sorting reads
+                    # its new neighbour as intended). A one-off formula (VAT =B14*0.2 below a Total)
+                    # gets no such leniency.
+                    if neighbour and axis == "row" and same_neighbour(b_ws, a_ws, idx, own):
+                        continue
+                    adjacent = (neighbour and axis == "row" and abs(idx - own) == 1
+                                and filled_down(after[name], c.row, c.column, f))
                     if neighbour:
-                        if axis == "row" and same_neighbour(b_ws, a_ws, idx, own):
+                        if adjacent and (new_row(b_ws, a_ws, idx) or new_row(b_ws, a_ws, own)):
                             continue
                         k = shift_of(b_ws, a_ws, axis, idx)
                         if k and shift_of(b_ws, a_ws, axis, own) == k:
                             continue
                     shift = moved_to(b_ws, a_ws, axis, idx, old, new)
+                    if (_blank(new) or shift) and adjacent:
+                        # The row was emptied, the cells the formula reads included: a running balance
+                        # now starts again from zero there.
+                        cleared = emptied(b_ws, a_ws, idx, c1, c2) if _blank(new) and not shift else None
+                        if cleared:
+                            findings.append(Finding("error", "reference-meaning-changed", where,
+                                                    f"{f} refers to row {idx} of '{sheet}', whose label in column A "
+                                                    f"was {old!r} and is now empty, and {cleared} and is now "
+                                                    "empty too"))
+                            broken = True
+                            break
+                        neighbours.setdefault((name, c.column, bool(shift)), {}).setdefault(
+                            where, f"{f} reads row {idx}, whose label in column A was {old!r} and is now "
+                                   + (f"{new!r} ({shift})" if shift else "empty"))
+                        continue
                     if _blank(new) or shift:
                         what = f"column {get_column_letter(idx)}" if axis == "column" else f"row {idx}"
                         findings.append(Finding("error", "reference-meaning-changed", where,
@@ -1091,6 +1311,20 @@ def compare(before, after, findings):
                     relabelled.setdefault((axis, sheet, idx, old, new, line_stats(b_ws, a_ws, sheet, axis, idx)), []).append(where)
                 if broken:
                     break
+    for (sheet, col, shifted), found in neighbours.items():
+        where, detail = next(iter(found.items()))
+        lead = (f"{len(found)} formula(s) filled down column {get_column_letter(col)} of '{sheet}' read the row "
+                "next to them")
+        if shifted:
+            findings.append(Finding("warning", "reference-meaning-changed", where,
+                                    f"{lead}, whose label in column A changed (e.g. {detail}): rows were reordered, "
+                                    "or inserted or deleted where the audit cannot follow them. That is right for a "
+                                    "running balance or change refilled after a sort or insert; check that they should "
+                                    "read their new neighbours"))
+        else:
+            findings.append(Finding("warning", "reference-meaning-changed", where,
+                                    f"{lead}, whose label in column A is now empty (e.g. {detail}); check that they "
+                                    "should still read that row"))
     for (axis, sheet, idx, old, new, (changed, compared, span)), wheres in relabelled.items():
         wheres = list(dict.fromkeys(wheres))
         what = f"column {get_column_letter(idx)}" if axis == "column" else f"row {idx}"

@@ -988,25 +988,72 @@ def _rule_applies(cf_rule, value, ev, truthy) -> bool:
 
 # -- number formats -----------------------------------------------------------------
 def number_format_key(fmt: str | None) -> tuple:
-    """A key for comparing number formats: two formats with the same key show every value alike.
+    """A key for comparing number formats.
 
-    Differences that change no shown value are removed: letter case outside quotes; a literal
+    Formats with the same key showed the same text for every value tried in LibreOffice 24.2 (en-US:
+    dates, positive, negative and zero numbers, text), with the one exception described below.
+
+    Differences that change no value tried are removed: letter case outside quotes; a literal
     written plainly, quoted or backslash-escaped (so 'yyyy-mm-dd', 'YYYY"-"MM"-"DD' and
     'yyyy\\-mm\\-dd', as LibreOffice saves it, are one format); a last section that is only '@'
-    ('yyyy-mm-dd;@': text shows as typed either way); a zero section equal to the first; a negative
-    section that is '-' and the first section ('#,##0.00;-#,##0.00'); and a locale tag with no
-    currency symbol ('[$-409]') on a section of digits and numeric date or time parts only
-    ('[$-409]yyyy-mm-dd'). Each of these was checked against LibreOffice's display of dates,
-    positive, negative and zero numbers and text.
+    ('yyyy-mm-dd;@': text shows as typed either way); a zero section equal to the first; and a locale
+    tag with no currency symbol ('[$-409]') on a section of digits and numeric date or time parts
+    without an unquoted '/' ('[$-409]yyyy-mm-dd'; ':' showed as ':' under each of the seven tags tried).
+
+    One difference is removed although it changes some numbers: a negative section that is '-' and
+    a first section of digit placeholders, grouping and decimal point only ('#,##0.00;-#,##0.00').
+    It shows a negative number that rounds to zero as '-0.00' where '#,##0.00' shows '0.00' (-0.004,
+    -1e-9); other numbers, zero and text show alike. The checkers that use this key compare it only
+    on cells whose values the task gives and which hold no such number. On a section with date or
+    time codes it is not removed: 'yyyy-mm-dd;-yyyy-mm-dd' shows -1766.34 as -1904-10-31, where
+    'yyyy-mm-dd' shows 1895-02-27.
 
     Everything else makes a different key: a time part, General, '0.00' against '#,##0.00', a
     currency, a colour or a condition, an empty section (it hides the values it applies to), and a
     locale tag on a section with separators, month or day names or AM/PM ('[$-407]#,##0.00' shows
-    1.766,34 in LibreOffice, '[$-407]mmm' shows Mär) or naming a system format ('[$-F800]').
+    1.766,34 in LibreOffice, '[$-407]mmm' shows Mär), on a date with an unquoted '/' (it shows the
+    tag's date separator: the probed one for the tags in PROBED_DATE_SEPARATORS, so '[$-41D]yyyy/mm/dd'
+    has the key of 'yyyy-mm-dd' and '[$-409]yyyy/mm/dd' does not; for other tags see
+    number_format_unsure) or naming a system format ('[$-F800]').
     """
+    return _number_format_key(fmt, None)
+
+
+#: The date separator an unquoted '/' shows under a locale tag, for the tags whose display was tried in
+#: LibreOffice 24.2 (en-US system locale) with '[$-xxx]yyyy/mm/dd'. LibreOffice re-saves
+#: '[$-41D]yyyy-mm-dd' (sv-SE) as '[$-41D]yyyy/mm/dd', which still shows 2024-03-02. Excel was not tried.
+PROBED_DATE_SEPARATORS = {
+    **dict.fromkeys((0x409, 0x40C, 0x411, 0x804, 0x412), "/"),   # en-US, fr-FR, ja-JP, zh-CN, ko-KR
+    **dict.fromkeys((0x407, 0x40B), "."),                          # de-DE, fi-FI
+    **dict.fromkeys((0x41D, 0x406, 0x413, 0xC0C, 0x1009, 0x427, 0x439, 0x445), "-"),
+    # sv-SE, da-DK, nl-NL, fr-CA, en-CA, lt-LT, hi-IN, bn-IN
+}
+
+
+def number_format_unsure(fmt: str | None, wanted: str | None) -> str | None:
+    """Why this checker cannot tell whether ``fmt`` shows dates as ``wanted`` does, or None.
+
+    Under a locale tag, an unquoted '/' in a date shows that locale's date separator. For the tags in
+    PROBED_DATE_SEPARATORS the key uses the separator LibreOffice showed, so the answer is definite.
+    For any other tag, when ``fmt`` would have the key of ``wanted`` if its '/' showed a literal
+    character of ``wanted`` (such as '-'), the answer is that reason. Otherwise (the keys are equal,
+    or they differ in more than that) it is None.
+    """
+    want = number_format_key(wanted)
+    if number_format_key(fmt) == want:
+        return None
+    literals = sorted({c for section in want for kind, c in section if kind == "text"})
+    if any(_number_format_key(fmt, sep) == want for sep in literals):
+        return "under a locale tag, '/' in a date shows that locale's date separator, which this checker does not know"
+    return None
+
+
+def _number_format_key(fmt: str | None, slash: str | None) -> tuple:
+    """number_format_key, or with ``slash`` set, its key if each unquoted '/' in a date under a bare
+    locale tag showed ``slash``."""
     # Characters a format shows as themselves without quotes; codes no locale tag changes (digit
     # placeholders, numeric date and time parts).
-    plain, locale_free = frozenset("$-+/():!^&'~{}<>= "), frozenset("0#?ymdhs ")
+    plain, locale_free = frozenset("$-+():!^&'~{}<>= "), frozenset("0#?ymdhs ")
 
     def split(fmt):  # at the semicolons that are not quoted, escaped or inside brackets
         parts, start, i, quoted, bracket = [], 0, 0, False, False
@@ -1043,20 +1090,35 @@ def number_format_key(fmt: str | None) -> tuple:
             elif ch in "_*" and i + 1 < len(section):  # pad to the width of, or fill with, the next character
                 out.append(("code", ch + section[i + 1]))
                 i += 2
+            elif ch == "/":  # a date separator or a fraction bar; shown as '/' unless a locale tag applies
+                out.append(("slash", "/"))
+                i += 1
             else:
                 out.append(("text", ch) if ch in plain else ("code", ch.lower()))
                 i += 1
+        shown = [("text", "/") if kind == "slash" else (kind, c) for kind, c in out]
         # A bare locale tag ([$-409]; from F000 up the tags name system formats such as [$-F800])
-        # is dropped when the rest of the section shows nothing a locale changes.
+        # is dropped when the rest of the section shows nothing a locale changes. An unquoted '/'
+        # in a date shows the tag's date separator: the probed one for the tags in
+        # PROBED_DATE_SEPARATORS, otherwise only known when ``slash`` gives it.
         tags = [t for t in out if t[0] == "bracket" and re.fullmatch(r"\$-[0-9a-f]{1,4}", t[1])
                 and int(t[1].removeprefix("$-"), 16) < 0xF000]
         if len(tags) == 1:
-            rest = tuple(t for t in out if t is not tags[0])
+            rest = [t for t in out if t is not tags[0]]
             codes = "".join(c if kind == "code" else " " for kind, c in rest)
             if (codes.strip() and not any(kind == "bracket" for kind, _ in rest)
                     and set(codes) <= locale_free and not re.search(r"mmm|ddd", codes)):
-                return rest
-        return tuple(out)
+                if not any(kind == "slash" for kind, _ in rest):
+                    return tuple(rest)
+                sep = PROBED_DATE_SEPARATORS.get(int(tags[0][1].removeprefix("$-"), 16), slash)
+                if sep is not None and set(codes) & set("ymd"):
+                    return tuple(("text", sep) if kind == "slash" else (kind, c) for kind, c in rest)
+        return tuple(shown)
+
+    def digits_only(section):  # digit placeholders, grouping and decimal point (and padding)
+        codes = [c for kind, c in section if kind == "code"]
+        return (any(c in "0#?" for c in codes) and not any(kind == "bracket" for kind, _ in section)
+                and all(c in "0#?,." or c[0] in "_*" for c in codes))
 
     sections = [tokens(s) for s in split(fmt or "General")]
     if any(kind == "bracket" and c[:1] in "<>=" for s in sections for kind, c in s):
@@ -1065,6 +1127,6 @@ def number_format_key(fmt: str | None) -> tuple:
         sections.pop()
     if len(sections) == 3 and sections[2] == sections[0]:
         sections.pop()
-    if len(sections) == 2 and sections[1] == (("text", "-"), *sections[0]):
+    if len(sections) == 2 and digits_only(sections[0]) and sections[1] == (("text", "-"), *sections[0]):
         sections.pop()
     return tuple(sections)

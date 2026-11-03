@@ -8,7 +8,7 @@ from openpyxl.chart import LineChart, Reference
 
 from failbook import kit
 from failbook import xlsx as X
-from failbook.checks import Inconclusive, require, rule
+from failbook.checks import Fail, Inconclusive, require, rule
 
 SHEET = "Monthly"
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -49,8 +49,16 @@ def build(meta, outdir):
 
 
 def _charts(ctx):
-    charts = [c for c in X.charts(ctx.path()) if c["sheet"] == SHEET]
-    for chart, typed in zip(charts, _typed_labels(ctx.path()), strict=True):
+    ctx.wb()  # a file that is not a workbook fails here, with the same message as the other rules
+    try:
+        charts = [c for c in X.charts(ctx.path()) if c["sheet"] == SHEET]
+        typed_labels = _typed_labels(ctx.path())
+    except (zipfile.BadZipFile, ET.ParseError, KeyError) as exc:
+        # A broken package or chart part is the agent's file, not the checker; any other KeyError is a bug.
+        if isinstance(exc, KeyError) and "There is no item named" not in str(exc):
+            raise
+        raise Fail(f"the charts in {ctx.primary!r} cannot be read: {exc}") from exc
+    for chart, typed in zip(charts, typed_labels, strict=True):
         for s, labels in zip(chart["series"], typed, strict=True):
             s["cat_typed"] = labels
     return charts
@@ -105,7 +113,8 @@ def chart_present(ctx):
     charts = _titled_charts(ctx)
     require(len(charts) == 1, f"there are {len(charts)} charts titled {ctx.meta['title']!r}; expected the one existing chart")
     chart = charts[0]
-    require("line" in chart["kinds"], f"the chart is now a {'/'.join(chart['kinds']) or 'unknown'} chart, not a line chart")
+    require(chart["kinds"], "the chart's plot area has no chart group, so it draws no lines and is no longer a line chart")
+    require("line" in chart["kinds"], f"the chart is now a {'/'.join(chart['kinds'])} chart, not a line chart")
 
 
 @rule(
@@ -132,7 +141,7 @@ def _check_chart(ctx, chart):
         rng = X.resolve_range(s["val"], wb, SHEET)
         if rng is None:
             unresolved.append(s)
-        elif rng[0] == SHEET and rng[2] == rng[4] and rng[2] in dict(SERIES):
+        elif _on_sheet(wb, rng[0]) and rng[2] == rng[4] and rng[2] in dict(SERIES):
             found.setdefault(rng[2], (s, rng))
         else:
             elsewhere.append((s, rng))
@@ -181,11 +190,19 @@ def _figures(ctx, label):
     return [m[label.lower()] for m in ctx.meta["existing"] + ctx.meta["new"]]
 
 
+def _on_sheet(wb, sheet):
+    """Whether a reference's sheet is Monthly. Sheet names in references match in any letter case, as in Excel and
+    LibreOffice ('monthly'!$B$2:$B$13 is the Revenue column)."""
+    return X.sheet_named(wb, sheet) == SHEET
+
+
 def _plotted(ctx, rng):
     """The recalculated values of the cells a chart range covers, in order and without trailing empty cells; None
     when the range is neither one row nor one column, or its sheet does not exist."""
     sheet, r1, c1, r2, c2 = rng
-    ws = next((ws for ws in ctx.values().wb.worksheets if ws.title.casefold() == sheet.casefold()), None)
+    wb = ctx.values().wb
+    name = X.sheet_named(wb, sheet)
+    ws = wb[name] if name else None
     if ws is None or (r1 != r2 and c1 != c2):
         return None
     cells = ([(r, c1) for r in range(r1, min(r2, ws.max_row) + 1)] if c1 == c2
@@ -198,22 +215,25 @@ def _plotted(ctx, rng):
 
 def _check_unresolved_names(ctx, wb, label, unresolved):
     """When no series the checker can read draws the ``label`` line, only a series it cannot resolve can, and the
-    legend must still name that line. Fails only when every such series has a readable name and none is ``label``."""
-    names = []
+    legend must still name that line. Fails only when every such series has a name the checker can read (or a name
+    that points at a sheet the workbook does not have) and none is ``label``."""
+    shown = []
     for s in unresolved:
         try:
             got = _series_name(ctx, wb, s, "a series")
         except Inconclusive:
             return
-        names.append(got)
-    if any(got is not None and X.norm_text(got[0]) == X.norm_text(label) for got in names):
-        return
-    shown = "; ".join(f"{_describe(wb, s['val'])} " + ("has no name" if got is None
-                      else f"is named {_clip(X.show(got[0]))} ({got[1]})") for s, got in zip(unresolved, names))
+        except _NameSheetMissing as exc:
+            shown.append(f"{_describe(wb, s['val'])} takes its name from {exc.where}")
+            continue
+        if got is not None and X.norm_text(got[0]) == X.norm_text(label):
+            return
+        shown.append(f"{_describe(wb, s['val'])} " + ("has no name" if got is None
+                     else f"is named {_clip(X.show(got[0]))} ({got[1]})"))
     require(False, f"no series the checker can resolve is over the {label} column of {SHEET} or plots the January to "
             f"December {label} figures, so only a series it cannot resolve can draw the {label} line, and "
             f"{'that series is not' if len(unresolved) == 1 else 'none of those series is'} named {label!r} "
-            f"({shown}); the legend does not label the {label} line")
+            f"({'; '.join(shown)}); the legend does not label the {label} line")
 
 
 def _note_inconclusive(open_points, check, *args):
@@ -252,7 +272,7 @@ def _check_labels(ctx, wb, vals, chart):
     require(source, "no series of the chart has category labels, so the axis does not show the month names")
     typed = source.get("cat_typed")
     if isinstance(typed, int):
-        require(False, f"the month labels typed into the chart have {typed if typed < _HUGE else 'over 10^18'} "
+        require(False, f"the month labels typed into the chart have {typed if typed < _HUGE else 'at least 10^18'} "
                 "points, not 12")
     if typed is not None:
         require([X.norm_text(v) for v in typed] == [X.norm_text(m) for m in MONTHS],
@@ -267,7 +287,7 @@ def _check_labels(ctx, wb, vals, chart):
     if c1 != c2 and c1_row != c2_row:
         raise Inconclusive(f"the month labels ({ref}) span several rows and columns; multi-level labels are not "
                            "checked")
-    if sheet != SHEET or c1 != c2:
+    if not _on_sheet(wb, sheet) or c1 != c2:
         # Labels from a helper sheet, or along a row: what the axis shows is the text of those cells.
         got = _plotted(ctx, cat)
         require(got is not None, f"the month labels ({ref}) come from sheet {sheet!r}, which does not exist")
@@ -283,15 +303,31 @@ def _check_labels(ctx, wb, vals, chart):
                 f"the month labels ({ref}) read {_clip(X.show(got))} in row {r}, not {month!r}")
 
 
+class _NameSheetMissing(Fail):
+    """The name of a series points at a sheet the workbook does not have; ``where`` is that reference and sheet."""
+
+    def __init__(self, message, where):
+        super().__init__(message)
+        self.where = where
+
+
 def _series_name(ctx, wb, s, what):
     """The legend text of a series and where it comes from, as ``(text, source)``; None when the series has no
-    name. Inconclusive when the name points somewhere the checker cannot read."""
+    name. Inconclusive when the name points somewhere the checker cannot read; _NameSheetMissing (a Fail) when it
+    points at a sheet the workbook does not have. Sheet names match in any letter case."""
     if s["name"]:
         ref = X.resolve_range(s["name"], wb, SHEET)
         if ref is None or ref[1] != ref[3] or ref[2] != ref[4]:
             raise Inconclusive(f"the name of {what} comes from {_clip(s['name'])}, which the checker cannot "
                                "resolve to one cell; the legend text is not checked")
-        return ctx.values().ws(ref[0]).cell(ref[1], ref[2]).value, f"from {_clip(s['name'])}"
+        vals = ctx.values().wb
+        sheet = X.sheet_named(vals, ref[0])
+        if sheet is None:
+            where = f"{_clip(s['name'])}, but the workbook has no sheet {_clip(ref[0])!r}"
+            raise _NameSheetMissing(f"the name of {what} comes from {where} (sheets: "
+                                    f"{_clip(', '.join(vals.sheetnames))}), so the legend cannot read the line's "
+                                    "name from it", where)
+        return vals[sheet].cell(ref[1], ref[2]).value, f"from {_clip(s['name'])}"
     if s.get("name_text"):
         return s["name_text"], "typed into the chart"
     return None
@@ -366,11 +402,12 @@ _HUGE = 10 ** 18
 
 def _number(text):
     """A point count or index written in the chart: an int, None when it is not a plain number, and ``_HUGE``
-    for a number of 19 or more digits."""
+    for a number of 19 or more significant digits (leading zeros do not count)."""
     text = (text or "").strip()
-    if _INDEX.fullmatch(text):
-        return int(text)
-    return _HUGE if text.isascii() and text.isdigit() else None
+    if not (text.isascii() and text.isdigit()):
+        return None
+    text = text.lstrip("0") or "0"
+    return int(text) if _INDEX.fullmatch(text) else _HUGE
 
 
 def _series_typed_labels(root):

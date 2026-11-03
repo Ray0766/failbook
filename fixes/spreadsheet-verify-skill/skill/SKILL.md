@@ -83,20 +83,46 @@ behave like a spreadsheet application: most of them never rewrite formulas for y
 ## What the audit script cannot tell
 
 - It tells moved rows apart by their label in column A or, when that label repeats, by the row's
-  constant values (two or more, unique in the sheet). Rows with a single constant, and duplicate
-  rows, are not tracked: after sorting or inserting such rows, check the single-cell references
-  to them yourself.
-- A formula that reads the previous row on its own sheet (a running balance) is accepted when it
-  was refilled after rows were inserted or deleted, but it can be reported as
-  `reference-meaning-changed` after a sort. A formula meant to read a fixed position (for example
-  the top row after sorting, `=Data!A2`) is reported the same way. If the new order was the task,
-  say so in your report.
-- A shorter aggregate below a total that covers more rows (an Average, a second-half sum) is a
-  `[warning]`. It is an `[error]` only with `--before`, when the original shows that both ranges
-  ended in the same row and only the total was extended.
-- A new sheet that holds at least half of a removed sheet's constants (its formulas, for a sheet
-  without constants) counts as that sheet renamed. A chart sheet counts as renamed when a new chart
-  sheet has the same title or series over the same columns.
+  constant values (two or more, unique in both files). Rows with a single constant, and duplicate
+  rows, are not tracked. Nor are single-cell references on the formula's own sheet without `$`
+  (for example a summary below the table that reads `=C2`) when the label in column A repeats or
+  is blank. After sorting or inserting such rows, check those references yourself.
+- A formula filled down a column that reads the row next to it on its own sheet without `$` (a
+  running balance `=D6+C7`, a change `=B7-B6`) is an `[error]` `reference-meaning-changed` only
+  when that row's label in column A and the cells the formula reads there were cleared. It gets
+  no finding when its own row or the row it reads is a new row, or when the row it reads holds the
+  content that was next to it before (with only deleted rows between them): what refilling the
+  column after inserting or deleting rows gives. Otherwise, for example after a sort or when
+  repeated rows hide where each row went, it is at most a `[warning]`: a balance refilled after a
+  sort reads its new neighbour as intended, so the script cannot call it wrong. (Balances moved by
+  an insert and not refilled are reported as an `[error]` `formula-moved-as-text`.) A row
+  inserted without its own balance formula gets no finding, although the next balance then reads
+  an empty cell, so check that every row of the column has its formula. A one-off formula next to
+  the row it reads (a VAT line `=B14*0.2` under the Total) gets none of this leniency, and a
+  formula meant to read a fixed position after a sort (for example the top row, `=Data!A2`) is
+  still reported as an `[error]`. If the new order was the task, say so in your report.
+- A shorter aggregate below a total that covers more rows (an Average, a 'Q4 2024' sum) is a
+  `[warning]`. It is an `[error]` only with `--before`, when in the original it covered the same
+  rows (the same first and last row) as an aggregate above it and the total that now covers the
+  new rows starts at the same row. A part that starts lower, such as a quarter or half-year kept
+  below an all-time total, stays a `[warning]`, because correct edits keep such parts too. With
+  `--before`, a total left at its old range and followed by a new sum of only the added rows is a
+  `[warning]` for the same reason (it has the shape of a correct split such as 2024 / 2025),
+  unless a total of all the rows sits in the same block of total rows.
+- A new sheet that holds at least half of a removed sheet's constants counts as that sheet
+  renamed; formulas are compared only for a sheet that held no constants, so a sheet renamed with
+  its values cleared and its formulas kept is reported as removed. A chart sheet counts as renamed
+  when a new chart sheet has the same title or a series over at least one of the same columns or
+  defined names (a name that stands for a range counts as that range), even when the new chart
+  shows only one of the old chart's columns. An old chart with neither a title nor a series over a
+  cell range (for example a series over an `OFFSET` name) is a `[warning]` when a new chart sheet
+  is left over, since nothing tells the two apart. A chart sheet in a file re-saved by
+  LibreOffice 24.2 becomes a worksheet and is reported as removed.
+- Known misreadings: a total written as `=SUM(B2:B4)+SUM(B5:B7)`, and half-year sums four or more
+  blank rows below the data, are `[error]`s; conditional formatting on column A that stops above a
+  'Total' label is a `[warning]`. Known misses: months appended below half-year sums that have no
+  total are not reported, and 5 of 150 random wrong `insert_rows` edits of invoice tables with
+  repeated values passed clean in our tests.
 
 ## Reporting
 

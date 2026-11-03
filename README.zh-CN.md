@@ -86,7 +86,7 @@ harbor run -p dist/harbor -a claude-code -m <model> -k 3
 
 ## 修复方案
 
-[spreadsheet-verify-skill](fixes/spreadsheet-verify-skill/) 是一个 Agent Skill：一份检查清单，加上 `audit_xlsx.py`——把改动后的工作簿与原件对比、与具体任务无关的审计脚本。它能标记 15 个失败产物中的 13 个，对 30 个正确解没有报出任何错误（[证据](docs/evidence/fix-self-check.md)）。智能体用了这个 Skill 是否真的做得更好，**尚未测量**；可以用 `--fix spreadsheet-verify-skill` 或 SkillEvaluator（`failbook export skillevaluator --fix spreadsheet-verify-skill --out dist/se`）复测。
+[spreadsheet-verify-skill](fixes/spreadsheet-verify-skill/) 是一个 Agent Skill：一份检查清单，加上 `audit_xlsx.py`——把改动后的工作簿与原件对比、与具体任务无关的审计脚本。它能标记 15 个失败产物中的 13 个，对 41 个正确解没有报出任何错误（[证据](docs/evidence/fix-self-check.md)）。智能体用了这个 Skill 是否真的做得更好，**尚未测量**；可以用 `--fix spreadsheet-verify-skill` 或 SkillEvaluator（`failbook export skillevaluator --fix spreadsheet-verify-skill --out dist/se`）复测。
 
 ## 仓库结构
 

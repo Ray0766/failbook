@@ -248,10 +248,12 @@ _LINES_CHANGED = (f"in a copy of the file where every line's Qty was raised by a
 )
 def vat_gross_follow_net(ctx):
     # Each figure is compared with the Nets as they are in the changed copy, so a Net that did not
-    # follow its Qty and Unit Price (net-still-calculated) is not counted again here.
+    # follow its Qty and Unit Price (net-still-calculated) is not counted again here. A Net that is
+    # not a number there is not reported either: that line's VAT and Gross are not compared, and
+    # neither is a Total VAT or Total Gross that is not a number (it may carry the error along).
     base, changed = ctx.values(), ctx.values(scenario="lines_changed")
     rate = ctx.meta["rate"]
-    problems, vats, grosses = [], [], []
+    problems, vats, grosses, bad_nets, bad_rows = [], [], [], [], []
 
     def stale(col, r, got):
         before = base[X.make_ref(SHEET, (r, col))]
@@ -270,22 +272,17 @@ def vat_gross_follow_net(ctx):
                 merged.append((v, [how]))
         return " or ".join(f"{_amt(v)} ({', and '.join(hows)})" for v, hows in merged)
 
-    def net_in_copy(r, what):
-        net = _read(ctx, changed, None, 4, r, what)
-        if net is None:
-            problems.append(Inconclusive(f"{_LINES_CHANGED}, {what} (row {r}) is not a number, so the VAT and "
-                                         "Gross that depend on it cannot be compared"))
-        return net
-
     for r, line in zip(_rows(ctx), _changed_lines(ctx.meta)):
         item = line["item"]
+        net = _read(ctx, changed, None, 4, r, f"Net of '{item}'")
+        if net is None:  # its VAT and Gross may carry it (#VALUE!): not compared
+            bad_nets.append(f"Net of '{item}' (row {r})")
+            bad_rows.append((r, item))
+            continue
         vat = _read(ctx, changed, problems, 5, r, f"VAT of '{item}'")
         gross = _read(ctx, changed, problems, 6, r, f"Gross of '{item}'")
         vats.append(vat)
         grosses.append(gross)
-        net = net_in_copy(r, f"Net of '{item}'")
-        if net is None:
-            continue
         exp_vat = net * rate
         if vat is not None and not _money_ok(vat, exp_vat):
             problems.append(f"VAT of '{item}' (row {r}) is {_amt(vat)}, expected {_amt(exp_vat)} (its Net in that "
@@ -294,23 +291,46 @@ def vat_gross_follow_net(ctx):
         if not follows and not (vat is not None and X.close(gross, net + vat)):  # Gross = Net + VAT as shown
             problems.append(f"Gross of '{item}' (row {r}) is {_amt(gross)}, expected {_amt(net + exp_vat)} (its Net "
                             f"in that copy {_amt(net)} + VAT {_amt(exp_vat)}){stale(6, r, gross)}")
-    t = _total_row(ctx)
-    vat = _read(ctx, changed, problems, 5, t, "Total VAT")
-    gross = _read(ctx, changed, problems, 6, t, "Total Gross")
-    net = net_in_copy(t, "Total Net")
-    # A total is accepted if it is the sum of its column's lines as read in that copy, or follows Total Net.
-    vat_sum = sum(vats) if None not in vats else None
-    gross_sum = sum(grosses) if None not in grosses else None
-    if vat is not None and (vat_sum is not None or net is not None):
-        ok = [(vat_sum, X.close(vat, vat_sum) if vat_sum is not None else False,
-               "the sum of the line VATs in that copy")]
+    # When every line's Net is a number, a total that is not a number is reported (unless Total Net is
+    # not a number either). When some line's Net is not a number, a total that is not a number may
+    # carry that error along and is not compared; a total that is a number still is.
+    t, lines_read = _total_row(ctx), not bad_nets
+    net = _read(ctx, changed, None, 4, t, "Total Net")
+    if lines_read:
+        vat = _read(ctx, changed, problems if net is not None else None, 5, t, "Total VAT")
+        gross = _read(ctx, changed, problems if net is not None else None, 6, t, "Total Gross")
+        if net is None and None in (vat, gross):
+            problems.append(Inconclusive(f"{_LINES_CHANGED}, Total Net (row {t}) is not a number, so a Total VAT "
+                                         "or Total Gross that is not a number either cannot be compared"))
+        # A total is accepted if it is the sum of its column's lines as read in that copy, or follows Total Net.
+        vat_sum = sum(vats) if None not in vats else None
+        gross_sum = sum(grosses) if None not in grosses else None
+        sum_how = "the sum of the line {} in that copy"
+    else:
+        vat = _read(ctx, changed, None, 5, t, "Total VAT")
+        gross = _read(ctx, changed, None, 6, t, "Total Gross")
+        for r, item in bad_rows:
+            vats.append(_read(ctx, changed, None, 5, r, f"VAT of '{item}'"))
+            grosses.append(_read(ctx, changed, None, 6, r, f"Gross of '{item}'"))
+        vat_sum = sum(v for v in vats if v is not None)
+        gross_sum = sum(g for g in grosses if g is not None)
+        sum_how = "the sum of the line {} that are numbers in that copy"
+    # A total worked out from Qty and Unit Price directly (SUMPRODUCT) follows them too, even where a
+    # line's Net did not; that Net is reported under net-still-calculated, not here.
+    lines_net = sum(_net(line) for line in _changed_lines(ctx.meta))
+    if vat is not None:
+        ok = [(vat_sum, X.close(vat, vat_sum) if vat_sum is not None else False, sum_how.format("VATs"))]
         if net is not None:
             ok.append((net * rate, _money_ok(vat, net * rate), f"Total Net in that copy x {_pct(rate)}"))
+        ok.append((lines_net * rate, _money_ok(vat, lines_net * rate),
+                   f"the sum of Qty x Unit Price in that copy x {_pct(rate)}"))
         if not any(good for _, good, _ in ok):
             problems.append(f"Total VAT (row {t}) is {_amt(vat)}, expected {expected(ok)}{stale(5, t, vat)}")
-    if gross is not None and (gross_sum is not None or net is not None):
+    if gross is not None:
         ok = [(gross_sum, X.close(gross, gross_sum) if gross_sum is not None else False,
-               "the sum of the line Gross amounts in that copy")]
+               sum_how.format("Gross amounts"))]
+        ok.append((lines_net * (1 + rate), _money_ok(gross - lines_net, lines_net * rate),
+                   f"the sum of Qty x Unit Price in that copy + {_pct(rate)} of it"))
         if net is not None:
             ok.append((net + net * rate, _money_ok(gross - net, net * rate),
                        f"Total Net in that copy + {_pct(rate)} of it"))
@@ -319,13 +339,31 @@ def vat_gross_follow_net(ctx):
         if not any(good for _, good, _ in ok):
             problems.append(f"Total Gross (row {t}) is {_amt(gross)}, expected {expected(ok)}{stale(6, t, gross)}")
     fails = [str(p) for p in problems if not isinstance(p, Inconclusive)]
-    checked = 2 * len(vats) + 2
-    require(not fails, f"{_LINES_CHANGED} (rate unchanged), {len(fails)} of {checked} VAT and Gross figures (the "
-                       "lines and the Total row) did not follow the Nets: " + "; ".join(fails[:3])
+    unread = [name for name, v in (("Total VAT", vat), ("Total Gross", gross)) if v is None]
+    if lines_read and net is not None:
+        checked, scope = 2 * len(vats) + 2, "the lines and the Total row"
+    elif lines_read:  # Total Net is not a number: a total that is not a number either was not compared
+        checked = 2 * len(vats) + 2 - len(unread)
+        scope = "the lines" + (", and the Total row's figures that are numbers" if len(unread) < 2 else "")
+    else:
+        checked = 2 * (len(vats) - len(bad_rows)) + 2 - len(unread)
+        scope = ("the lines whose Net in that copy is a number"
+                 + (", and the Total row's figures that are numbers" if len(unread) < 2 else ""))
+    require(not fails, f"{_LINES_CHANGED} (rate unchanged), {len(fails)} of {checked} VAT and Gross figures "
+                       f"({scope}) did not follow the Nets: " + "; ".join(fails[:3])
                        + (f" (and {len(fails) - 3} more)" if len(fails) > 3 else "")
                        + ". Exact amounts and amounts rounded to whole cents are both accepted.")
     if problems:
         raise problems[0]
+    if bad_nets:
+        one = len(bad_nets) == 1
+        is_, lines, nets = ("is", "that line's", "that Net") if one else ("are", "those lines'", "those Nets")
+        totals = (f", nor {' and '.join(unread)}, which {'is not a number' if len(unread) == 1 else 'are not numbers'} "
+                  "there" if unread else "")
+        raise Inconclusive(f"{_LINES_CHANGED}, " + ", ".join(bad_nets[:3])
+                           + (f" and {len(bad_nets) - 3} more" if len(bad_nets) > 3 else "")
+                           + f" {is_} not a number, so {lines} VAT and Gross were not compared{totals} "
+                           f"(net-still-calculated reports {nets})")
 
 
 @rule(
