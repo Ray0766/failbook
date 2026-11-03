@@ -33,5 +33,9 @@ failbook docs                      # regenerates case READMEs, the index and RES
 pytest -q
 ```
 
+If you change the audit script (`src/failbook/audit.py`), also run `pytest tests/test_audit_corpus.py`
+and read [tests/audit_corpus/README.md](tests/audit_corpus/README.md) before changing a label; `failbook
+docs` copies the script into the skill.
+
 Case code (`case.py`, solutions) is executed by the grader. Pull requests that add or change it are
 reviewed for anything beyond reading and writing workbooks; CI runs them without secrets.

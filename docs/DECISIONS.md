@@ -159,8 +159,13 @@ project's own repository, package metadata or installed source, as each note say
 - **How the audit was kept from regressing.** Its rules are heuristics, and early fix rounds traded one false
   finding for another. From the third fix round on, every change was run on a corpus of before/after workbook
   pairs collected from the reviews (1,587 pairs: 217 hand-made ones, each labelled with its intended outcome,
-  and three random families), against the two previous versions, and accepted only if no pair got worse. The corpus stayed outside the repository; the pairs that pin a
-  decision are tests. What the script cannot tell is listed in the skill's SKILL.md.
+  and three random families), against the two previous versions, and accepted only if no pair got worse.
+  The hand-made probes that do not need large files (204 of the 217, after dropping one duplicate) are
+  now in the repository, [tests/audit_corpus/](../tests/audit_corpus/), with 6 that an independent check
+  of the corpus added (210 in all), and run with the tests: each must keep its labelled outcome,
+  and a documented limitation is pinned so that fixing it or making it worse is noticed. The large timing
+  pairs and the random families stayed outside. What the script cannot tell is listed in the skill's
+  SKILL.md.
 - **Limits.** The checks were written with these failures in view, so this is coverage, not generalisation.
   **Whether agents do better with the skill is a hypothesis** until runs with and without it are recorded.
 
@@ -213,9 +218,11 @@ project's own repository, package metadata or installed source, as each note say
   accepted: no probe got worse.
 - **Limits.** The reviewers are models, not ground truth; their findings were accepted only with a reproduced
   failure. After each fix, the reproductions were run again (wrong solutions fail, valid ones pass or are
-  inconclusive with a stated reason). Logs and the audit corpus were kept outside the repository; the probes
-  that pin a decision are tests in `tests/`. No further fresh review was run on the final code. Known gaps
-  are listed under each case's Limitations and in the skill's "What the audit script cannot tell".
+  inconclusive with a stated reason). Logs were kept outside the repository; the wrong and valid solutions
+  that pin a grading decision are `fail_*.py` and `alt_*.py` fixtures, and 204 of the audit's 217 hand-made
+  probes (all but the large timing pairs and one duplicate) are in `tests/audit_corpus/`. No further fresh
+  review was run on the final code. Known gaps are listed under each case's Limitations and in the skill's
+  "What the audit script cannot tell".
 
 ## D10. Grading policies made explicit by the review
 

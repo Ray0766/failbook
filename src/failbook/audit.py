@@ -1008,9 +1008,14 @@ def compare(before, after, findings):
         else:
             unknown.append(name)
     for name in removed:
-        hint = (f" (the new chart sheet{'s' if len(added) > 1 else ''} "
-                f"{', '.join(repr(n) for n in added)} show{'' if len(added) > 1 else 's'} another chart: "
-                "its title and the columns its series read all differ)") if added else ""
+        if len(added) > 1:
+            hint = (f" (the new chart sheets {', '.join(repr(n) for n in added)} show other charts: none of them "
+                    "shares a title, or a column or name that a series plots as values, with it)")
+        elif added:
+            hint = (f" (the new chart sheet {next(iter(added))!r} shows another chart: the two share no title and "
+                    "no column or name that a series plots as values)")
+        else:
+            hint = ""
         findings.append(Finding("error", "sheet-removed", name, f"chart sheet '{name}' existed before and is gone{hint}"))
     for name in unknown:
         if not added:
