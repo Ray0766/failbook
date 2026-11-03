@@ -14,6 +14,12 @@ Last updated 2026-11-03.
 | Harbor export loads in Harbor 0.24.0; SkillEvaluator 0.7.0 `tier3 validate --harbor-contract` passes | [DECISIONS.md](DECISIONS.md) D4 |
 | Static site: catalog + evidence pages, en/zh, reflow at 320 px checked | `failbook site`, GitHub Pages workflow |
 
+## Release steps left to the maintainer
+
+- Merge the first release (pull request #1 on Ray0766/failbook).
+- Enable GitHub Pages with "GitHub Actions" as the source (Settings → Pages); the `pages` workflow then
+  publishes the case gallery on every push to `main`. The build environment could not change this setting.
+
 ## Not done / not verified
 
 - **No recorded agent runs.** Every case is `reconstructed`. Running a CLI agent unsandboxed was blocked in
