@@ -76,10 +76,21 @@ def _expected(ctx, bump=0):
     return q + [sum(q)]
 
 
+def _bumped(meta):
+    """The "bump" scenario: (row, column, new value) adding 100 to one rep's figure in each quarter.
+
+    Each quarter uses a different rep, so a Grand Total that covers only some rows is caught too.
+    """
+    reps, _ = layout(meta)
+    out = []
+    for i, col in enumerate(QCOLS):
+        r, _, rep = reps[(len(reps) // 2 + i) % len(reps)]
+        out.append((r, col, rep["q"][i] + 100))
+    return out
+
+
 def scenarios(ctx):
-    reps, _ = layout(ctx.meta)
-    r, _, rep = reps[len(reps) // 2]
-    return {"bump": {X.make_ref(SHEET, (r, 4)): rep["q"][1] + 100}}
+    return {"bump": {X.make_ref(SHEET, (r, col)): value for r, col, value in _bumped(ctx.meta)}}
 
 
 @rule(
@@ -114,18 +125,24 @@ def grand_total_values(ctx):
 
 @rule(
     "grand-total-live",
-    "Adding 100 to one rep's Q2 adds exactly 100 to the Grand Total",
+    "Adding 100 to one rep's figure in each quarter adds exactly 100 to each quarter's Grand Total and 400 to Year",
     kind="live",
-    title_zh="某位代表的 Q2 增加 100，Grand Total 恰好增加 100",
-    requirement="Use formulas, so that it updates when a rep's figures change.",
+    title_zh="每个季度各给一位代表加 100，各季度 Grand Total 恰好增加 100，Year 增加 400",
+    requirement="For Q1, Q2, Q3, Q4 and Year ... Use formulas, so that it updates when a rep's figures change.",
 )
 def grand_total_live(ctx):
     base, bumped = ctx.values(), ctx.values(scenario="bump")
     row = _grand_row(ctx)
-    for col, label in ((4, "Q2"), (YEAR, "Year")):
+    changed = {col: r for r, col, _ in _bumped(ctx.meta)}
+    for col, label in [(c, HEADERS[c - 1]) for c in QCOLS] + [(YEAR, "Year")]:
         ref = X.make_ref(SHEET, (row, col))
         delta = ctx.num(bumped, ref, f"Grand Total {label}") - ctx.num(base, ref, f"Grand Total {label}")
-        require(X.close(delta, 100), f"adding 100 to one rep's Q2 changed Grand Total {label} by {delta:,.0f}, expected +100")
+        if col == YEAR:
+            require(X.close(delta, 400), "adding 100 to one rep's figure in each of Q1-Q4 changed Grand Total Year "
+                    f"by {delta:,.0f}, expected +400")
+        else:
+            require(X.close(delta, 100), f"adding 100 to one rep's {label} (row {changed[col]}) changed Grand Total "
+                    f"{label} by {delta:,.0f}, expected +100")
 
 
 @rule(

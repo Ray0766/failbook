@@ -20,6 +20,14 @@ if TYPE_CHECKING:  # pragma: no cover
     from .runner import AgentPreset
 
 
+#: Where a skill is installed, relative to the working directory, for agents without skill discovery.
+FALLBACK_SKILLS_DIR = "skills"
+#: How SKILL.md refers to its own folder; replaced by the real path where Failbook knows it.
+SKILL_DIR_PLACEHOLDER = "<this-skill-dir>"
+#: Local build products that must not reach the agent's working directory.
+SKILL_COPY_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store")
+
+
 def fixes_dir() -> Path:
     root = repo_root()
     if root is None:
@@ -61,14 +69,28 @@ class Fix:
         if self.kind == "skill":
             skills_dir = preset.skills_dir if preset else None
             if skills_dir:
-                shutil.copytree(self.skill_dir, Path(workdir) / skills_dir / self.skill_name)
+                shutil.copytree(self.skill_dir, Path(workdir) / skills_dir / self.skill_name, ignore=SKILL_COPY_IGNORE)
             else:
-                # Agents without skill discovery get the skill text as project instructions.
+                # Agents without skill discovery get the whole skill folder (its scripts too) in
+                # the working directory, and its text as project instructions pointing there.
+                rel = f"{FALLBACK_SKILLS_DIR}/{self.skill_name}"
+                shutil.copytree(self.skill_dir, Path(workdir) / rel, ignore=SKILL_COPY_IGNORE)
                 name = preset.instructions_file if preset else "AGENTS.md"
-                body = (self.skill_dir / "SKILL.md").read_text(encoding="utf-8")
-                (Path(workdir) / name).write_text(body, encoding="utf-8")
+                (Path(workdir) / name).write_text(self.instructions(rel), encoding="utf-8")
             return prompt
         raise CaseError(f"fix {self.id}: unknown kind {self.kind!r}")
+
+    def instructions(self, rel: str) -> str:
+        """SKILL.md as an instructions file for an agent that reads the skill folder at ``rel``."""
+        body = (self.skill_dir / "SKILL.md").read_text(encoding="utf-8").replace(SKILL_DIR_PLACEHOLDER, rel)
+        note = (f"> This is the `{self.skill_name}` skill, installed in `{rel}/` (relative to this file). "
+                f"Paths such as `{rel}/scripts/...` below point into that folder.\n\n")
+        if body.startswith("---\n"):
+            end = body.find("\n---\n", 4)
+            if end != -1:
+                head, rest = body[:end + 5], body[end + 5:]
+                return head + "\n" + note + rest.lstrip("\n")
+        return note + body
 
 
 def load_fix(ref: str) -> Fix:

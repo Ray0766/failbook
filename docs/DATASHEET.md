@@ -48,8 +48,10 @@ method reference, not a recent result.
 
 ## Maintenance
 
-- Cases are versioned (`version` in `case.yaml`); a change to a task or a rule bumps the version, and results
-  for older versions are kept but shown separately.
+- Cases are versioned (`version` in `case.yaml`); from the first release on, a change to a task or a rule
+  bumps the version, and results for older versions are kept but shown separately. Changes made before the
+  first release kept version 1, because no result referenced any version
+  ([DECISIONS.md D10](DECISIONS.md#d10-grading-policies-made-explicit-by-the-review)).
 - Results are append-only. Disputes about a checker are handled through the "checker dispute" issue form;
   a confirmed checker error is fixed and the case version bumped.
 - A case that every recorded agent configuration passes consistently may be marked `retired`; it stays in

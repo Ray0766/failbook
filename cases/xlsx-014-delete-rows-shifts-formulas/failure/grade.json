@@ -42,9 +42,9 @@
     {
       "id": "totals-live",
       "kind": "live",
-      "title": "Totals and Summary update when a quantity changes",
+      "title": "Values, totals and Summary update when quantities or costs change",
       "status": "fail",
-      "detail": "Total Qty (Stock!D16) evaluates to #VALUE!"
+      "detail": "adding 10 units to every remaining item changed the Value of S-303 (row 3) by +887.50, expected +1,295.80"
     }
   ]
 }

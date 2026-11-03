@@ -19,7 +19,7 @@
 - **Check outcomes, not methods.** Compare recalculated values, never formula text. Test liveness by
   perturbing inputs (`scenarios`) rather than by looking for `=` signs.
 - **Compute expectations independently.** Expected values come from `params()` in Python, not from the engine.
-- **Fail with evidence.** Messages name the cell and both numbers: `Total Qty is 198, expected 269 (difference 71)`.
+- **Fail with evidence.** Messages name the cell and both numbers: `Total Qty is 198, expected 269 (difference -71)`.
 - **Never fail the agent for the checker's limits.** Use `ctx.num()` / `ctx.value()`, which turn engine gaps
   into `Inconclusive`; let unexpected exceptions surface as inconclusive "checker error".
 - **Add an alternative solution** whenever there is a reasonable different way to do the task, and a `fail_*.py`

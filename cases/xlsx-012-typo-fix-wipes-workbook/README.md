@@ -6,9 +6,9 @@
 
 中文版见下方 / [Chinese version below](#中文)
 
-> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), which
-> performs the naive steps described below. It is a reconstruction of a commonly reported pattern, not a
-> recording of a particular model. Recorded agent runs, when there are any, are listed under
+> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), a script
+> that makes the mistake described under "Observed in the failure artifact" below. It is a reconstruction
+> of a commonly reported pattern, not a recording of a particular model. Recorded agent runs, when there are any, are listed under
 > [Retests](#retests).
 
 ## Task
@@ -27,7 +27,7 @@ Only the misspelled City cells change. All sheets, formulas, header styling, num
 
 ## Observed in the failure artifact
 
-The agent fixed the misspelled city with pandas: read the sheet into a DataFrame, replace, write it back with to_excel(). That rewrote the file from scratch. The Regions and Notes sheets are gone, the Region formulas became fixed text (still saying "Unknown" for the corrected rows), the header styling, column widths, frozen header and the Tier dropdown were lost. The typo itself is fixed.
+The four misspelled cities now read "Beijing", but the file was written anew. It has only the Customers sheet: Regions and Notes are gone. The Region column holds fixed text instead of formulas, still "Unknown" for the four corrected rows. The header is no longer bold or filled, the column widths, the frozen header and the Tier dropdown are gone, and the Since dates now have the number format YYYY-MM-DD HH:MM:SS.
 
 The illustrative claim that goes with this reconstruction (written for the case, not quoted from a run):
 
@@ -42,7 +42,7 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 | `typo-fixed` | content | Every 'Bejing' in the City column now reads 'Beijing' | pass |
 | `customer-data-unchanged` | no collateral damage | All other Customers cells are unchanged; Region is still a formula and now resolves | **FAIL**: Region of C2001 is no longer a formula: 'East' |
 | `other-sheets-unchanged` | no collateral damage | The Regions and Notes sheets are still there, unchanged | **FAIL**: sheets are ['Customers'], expected ['Customers', 'Regions', 'Notes'] |
-| `formatting-kept` | structure | Header style, number formats, column widths and the frozen header are kept | **FAIL**: header 'ID' lost its bold font |
+| `formatting-kept` | structure | Cell formatting, column widths, the frozen header and the filter settings are kept | **FAIL**: bold of A1 changed from on to off |
 | `dropdown-kept` | structure | The Tier dropdown still covers every customer row | **FAIL**: no Tier dropdown (Gold, Silver, Bronze) covers the Tier column any more |
 
 Files: [`failure/customers.xlsx`](failure/customers.xlsx) (graded in [`failure/grade.json`](failure/grade.json)); the steps that produced it: [`failure.py`](failure.py).
@@ -71,7 +71,7 @@ failbook run xlsx-012 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-012 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-012 --seeds 3`): [`reference.py`](reference.py) must pass, also after LibreOffice opens and re-saves its output; the failure must fail on the rules listed in `case.yaml`; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-012 --seeds 3`): [`reference.py`](reference.py) must pass, also after LibreOffice opens and re-saves its output; the failure must fail on the rules listed in `case.yaml`; [`fail_filter_added.py`](fail_filter_added.py), [`fail_headers_renamed.py`](fail_headers_renamed.py) and [`fail_highlight_fixed.py`](fail_highlight_fixed.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -79,7 +79,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 ## Limitations
 
-- Formatting checks cover header bold and fill, two number-format columns, column widths (±1.5) and frozen panes; other style details are not compared.
+- Formatting checks compare every Customers cell's bold, italic, underline, strikethrough, font colour, solid fill, horizontal alignment and number format with the input, plus column widths (±1.5), frozen panes, the filter range and the number of conditional-format rules. Font names and sizes, borders and patterned fills are not compared.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
 ---
@@ -88,7 +88,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 **用 pandas 改一个错字，却毁掉了工作簿的其余部分**
 
-> **关于这条记录：** 失败产物由 [`failure.py`](failure.py) 执行下述朴素步骤生成，是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
+> **关于这条记录：** 失败产物由脚本 [`failure.py`](failure.py) 生成，它会犯下文“失败产物中观察到的情况”所述的错误。这是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
 
 ### 任务
 
@@ -106,7 +106,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 ### 失败产物中观察到的情况
 
-智能体用 pandas 修正拼错的城市名：把工作表读成 DataFrame，替换后用 to_excel() 写回。这相当于从头重写了文件：Regions 和 Notes 两张表没了；Region 公式变成固定文本（被修正的行仍显示 "Unknown"）；表头样式、列宽、冻结窗格和 Tier 下拉列表全部丢失。错字倒是改好了。
+四处拼错的城市已改为 "Beijing"，但整个文件被重新写过：只剩 Customers 一张表，Regions 和 Notes 都没了；Region 列存的是固定文本而不是公式，四个被修正的行仍显示 "Unknown"；表头不再加粗、没有填充色，列宽、冻结表头和 Tier 下拉列表都没了，Since 日期的数字格式变成了 YYYY-MM-DD HH:MM:SS。
 
 与该复现配套的示例声明（为本案例撰写，并非摘自真实运行）：
 
@@ -121,7 +121,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 | `typo-fixed` | 内容 | City 列中所有 'Bejing' 都已改为 'Beijing' | pass |
 | `customer-data-unchanged` | 无连带破坏 | Customers 表其余单元格不变；Region 仍是公式，且现在能查到结果 | **FAIL**: Region of C2001 is no longer a formula: 'East' |
 | `other-sheets-unchanged` | 无连带破坏 | Regions 和 Notes 工作表仍在且未被修改 | **FAIL**: sheets are ['Customers'], expected ['Customers', 'Regions', 'Notes'] |
-| `formatting-kept` | 结构 | 表头样式、数字格式、列宽和冻结表头都保持原样 | **FAIL**: header 'ID' lost its bold font |
+| `formatting-kept` | 结构 | 单元格格式、列宽、冻结表头和筛选设置都保持原样 | **FAIL**: bold of A1 changed from on to off |
 | `dropdown-kept` | 结构 | Tier 下拉列表仍覆盖所有客户行 | **FAIL**: no Tier dropdown (Gold, Silver, Bronze) covers the Tier column any more |
 
 ### 解释
@@ -140,5 +140,5 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 ### 限制
 
-- 格式检查覆盖表头加粗与填充、两列数字格式、列宽（±1.5）和冻结窗格，其他样式细节不比较。
+- 格式检查把 Customers 表每个单元格的加粗、斜体、下划线、删除线、字体颜色、纯色填充、水平对齐和数字格式与输入比较，另外比较列宽（±1.5）、冻结窗格、筛选区域和条件格式规则数量。字体名称与字号、边框和图案填充不比较。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

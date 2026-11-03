@@ -28,7 +28,7 @@
     {
       "id": "lookups-live",
       "kind": "live",
-      "title": "Changing a price on Products updates the matching orders",
+      "title": "Orders follow when every category and price on Products is changed",
       "status": "pass",
       "detail": ""
     },

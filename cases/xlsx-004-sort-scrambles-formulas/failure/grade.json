@@ -30,14 +30,14 @@
       "kind": "value",
       "title": "Each Bonus equals Base Salary x Bonus Rate of the same row",
       "status": "fail",
-      "detail": "15 bonus(es) belong to another row, e.g. Arjun Wang (row 2): 5,850 instead of 10,950; Ava Yilmaz (row 3): 16,650 instead of 2,625; Dina Yilmaz (row 5): 2,625 instead of 15,600"
+      "detail": "15 of 16 bonuses equal another person's Base Salary x Bonus Rate instead of their own, e.g. Arjun Wang (row 2): 5,850, the Base Salary x Bonus Rate of Gao Huang (row 6), instead of 10,950; Ava Yilmaz (row 3): 16,650, the Base Salary x Bonus Rate of Yuki Quist (row 13), instead of 2,625; Dina Yilmaz (row 5): 2,625, the Base Salary x Bonus Rate of Ava Yilmaz (row 3), instead of 15,600"
     },
     {
       "id": "bonus-is-live",
       "kind": "live",
       "title": "Changing a salary changes the Bonus on that same row",
       "status": "fail",
-      "detail": "after changing Arjun Wang's salary, their Bonus is 6,100, expected 11,100"
+      "detail": "in a copy of the file where every Base Salary was raised, 15 of 16 bonuses did not follow, e.g. Arjun Wang (row 2): with Base Salary 74,000 the Bonus is 6,100, expected 11,100; Ava Yilmaz (row 3): with Base Salary 54,500 the Bonus is 18,450, expected 2,725; Dina Yilmaz (row 5): with Base Salary 108,000 the Bonus is 2,725, expected 16,200"
     }
   ]
 }

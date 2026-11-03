@@ -21,9 +21,9 @@
     {
       "id": "grand-total-live",
       "kind": "live",
-      "title": "Adding 100 to one rep's Q2 adds exactly 100 to the Grand Total",
+      "title": "Adding 100 to one rep's figure in each quarter adds exactly 100 to each quarter's Grand Total and 400 to Year",
       "status": "fail",
-      "detail": "adding 100 to one rep's Q2 changed Grand Total Q2 by 200, expected +100"
+      "detail": "adding 100 to one rep's Q1 (row 10) changed Grand Total Q1 by 200, expected +100"
     },
     {
       "id": "sales-unchanged",

@@ -46,10 +46,17 @@ def build(meta, outdir):
     wb.save(outdir / "report.xlsx")
 
 
-def _expected(meta, bump_row=None, bump=0):
+def _bumped(meta):
+    """Revenues in the "bump" scenario: in a copy of the file, every row is raised by a different
+    amount (100 for the first row, 200 for the second, ...), so a Dashboard figure that is a typed
+    number, or that reads the wrong rows, no longer matches."""
+    return [r["revenue"] + 100 * k for k, r in enumerate(meta["rows"], start=1)]
+
+
+def _expected(meta, revenues=None):
     rows = [dict(r) for r in meta["rows"]]
-    if bump_row is not None:
-        rows[bump_row]["revenue"] += bump
+    for row, revenue in zip(rows, revenues or []):
+        row["revenue"] = revenue
     out = {reg: sum(r["revenue"] for r in rows if r["region"] == reg) for reg in meta["regions"]}
     out[ALL_LABEL] = sum(r["revenue"] for r in rows)
     out[AVG_LABEL] = out[ALL_LABEL] / len(rows)
@@ -69,7 +76,7 @@ def _dashboard_refs(ctx):
 def scenarios(ctx):
     wb = ctx.wb()
     require(NEW in wb.sheetnames, f"there is no sheet named {NEW!r}")
-    return {"bump": {X.make_ref(NEW, "C2"): ctx.meta["rows"][0]["revenue"] + 1000}}
+    return {"bump": {X.make_ref(NEW, (i, 3)): v for i, v in enumerate(_bumped(ctx.meta), start=2)}}
 
 
 @rule(
@@ -112,9 +119,16 @@ def dashboard_values(ctx):
     requirement="...still calculated from the renamed sheet, so they keep updating when the sales data changes.",
 )
 def dashboard_live(ctx):
-    values = ctx.values(scenario="bump")
-    exp = _expected(ctx.meta, bump_row=0, bump=1000)
-    for label, ref in _dashboard_refs(ctx).items():
+    base, values = ctx.values(), ctx.values(scenario="bump")
+    exp = _expected(ctx.meta, _bumped(ctx.meta))
+    refs = _dashboard_refs(ctx)
+    wrong = []
+    for label, ref in refs.items():
         got = ctx.num(values, ref, f"Dashboard '{label}'")
-        require(X.close(got, exp[label]),
-                f"after adding 1,000 to {NEW}!C2, Dashboard '{label}' is {got:,.2f}, expected {exp[label]:,.2f}")
+        if X.close(got, exp[label]):
+            continue
+        before = base[ref]
+        same = ", the same as before the change" if X.is_number(before) and X.close(before, got) else ""
+        wrong.append(f"'{label}' is {got:,.2f}, expected {exp[label]:,.2f}{same}")
+    require(not wrong, f"in a copy of the file where every revenue on '{NEW}' was raised by a different amount, "
+                       f"{len(wrong)} of {len(refs)} Dashboard figures did not follow: " + "; ".join(wrong[:3]))

@@ -17,13 +17,16 @@ failure:
   expected_zh: >
     停产行被删除且无空行，Value、Total 和 Summary 公式对剩余行计算正确并保持实时。
   observed: >
-    The agent removed the discontinued items with openpyxl's delete_rows(). The rows are gone, but
-    no formula was rewritten. Each remaining Value formula still points at its old row number, so
-    most items show another item's value. The Total row's SUM still ends at the old last row, which
-    now includes the Total row itself. The Summary sheet still reads the cell where the total used to be.
+    The four Discontinued rows are gone and the 14 remaining items are in rows 2 to 15, but no formula
+    was rewritten. Thirteen of the 14 Value formulas still use the old row numbers (row 3 holds
+    =D4*E4), so they show another item's value. The Total row, now row 16, still sums D2:D19 and
+    F2:F19, a range that includes the Total row itself; LibreOffice reports #VALUE! for both totals.
+    The Summary sheet still reads Stock!D20 and Stock!F20, where the Total row used to be; those cells
+    are now empty.
   observed_zh: >
-    智能体用 openpyxl 的 delete_rows() 删除了已停产的商品。行确实删掉了，但没有改写任何公式：剩下每行的 Value 公式仍指向原来的行号，
-    多数商品显示的是别的商品的值；合计行的 SUM 仍止于原来的最后一行，如今把合计行自己也包含了进去；Summary 表还在读取合计原来所在的单元格。
+    四个 Discontinued 行已删除，剩下的 14 个商品位于第 2–15 行，但没有改写任何公式：14 个 Value 公式中有 13 个仍使用原来的行号
+    （第 3 行是 =D4*E4），显示的是别的商品的值；合计行现在位于第 16 行，仍对 D2:D19 和 F2:F19 求和，这个区域把合计行自己也包含了进去，
+    LibreOffice 对两个合计都报 #VALUE!；Summary 表仍读取合计行原来所在的 Stock!D20 和 Stock!F20，这两个单元格现在是空的。
   claim: >
     I deleted the discontinued items from the Stock sheet. The remaining rows are contiguous, and
     the totals on Stock and Summary are formulas, so they stay up to date.
@@ -35,7 +38,7 @@ failure:
   explanation_zh: >
     在表格软件中删除行时，所有受影响的引用都会被改写；openpyxl 的 delete_rows() 只移动单元格。
     表格看起来很整齐，损坏只体现在没人重新计算过的公式结果里。
-  failing_rules: [values-correct, stock-totals-correct, summary-correct]
+  failing_rules: [values-correct, stock-totals-correct, summary-correct, totals-live]
 classification:
   # model | tool | environment | evaluator | undetermined (see docs/FAILURE_TAXONOMY.md)
   category: model

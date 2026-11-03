@@ -6,9 +6,9 @@
 
 中文版见下方 / [Chinese version below](#中文)
 
-> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), which
-> performs the naive steps described below. It is a reconstruction of a commonly reported pattern, not a
-> recording of a particular model. Recorded agent runs, when there are any, are listed under
+> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), a script
+> that makes the mistake described under "Observed in the failure artifact" below. It is a reconstruction
+> of a commonly reported pattern, not a recording of a particular model. Recorded agent runs, when there are any, are listed under
 > [Retests](#retests).
 
 ## Task
@@ -30,7 +30,7 @@ Category and Unit Price come from exact-match lookups, so every order shows its 
 
 ## Observed in the failure artifact
 
-The agent filled Category and Unit Price with =VLOOKUP(B2,Products!$A$2:$C$17,2) and left out the fourth argument. VLOOKUP then defaults to approximate match, which assumes the product list is sorted by SKU. It is not, so the lookup returns some neighbouring product's category and price for many orders. Every cell shows a valid-looking value and nothing is flagged as an error.
+Category and Unit Price hold =VLOOKUP(B2,Products!$A$2:$C$17,2) and =VLOOKUP(B2,Products!$A$2:$C$17,3) without the fourth argument, so they use approximate match on a product list that is not sorted by SKU. Recalculated with LibreOffice, 9 of the 21 categories and 14 of the 21 unit prices (and the amounts computed from them) belong to another product. Every cell shows a valid-looking value; none is an error.
 
 The illustrative claim that goes with this reconstruction (written for the case, not quoted from a run):
 
@@ -45,7 +45,7 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 | `categories-correct` | value | Every order shows the category of its own SKU | **FAIL**: 9 of 21 categories are wrong, e.g. O-5003 (P-410): 'Electronics' instead of 'Stationery'; O-5012 (P-469): 'Electronics' instead of 'Kitchen'; O-5015 (P-410): 'Electronics' instead of 'Stationery' |
 | `prices-correct` | value | Every order shows the unit price of its own SKU | **FAIL**: 14 of 21 unit prices are wrong, e.g. O-5002 (P-575): 74.57 instead of 109.11; O-5003 (P-410): 310.22 instead of 152.06; O-5004 (P-575): 74.57 instead of 109.11 |
 | `amounts-correct` | value | Amount = Qty x the product's unit price on every order | **FAIL**: 14 of 21 amounts are wrong, e.g. O-5002 (P-575): 1715.11 instead of 2509.53; O-5003 (P-410): 930.66 instead of 456.18; O-5004 (P-575): 1715.11 instead of 2509.53 |
-| `lookups-live` | live | Changing a price on Products updates the matching orders | pass |
+| `lookups-live` | live | Orders follow when every category and price on Products is changed | pass |
 | `data-unchanged` | no collateral damage | Orders (Order, SKU, Qty) and the Products sheet are unchanged | pass |
 
 Files: [`failure/orders.xlsx`](failure/orders.xlsx) (graded in [`failure/grade.json`](failure/grade.json)); the steps that produced it: [`failure.py`](failure.py).
@@ -74,7 +74,7 @@ failbook run xlsx-009 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-009 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-009 --seeds 3`): [`reference.py`](reference.py) and [`alt_vlookup_exact.py`](alt_vlookup_exact.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-009 --seeds 3`): [`reference.py`](reference.py) and [`alt_vlookup_exact.py`](alt_vlookup_exact.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_partial_static.py`](fail_partial_static.py) and [`fail_static_category.py`](fail_static_category.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -83,6 +83,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 ## Limitations
 
 - Approximate VLOOKUP on unsorted data is not standardised: Excel and LibreOffice may return different wrong rows. The rules only check for the correct values, so both engines flag the failure, but the wrong values shown can differ.
+- The live rule changes every product's category and price at once and checks only the order cells that were right before the change; cells that were already wrong are reported by the value rules, not again by the live rule.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
 ---
@@ -91,7 +92,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 **查找公式没有使用精确匹配，返回了别的产品的数据**
 
-> **关于这条记录：** 失败产物由 [`failure.py`](failure.py) 执行下述朴素步骤生成，是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
+> **关于这条记录：** 失败产物由脚本 [`failure.py`](failure.py) 生成，它会犯下文“失败产物中观察到的情况”所述的错误。这是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
 
 ### 任务
 
@@ -112,7 +113,7 @@ Category 与 Unit Price 来自精确匹配查找，每个订单显示其 SKU 对
 
 ### 失败产物中观察到的情况
 
-智能体用 =VLOOKUP(B2,Products!$A$2:$C$17,2) 填写 Category 和 Unit Price，省略了第四个参数。此时 VLOOKUP 默认为近似匹配，并假定产品表按 SKU 排序；而产品表并未排序，于是很多订单查到的是相邻某个产品的类别和单价。每个单元格都显示着看似有效的值，没有任何错误提示。
+Category 和 Unit Price 中是 =VLOOKUP(B2,Products!$A$2:$C$17,2) 和 =VLOOKUP(B2,Products!$A$2:$C$17,3)，省略了第四个参数，因此是在未按 SKU 排序的产品表上做近似匹配。用 LibreOffice 重新计算后，21 个订单中有 9 个类别、14 个单价（以及据此算出的金额）属于别的产品。每个单元格都显示着看似有效的值，没有一个是错误值。
 
 与该复现配套的示例声明（为本案例撰写，并非摘自真实运行）：
 
@@ -127,7 +128,7 @@ Category 与 Unit Price 来自精确匹配查找，每个订单显示其 SKU 对
 | `categories-correct` | 数值 | 每个订单显示的都是其 SKU 对应的类别 | **FAIL**: 9 of 21 categories are wrong, e.g. O-5003 (P-410): 'Electronics' instead of 'Stationery'; O-5012 (P-469): 'Electronics' instead of 'Kitchen'; O-5015 (P-410): 'Electronics' instead of 'Stationery' |
 | `prices-correct` | 数值 | 每个订单显示的都是其 SKU 对应的单价 | **FAIL**: 14 of 21 unit prices are wrong, e.g. O-5002 (P-575): 74.57 instead of 109.11; O-5003 (P-410): 310.22 instead of 152.06; O-5004 (P-575): 74.57 instead of 109.11 |
 | `amounts-correct` | 数值 | 每个订单 Amount = Qty × 该产品单价 | **FAIL**: 14 of 21 amounts are wrong, e.g. O-5002 (P-575): 1715.11 instead of 2509.53; O-5003 (P-410): 930.66 instead of 456.18; O-5004 (P-575): 1715.11 instead of 2509.53 |
-| `lookups-live` | 实时性 | 修改 Products 表中的价格后，对应订单随之更新 | pass |
+| `lookups-live` | 实时性 | 修改 Products 表中所有类别和价格后，订单随之更新 | pass |
 | `data-unchanged` | 无连带破坏 | 订单（Order、SKU、Qty）与 Products 表保持不变 | pass |
 
 ### 解释
@@ -147,4 +148,5 @@ Category 与 Unit Price 来自精确匹配查找，每个订单显示其 SKU 对
 ### 限制
 
 - 在未排序数据上做近似 VLOOKUP 没有统一标准：Excel 与 LibreOffice 可能返回不同的错误行。规则只检查正确值，所以两个引擎都会判失败，但显示的错误值可能不同。
+- 实时性规则一次性修改所有产品的类别和价格，只检查修改前就正确的订单单元格；原本就错的单元格由数值规则报告，实时性规则不再重复报告。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

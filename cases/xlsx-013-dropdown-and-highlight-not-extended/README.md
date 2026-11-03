@@ -6,9 +6,9 @@
 
 中文版见下方 / [Chinese version below](#中文)
 
-> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), which
-> performs the naive steps described below. It is a reconstruction of a commonly reported pattern, not a
-> recording of a particular model. Recorded agent runs, when there are any, are listed under
+> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), a script
+> that makes the mistake described under "Observed in the failure artifact" below. It is a reconstruction
+> of a commonly reported pattern, not a recording of a particular model. Recorded agent runs, when there are any, are listed under
 > [Retests](#retests).
 
 ## Task
@@ -35,7 +35,7 @@ The Status dropdown and the red 'Blocked' highlight cover every task row, includ
 
 ## Observed in the failure artifact
 
-The agent appended five tasks below the tracker. The Status dropdown and the red "Blocked" highlight are defined for a fixed range (D2:D13) that ends at the old last row, so the new rows accept any text and a blocked task is not highlighted. The data itself is correct.
+The five new tasks are in rows 14 to 18 with the given values. The Status dropdown and the red "Blocked" highlight are still defined for D2:D13 only, which ends at the old last row, so the new rows accept any text and the two new "Blocked" tasks (rows 15 and 16) are not highlighted.
 
 The illustrative claim that goes with this reconstruction (written for the case, not quoted from a run):
 
@@ -49,7 +49,7 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 |---|---|---|---|
 | `tasks-added` | content | The new tasks are appended after the existing ones with the given values | pass |
 | `dropdown-covers-new-rows` | structure | The Status dropdown applies to every task row, including the new ones | **FAIL**: the Status dropdown does not cover D14, D15, D16, D17, D18 |
-| `highlight-covers-new-rows` | structure | The red 'Blocked' highlight applies to every task row, including the new ones | **FAIL**: the 'Blocked' highlight does not cover D14, D15, D16, D17, D18 |
+| `highlight-covers-new-rows` | structure | Every task row, including the new ones, is highlighted in red exactly when its Status is 'Blocked' | **FAIL**: D15, D16 (Status 'Blocked') are not highlighted in red; for D15: no conditional format with a colour applies to it |
 | `existing-unchanged` | no collateral damage | The existing tasks are unchanged | pass |
 
 Files: [`failure/tracker.xlsx`](failure/tracker.xlsx) (graded in [`failure/grade.json`](failure/grade.json)); the steps that produced it: [`failure.py`](failure.py).
@@ -78,7 +78,7 @@ failbook run xlsx-013 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-013 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-013 --seeds 3`): [`reference.py`](reference.py) and [`alt_whole_column.py`](alt_whole_column.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-013 --seeds 3`): [`reference.py`](reference.py), [`alt_begins_with.py`](alt_begins_with.py), [`alt_named_status_list.py`](alt_named_status_list.py) and [`alt_whole_column.py`](alt_whole_column.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_absolute_ref.py`](fail_absolute_ref.py), [`fail_green_highlight.py`](fail_green_highlight.py) and [`fail_offset_formula.py`](fail_offset_formula.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -86,7 +86,8 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 ## Limitations
 
-- Highlight detection accepts cellIs, expression and containsText rules that mention 'Blocked' and set a style; other rule types are not recognised.
+- The highlight rule evaluates the conditional formats on each Status cell for the current Status and for each of the four statuses. It understands cell-value rules, text rules (contains, begins with, ends with) and formula rules built from cell references, text, comparisons and a few functions (AND, OR, NOT, IF, EXACT, SEARCH, FIND, LEFT, RIGHT, LEN, TRIM, ISNUMBER, ISERROR ...). Other rule types and functions, and colours it cannot resolve, make the rule inconclusive. "Red" is judged by hue, so light red fills such as FFC7CE count. A cell's own fill is not considered, only conditional formatting.
+- A dropdown whose options come from a range or from a defined name that stands for a fixed range is resolved; other sources (INDIRECT, OFFSET) make the dropdown rule inconclusive.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
 ---
@@ -95,7 +96,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 **新增的行既没有下拉列表，也没有高亮规则**
 
-> **关于这条记录：** 失败产物由 [`failure.py`](failure.py) 执行下述朴素步骤生成，是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
+> **关于这条记录：** 失败产物由脚本 [`failure.py`](failure.py) 生成，它会犯下文“失败产物中观察到的情况”所述的错误。这是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
 
 ### 任务
 
@@ -121,7 +122,7 @@ Status 下拉列表和 'Blocked' 红色高亮覆盖所有任务行（含五个�
 
 ### 失败产物中观察到的情况
 
-智能体在任务表末尾追加了五条任务。但 Status 下拉列表和"Blocked"红色高亮都只定义在一个固定区域（D2:D13），止于原来的最后一行。于是新行可以随意输入任何文本，被阻塞的任务也不会高亮。数据本身倒是正确的。
+五条新任务已按给定内容写在第 14–18 行。但 Status 下拉列表和"Blocked"红色高亮仍只定义在 D2:D13，止于原来的最后一行。于是新行可以输入任何文本，两条新的"Blocked"任务（第 15、16 行）也没有高亮。
 
 与该复现配套的示例声明（为本案例撰写，并非摘自真实运行）：
 
@@ -135,7 +136,7 @@ Status 下拉列表和 'Blocked' 红色高亮覆盖所有任务行（含五个�
 |---|---|---|---|
 | `tasks-added` | 内容 | 新任务按给定内容追加在现有任务之后 | pass |
 | `dropdown-covers-new-rows` | 结构 | Status 下拉列表覆盖所有任务行（含新行） | **FAIL**: the Status dropdown does not cover D14, D15, D16, D17, D18 |
-| `highlight-covers-new-rows` | 结构 | 'Blocked' 红色高亮覆盖所有任务行（含新行） | **FAIL**: the 'Blocked' highlight does not cover D14, D15, D16, D17, D18 |
+| `highlight-covers-new-rows` | 结构 | 所有任务行（含新行）在且仅在 Status 为 'Blocked' 时显示红色高亮 | **FAIL**: D15, D16 (Status 'Blocked') are not highlighted in red; for D15: no conditional format with a colour applies to it |
 | `existing-unchanged` | 无连带破坏 | 原有任务保持不变 | pass |
 
 ### 解释
@@ -154,5 +155,6 @@ Status 下拉列表和 'Blocked' 红色高亮覆盖所有任务行（含五个�
 
 ### 限制
 
-- 高亮识别接受提到 'Blocked' 并设置样式的 cellIs、expression、containsText 规则，其他类型的规则识别不了。
+- 高亮规则针对每个 Status 单元格，分别在当前状态和四种状态下计算条件格式的效果。它能理解"单元格值"规则、文本规则（包含、开头是、结尾是），以及由单元格引用、文本、比较和少数函数（AND、OR、NOT、IF、EXACT、SEARCH、FIND、LEFT、RIGHT、LEN、TRIM、ISNUMBER、ISERROR 等）组成的公式规则。其他规则类型、函数或无法解析的颜色会使该规则判为"无法判定"。"红色"按色相判断，因此 FFC7CE 这类浅红填充也算。只考虑条件格式，不考虑单元格本身的填充色。
+- 下拉列表的选项来自区域或指向固定区域的命名区域时会被解析；其他来源（INDIRECT、OFFSET）会使下拉列表规则判为"无法判定"。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

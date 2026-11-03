@@ -19,6 +19,13 @@
       "detail": ""
     },
     {
+      "id": "discounts-percent-format",
+      "kind": "structure",
+      "title": "The discount cells are formatted as percentages",
+      "status": "pass",
+      "detail": ""
+    },
+    {
       "id": "line-totals-correct",
       "kind": "value",
       "title": "Line Total = Unit Price x Qty x (1 - Discount) on every line",
@@ -28,7 +35,7 @@
     {
       "id": "line-totals-live",
       "kind": "live",
-      "title": "Line Total follows a change of Discount",
+      "title": "Every Line Total follows changes of its Unit Price, Discount and Qty",
       "status": "pass",
       "detail": ""
     },
@@ -37,14 +44,14 @@
       "kind": "value",
       "title": "Summary shows the correct total revenue, total units and average unit price",
       "status": "fail",
-      "detail": "Total revenue is 333.00, expected 27,468.65"
+      "detail": "Total revenue is 333.00, expected 27,468.645 (difference -27,135.645)"
     },
     {
       "id": "summary-live",
       "kind": "live",
-      "title": "Summary updates when a quantity on Lines changes",
+      "title": "Summary total revenue, total units and average unit price follow changes on Lines",
       "status": "fail",
-      "detail": "adding 5 units to the first line changed Total units by 0, expected +5"
+      "detail": "in a copy of the file where every line's Unit Price, Discount and Qty were changed, Total revenue is 399.00, expected 22,310.9448 (difference -21,911.9448); Total units is 3.96, expected 399.00 (difference -395.04)"
     },
     {
       "id": "lines-unchanged",

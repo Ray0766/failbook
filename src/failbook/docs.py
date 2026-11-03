@@ -151,9 +151,9 @@ failbook export harbor {case.id} --out dist/harbor
 
 中文版见下方 / [Chinese version below](#中文)
 
-> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), which
-> performs the naive steps described below. It is a reconstruction of a commonly reported pattern, not a
-> recording of a particular model. Recorded agent runs, when there are any, are listed under
+> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), a script
+> that makes the mistake described under "Observed in the failure artifact" below. It is a reconstruction
+> of a commonly reported pattern, not a recording of a particular model. Recorded agent runs, when there are any, are listed under
 > [Retests](#retests).
 
 ## Task
@@ -213,7 +213,7 @@ How the checker itself is validated (`failbook verify {case.id} --seeds 3`): {_v
 
 **{case.title_zh}**
 
-> **关于这条记录：** 失败产物由 [`failure.py`](failure.py) 执行下述朴素步骤生成，是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
+> **关于这条记录：** 失败产物由脚本 [`failure.py`](failure.py) 生成，它会犯下文“失败产物中观察到的情况”所述的错误。这是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
 
 ### 任务
 

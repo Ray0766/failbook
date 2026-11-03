@@ -62,6 +62,12 @@ def _by_name(ctx):
     return {s["name"]: s for s in ctx.meta["staff"]}
 
 
+def _num(x, sign=False):
+    """A number with thousands separators and only the decimals it needs (at most 4)."""
+    text = f"{x:+,.4f}" if sign else f"{x:,.4f}"
+    return text.rstrip("0").rstrip(".")
+
+
 def scenarios(ctx):
     ws = ctx.ws(SHEET)
     by_name = _by_name(ctx)
@@ -132,16 +138,35 @@ def sorted_rows(ctx):
 def bonus_matches_row(ctx):
     values = ctx.values()
     by_name = _by_name(ctx)
-    wrong = []
-    for r, rec in _records(ctx, values):
+    records = _records(ctx, values)
+    row_of = {rec[0]: r for r, rec in records}
+    foreign, wrong, checked = [], [], 0
+    for r, rec in records:
         person = by_name.get(rec[0])
         if not person:
             continue
+        checked += 1
         got = ctx.num(values, X.make_ref(SHEET, (r, 5)), f"Bonus of {rec[0]}")
         exp = person["salary"] * person["rate"]
-        if not X.close(got, exp):
-            wrong.append(f"{rec[0]} (row {r}): {got:,.0f} instead of {exp:,.0f}")
-    require(not wrong, f"{len(wrong)} bonus(es) belong to another row, e.g. " + "; ".join(wrong[:3]))
+        if X.close(got, exp):
+            continue
+        # Name another person only when the value equals that person's Base Salary x Bonus Rate.
+        owners = [s for s in ctx.meta["staff"] if s is not person and X.close(got, s["salary"] * s["rate"])]
+        if owners:
+            o = owners[0]
+            where = f" (row {row_of[o['name']]})" if o["name"] in row_of else ""
+            foreign.append(f"{rec[0]} (row {r}): {_num(got)}, the Base Salary x Bonus Rate of {o['name']}{where}, "
+                           f"instead of {_num(exp)}")
+        else:
+            wrong.append(f"{rec[0]} (row {r}): {_num(got)} instead of {_num(exp)} "
+                         f"(difference {_num(got - exp, sign=True)})")
+    parts = []
+    if foreign:
+        parts.append(f"{len(foreign)} of {checked} bonuses equal another person's Base Salary x Bonus Rate instead "
+                     "of their own, e.g. " + "; ".join(foreign[:3]))
+    if wrong:
+        parts.append(f"{len(wrong)} of {checked} bonuses are wrong, e.g. " + "; ".join(wrong[:3]))
+    require(not parts, ". ".join(parts))
 
 
 @rule(
@@ -152,14 +177,24 @@ def bonus_matches_row(ctx):
     requirement="The Bonus column must remain a formula: Base Salary x Bonus Rate of the same row.",
 )
 def bonus_is_live(ctx):
-    values = ctx.values(scenario="raise")
+    base, values = ctx.values(), ctx.values(scenario="raise")
     by_name = _by_name(ctx)
     ws = ctx.ws(SHEET)
+    wrong, checked = [], 0
     for r in _rows(ctx):
         person = by_name.get(ws.cell(r, 1).value)
         if not person:
             continue
+        checked += 1
         salary = person["salary"] + 1000 * (r - 1)
-        got = ctx.num(values, X.make_ref(SHEET, (r, 5)), f"Bonus of {person['name']}")
-        require(X.close(got, salary * person["rate"]),
-                f"after changing {person['name']}'s salary, their Bonus is {got:,.0f}, expected {salary * person['rate']:,.0f}")
+        ref = X.make_ref(SHEET, (r, 5))
+        got = ctx.num(values, ref, f"Bonus of {person['name']}")
+        exp = salary * person["rate"]
+        if X.close(got, exp):
+            continue
+        before = base[ref]
+        same = ", the same as before the change" if X.is_number(before) and X.close(before, got) else ""
+        wrong.append(f"{person['name']} (row {r}): with Base Salary {_num(salary)} the Bonus is {_num(got)}, "
+                     f"expected {_num(exp)}{same}")
+    require(not wrong, f"in a copy of the file where every Base Salary was raised, {len(wrong)} of {checked} "
+                       "bonuses did not follow, e.g. " + "; ".join(wrong[:3]))

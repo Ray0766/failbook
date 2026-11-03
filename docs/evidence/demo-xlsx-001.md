@@ -17,10 +17,11 @@ verdict: FAIL   (seed 0, engine: LibreOffice 24.2.7.2 420(Build:2))
   [PASS] new-orders-added: Each new order appears once, with the given date, customer, qty and price
   [PASS] existing-orders-unchanged: The original orders are unchanged and in their original order
   [PASS] amounts-correct: Amount equals Qty x Unit Price on every order row
+  [PASS] amounts-are-live: Every order's Amount follows its Qty and Unit Price (new rows and original rows)
   [FAIL] totals-include-all-orders: The Total row sums Qty and Amount over all orders, old and new
-         Total Qty is 198, expected 269 (difference 71)
-  [FAIL] totals-are-live: Changing a new order's Qty updates its Amount and the totals
-         adding 10 to the Qty of SO-1161 changed Total Qty by 0, expected +10
+         Total Qty is 198, expected 269 (difference -71)
+  [FAIL] totals-are-live: Changing the Qty and Unit Price of the orders updates Total Qty and Total Amount
+         in a copy of the file where each order's Qty was raised by a different amount (+91 in all) and every Unit Price by 1.00, Total Qty changed by +55, expected +91 (difference -36)
   [PASS] total-row-last: The Total row is directly below the last order
 
 $ failbook audit $WORK/attempt/sales.xlsx --before $WORK/original/sales.xlsx
@@ -37,12 +38,11 @@ verdict: PASS   (seed 0, engine: LibreOffice 24.2.7.2 420(Build:2))
   [PASS] new-orders-added: Each new order appears once, with the given date, customer, qty and price
   [PASS] existing-orders-unchanged: The original orders are unchanged and in their original order
   [PASS] amounts-correct: Amount equals Qty x Unit Price on every order row
+  [PASS] amounts-are-live: Every order's Amount follows its Qty and Unit Price (new rows and original rows)
   [PASS] totals-include-all-orders: The Total row sums Qty and Amount over all orders, old and new
-  [PASS] totals-are-live: Changing a new order's Qty updates its Amount and the totals
+  [PASS] totals-are-live: Changing the Qty and Unit Price of the orders updates Total Qty and Total Amount
   [PASS] total-row-last: The Total row is directly below the last order
 
 $ failbook audit $WORK/fixed/sales.xlsx --before $WORK/original/sales.xlsx
 no findings
 ```
-
-What it shows: the grader names the exact cells and numbers that are wrong; the fix's task-agnostic self-check reports the same defect from the file alone; after the correction both are clean. What it does not show: that an AI agent equipped with the fix would make the correction. That needs recorded agent runs (see [docs/PROGRESS.md](../PROGRESS.md)).

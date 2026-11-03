@@ -1,6 +1,7 @@
 import datetime as dt
 
 import openpyxl
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
 from failbook import kit
@@ -110,6 +111,13 @@ def customer_data_unchanged(ctx):
     values = ctx.values()
     vals = values.ws(CUST)
     ws = ctx.ws(CUST)
+    before = ctx.input_wb(data_only=False)[CUST]
+    for col in range(1, len(HEADERS) + 1):
+        a, b = before.cell(1, col).value, vals.cell(1, col).value
+        require(a == b, f"header {get_column_letter(col)}1 changed from {X.show(a)} to {X.show(b)}")
+    last = 1 + len(ctx.meta["customers"])
+    extra = [f"{get_column_letter(c)}{r}" for r, c, _ in X.used_cells(ws) if r > last or c > len(HEADERS)]
+    require(not extra, f"the Customers sheet has new content outside the table: {', '.join(extra[:5])}")
     for r, c, _, region in _expected_rows(ctx.meta):
         got = [vals.cell(r, col).value for col in (1, 2, 4, 5, 6)]
         exp = [c["id"], c["name"], c["tier"], kit.from_iso(c["since"]), c["spend"]]
@@ -142,29 +150,69 @@ def other_sheets_unchanged(ctx):
 
 @rule(
     "formatting-kept",
-    "Header style, number formats, column widths and the frozen header are kept",
+    "Cell formatting, column widths, the frozen header and the filter settings are kept",
     kind="structure",
-    title_zh="表头样式、数字格式、列宽和冻结表头都保持原样",
+    title_zh="单元格格式、列宽、冻结表头和筛选设置都保持原样",
     requirement="Keep ... the formatting ... exactly as it is.",
 )
 def formatting_kept(ctx):
     ws = ctx.ws(CUST)
-    before = ctx.input_wb(data_only=False)[CUST]
-    for col in range(1, len(HEADERS) + 1):
-        a, b = before.cell(1, col), ws.cell(1, col)
-        require(bool(b.font and b.font.b) == bool(a.font and a.font.b), f"header {a.value!r} lost its bold font")
-        fa = (a.fill.fgColor.rgb if a.fill and a.fill.fill_type else None)
-        fb = (b.fill.fgColor.rgb if b.fill and b.fill.fill_type else None)
-        require(fa == fb, f"header {a.value!r} fill changed from {fa} to {fb}")
-    for r in range(2, 2 + len(ctx.meta["customers"])):
-        for col in (5, 6):
-            fa, fb = before.cell(r, col).number_format, ws.cell(r, col).number_format
-            require(fa == fb, f"number format of {ws.cell(r, col).coordinate} changed from {fa!r} to {fb!r}")
+    original = ctx.input_wb(data_only=False)
+    before = original[CUST]
+    wb = ctx.wb()
+    for r in range(1, 2 + len(ctx.meta["customers"])):
+        for col in range(1, len(HEADERS) + 1):
+            a, b = before.cell(r, col), ws.cell(r, col)
+            for (what, va), (_, vb) in zip(_style(a, original), _style(b, wb)):
+                require(va is None or vb is None or va == vb,
+                        f"{what} of {b.coordinate} changed from {_show_style(va)} to {_show_style(vb)}")
+            require(a.number_format == b.number_format,
+                    f"number format of {b.coordinate} changed from {a.number_format!r} to {b.number_format!r}")
     for letter in "ABCDEFG":
         wa = before.column_dimensions[letter].width or 0
         wb_ = ws.column_dimensions[letter].width or 0
         require(abs(wa - wb_) <= 1.5, f"column {letter} width changed from {wa:g} to {wb_:g}")
     require(ws.freeze_panes == before.freeze_panes, f"frozen panes changed from {before.freeze_panes} to {ws.freeze_panes}")
+    require(ws.auto_filter.ref == before.auto_filter.ref,
+            f"the filter changed from {before.auto_filter.ref or 'none'} to {ws.auto_filter.ref or 'none'}")
+    n_before = sum(len(cf.rules) for cf in before.conditional_formatting)
+    n_after = sum(len(cf.rules) for cf in ws.conditional_formatting)
+    require(n_after == n_before, f"the sheet now has {n_after} conditional-format rule(s), the input had {n_before}")
+
+
+def _style(cell, wb):
+    """What a reader sees of a cell's style, as comparable values (None where it cannot be resolved)."""
+    font, fill = cell.font, cell.fill
+    return [
+        ("bold", bool(font.b)),
+        ("italic", bool(font.i)),
+        ("underline", font.u or "none"),
+        ("strikethrough", bool(font.strike)),
+        ("font colour", _font_colour(font, wb)),
+        ("fill", _fill(fill, wb)),
+        ("horizontal alignment", cell.alignment.horizontal or "general"),
+    ]
+
+
+def _font_colour(font, wb):
+    color = font.color
+    if color is None or getattr(color, "auto", None) or (color.type == "rgb" and color.rgb == "00000000"):
+        return "000000"  # automatic: the default text colour
+    return X.colour_rgb(color, wb)
+
+
+def _fill(fill, wb):
+    if fill is None or fill.fill_type in (None, "none"):
+        return "none"
+    if fill.fill_type != "solid":
+        return None if fill.__class__.__name__ != "PatternFill" else (fill.fill_type,)
+    return X.colour_rgb(fill.fgColor, wb)
+
+
+def _show_style(value):
+    if value is True or value is False:
+        return "on" if value else "off"
+    return repr(value) if isinstance(value, str) else str(value)
 
 
 @rule(

@@ -6,9 +6,9 @@
 
 中文版见下方 / [Chinese version below](#中文)
 
-> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), which
-> performs the naive steps described below. It is a reconstruction of a commonly reported pattern, not a
-> recording of a particular model. Recorded agent runs, when there are any, are listed under
+> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), a script
+> that makes the mistake described under "Observed in the failure artifact" below. It is a reconstruction
+> of a commonly reported pattern, not a recording of a particular model. Recorded agent runs, when there are any, are listed under
 > [Retests](#retests).
 
 ## Task
@@ -36,11 +36,11 @@ Then:
 
 ## Expected
 
-Discount is column C, Line Total uses the new column positions, and the Summary formulas point at Line Total (E), Qty (D) and Unit Price (B).
+Discount is column C, holding the listed discounts as fractions formatted as percentages. Every Line Total is Unit Price × Qty × (1 − Discount) and follows its inputs, and the Summary shows the correct total revenue, total units and average unit price and follows changes on Lines (for example with formulas that point at Line Total (E), Qty (D) and Unit Price (B)).
 
 ## Observed in the failure artifact
 
-The agent inserted the Discount column with openpyxl's insert_cols(), filled in the discounts and rewrote the Line Total formulas. It did not touch the Summary sheet, because nothing there seemed related. insert_cols() does not update references, so Summary still reads Lines!D (now Qty) as revenue and Lines!C (now Discount) as units. Its numbers are wrong, with no error shown.
+In the failure file, Lines has the new Discount column in C (0.05, 0.15, 0, ... formatted 0%), Qty in D and a Line Total formula on every line in E (for example =B2*D2*(1-C2)), all with the right values. The Summary sheet still holds the formulas of the input: Total revenue is =SUM(Lines!D2:D12), which now adds up Qty, and Total units is =SUM(Lines!C2:C12), which now adds up the discounts. After recalculation Total revenue is 333.00 instead of 27,468.645 and Total units 0.45 instead of 333, while Average unit price (=AVERAGE(Lines!B2:B12)) is still right at 77.26. No cell shows an error. In a copy of the file where every line's Unit Price, Discount and Qty are changed, Total units becomes 3.96 instead of 399.
 
 The illustrative claim that goes with this reconstruction (written for the case, not quoted from a run):
 
@@ -54,10 +54,11 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 |---|---|---|---|
 | `columns-in-order` | content | Lines columns are Product, Unit Price, Discount, Qty, Line Total | pass |
 | `discounts-entered` | content | Each line has the listed discount as a fraction (0 when not listed) | pass |
+| `discounts-percent-format` | structure | The discount cells are formatted as percentages | pass |
 | `line-totals-correct` | value | Line Total = Unit Price x Qty x (1 - Discount) on every line | pass |
-| `line-totals-live` | live | Line Total follows a change of Discount | pass |
-| `summary-correct` | value | Summary shows the correct total revenue, total units and average unit price | **FAIL**: Total revenue is 333.00, expected 27,468.65 |
-| `summary-live` | live | Summary updates when a quantity on Lines changes | **FAIL**: adding 5 units to the first line changed Total units by 0, expected +5 |
+| `line-totals-live` | live | Every Line Total follows changes of its Unit Price, Discount and Qty | pass |
+| `summary-correct` | value | Summary shows the correct total revenue, total units and average unit price | **FAIL**: Total revenue is 333.00, expected 27,468.645 (difference -27,135.645) |
+| `summary-live` | live | Summary total revenue, total units and average unit price follow changes on Lines | **FAIL**: in a copy of the file where every line's Unit Price, Discount and Qty were changed, Total revenue is 399.00, expected 22,310.9448 (difference -21,911.9448); Total units is 3.96, expected 399.00 (difference -395.04) |
 | `lines-unchanged` | no collateral damage | Products, unit prices and quantities are unchanged | pass |
 
 Files: [`failure/orders.xlsx`](failure/orders.xlsx) (graded in [`failure/grade.json`](failure/grade.json)); the steps that produced it: [`failure.py`](failure.py).
@@ -86,7 +87,7 @@ failbook run xlsx-005 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-005 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-005 --seeds 3`): [`reference.py`](reference.py) must pass, also after LibreOffice opens and re-saves its output; the failure must fail on the rules listed in `case.yaml`; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-005 --seeds 3`): [`reference.py`](reference.py), [`alt_rebuild_sumproduct.py`](alt_rebuild_sumproduct.py) and [`alt_round_cents.py`](alt_round_cents.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_no_percent_format.py`](fail_no_percent_format.py) and [`fail_partial_values.py`](fail_partial_values.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -95,6 +96,9 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 ## Limitations
 
 - Average unit price is unaffected by the insertion in this layout, so that figure alone would not reveal the stale references.
+- Liveness is tested in one changed copy of the file (every line's Unit Price, Discount and Qty changed by a different amount). Formula text is never inspected, so a formula that happens to give the right results for both the original and the changed inputs would pass.
+- Line Totals are accepted exact or rounded to whole cents (at most one cent from the exact amount, in either direction). Total revenue is accepted if it is exact, rounded to whole cents, or the sum of the accepted Line Totals. Other rounding, for example to 0.1, fails.
+- An empty Discount cell is accepted for a product that is not listed (it counts as 0 in the formulas), and the number format of an empty cell is not checked.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
 Further reading:
@@ -107,7 +111,7 @@ Further reading:
 
 **插入一列后，另一张工作表上的公式悄悄错位**
 
-> **关于这条记录：** 失败产物由 [`failure.py`](failure.py) 执行下述朴素步骤生成，是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
+> **关于这条记录：** 失败产物由脚本 [`failure.py`](failure.py) 生成，它会犯下文“失败产物中观察到的情况”所述的错误。这是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
 
 ### 任务
 
@@ -134,11 +138,11 @@ Further reading:
 
 ### 预期结果
 
-Discount 位于 C 列，Line Total 使用新的列位置，Summary 公式指向 Line Total（E）、Qty（D）和 Unit Price（B）。
+Discount 位于 C 列，存放清单中的折扣（小数，百分比格式）。每行 Line Total 都等于 Unit Price × Qty × (1 − Discount) 并随输入变化；Summary 显示正确的总收入、总数量和平均单价，并随 Lines 表的变化而更新（例如公式指向 Line Total（E）、Qty（D）和 Unit Price（B））。
 
 ### 失败产物中观察到的情况
 
-智能体用 openpyxl 的 insert_cols() 插入 Discount 列，填好折扣，并改写了 Line Total 公式。它没动 Summary 表，因为看起来无关。但 insert_cols() 不会更新引用：Summary 仍把 Lines!D（现在是 Qty）当作收入，把 Lines!C（现在是 Discount）当作数量。数字全错，却不显示任何错误。
+失败文件中，Lines 表的 C 列是新的 Discount 列（0.05、0.15、0……，格式为 0%），D 列是 Qty，E 列每一行都是 Line Total 公式（如 =B2*D2*(1-C2)），数值都正确。Summary 表仍是输入文件里的公式：Total revenue 为 =SUM(Lines!D2:D12)，现在加总的是 Qty；Total units 为 =SUM(Lines!C2:C12)，现在加总的是折扣。重新计算后，Total revenue 为 333.00（应为 27,468.645），Total units 为 0.45（应为 333），而 Average unit price（=AVERAGE(Lines!B2:B12)）仍正确，为 77.26。没有任何单元格显示错误。在把每行的 Unit Price、Discount 和 Qty 都改掉的副本中，Total units 变为 3.96，应为 399。
 
 与该复现配套的示例声明（为本案例撰写，并非摘自真实运行）：
 
@@ -152,10 +156,11 @@ Discount 位于 C 列，Line Total 使用新的列位置，Summary 公式指向 
 |---|---|---|---|
 | `columns-in-order` | 内容 | Lines 表的列依次为 Product、Unit Price、Discount、Qty、Line Total | pass |
 | `discounts-entered` | 内容 | 每行的折扣按清单以小数填写（未列出的为 0） | pass |
+| `discounts-percent-format` | 结构 | 折扣单元格为百分比格式 | pass |
 | `line-totals-correct` | 数值 | 每行 Line Total = Unit Price × Qty × (1 − Discount) | pass |
-| `line-totals-live` | 实时性 | 修改 Discount 后，Line Total 随之变化 | pass |
-| `summary-correct` | 数值 | Summary 显示正确的总收入、总数量和平均单价 | **FAIL**: Total revenue is 333.00, expected 27,468.65 |
-| `summary-live` | 实时性 | Lines 表的数量变化时，Summary 随之更新 | **FAIL**: adding 5 units to the first line changed Total units by 0, expected +5 |
+| `line-totals-live` | 实时性 | 每行 Line Total 都随本行的 Unit Price、Discount 和 Qty 变化 | pass |
+| `summary-correct` | 数值 | Summary 显示正确的总收入、总数量和平均单价 | **FAIL**: Total revenue is 333.00, expected 27,468.645 (difference -27,135.645) |
+| `summary-live` | 实时性 | Lines 表的数据变化时，Summary 的总收入、总数量和平均单价随之更新 | **FAIL**: in a copy of the file where every line's Unit Price, Discount and Qty were changed, Total revenue is 399.00, expected 22,310.9448 (difference -21,911.9448); Total units is 3.96, expected 399.00 (difference -395.04) |
 | `lines-unchanged` | 无连带破坏 | 产品、单价和数量保持不变 | pass |
 
 ### 解释
@@ -175,4 +180,7 @@ Discount 位于 C 列，Line Total 使用新的列位置，Summary 公式指向 
 ### 限制
 
 - 在这个布局下，平均单价不受插入影响，单看它发现不了引用过期。
+- 实时性只在一个修改过的副本中检验（每行的 Unit Price、Discount 和 Qty 各改为不同的值）。检查不读公式文本，因此若某个公式恰好在原始输入和修改后的输入下都给出正确结果，也会通过。
+- Line Total 可以是精确值，也可以取整到分（与精确值相差不超过 1 分，向上向下均可）。总收入若为精确值、取整到分的值，或各行已接受的 Line Total 之和，均判为正确。其他取整方式（例如取整到 0.1）判为失败。
+- 未列出的产品，Discount 单元格留空也被接受（在公式中按 0 计算），空单元格的数字格式不检查。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

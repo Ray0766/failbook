@@ -6,9 +6,9 @@
 
 中文版见下方 / [Chinese version below](#中文)
 
-> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), which
-> performs the naive steps described below. It is a reconstruction of a commonly reported pattern, not a
-> recording of a particular model. Recorded agent runs, when there are any, are listed under
+> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), a script
+> that makes the mistake described under "Observed in the failure artifact" below. It is a reconstruction
+> of a commonly reported pattern, not a recording of a particular model. Recorded agent runs, when there are any, are listed under
 > [Retests](#retests).
 
 ## Task
@@ -31,7 +31,7 @@ Rows are sorted by Department and then Name, every person's data stays on one ro
 
 ## Observed in the failure artifact
 
-The agent read the table, sorted the rows in Python and wrote them back. Names, departments, salaries and rates moved together correctly, but the Bonus formulas were copied as text: the row that now holds Ava's data still says =C2*D2, which is someone else's row. Every bonus is a real, plausible number that belongs to a different person.
+The rows are sorted by Department, then Name, and each person's Name, Department, Base Salary and Bonus Rate are still together, but each Bonus formula is the text from that person's original row. Ava Yilmaz is now on row 3 and her Bonus is =C13*D13: row 13 was her row before the sort and now holds Yuki Quist, so she shows Yuki's 16,650 instead of her own 2,625. 15 of the 16 bonuses equal another person's Base Salary × Bonus Rate; only Dina Khan, whose row did not move (row 4, =C4*D4), has her own.
 
 The illustrative claim that goes with this reconstruction (written for the case, not quoted from a run):
 
@@ -46,8 +46,8 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 | `header-kept` | no collateral damage | The header row is still at the top | pass |
 | `same-people` | no collateral damage | Every person's row is intact: nobody lost, duplicated or mixed up | pass |
 | `sorted` | content | Rows are sorted by Department, then by Name | pass |
-| `bonus-matches-row` | value | Each Bonus equals Base Salary x Bonus Rate of the same row | **FAIL**: 15 bonus(es) belong to another row, e.g. Arjun Wang (row 2): 5,850 instead of 10,950; Ava Yilmaz (row 3): 16,650 instead of 2,625; Dina Yilmaz (row 5): 2,625 instead of 15,600 |
-| `bonus-is-live` | live | Changing a salary changes the Bonus on that same row | **FAIL**: after changing Arjun Wang's salary, their Bonus is 6,100, expected 11,100 |
+| `bonus-matches-row` | value | Each Bonus equals Base Salary x Bonus Rate of the same row | **FAIL**: 15 of 16 bonuses equal another person's Base Salary x Bonus Rate instead of their own, e.g. Arjun Wang (row 2): 5,850, the Base Salary x Bonus Rate of Gao Huang (row 6), instead of 10,950; Ava Yilmaz (row 3): 16,650, the Base Salary x Bonus Rate of Yuki Quist (row 13), instead of 2,625; Dina Yilmaz (row 5): 2,625, the Base Salary x Bonus Rate of Ava Yilmaz (row 3), instead of 15,600 |
+| `bonus-is-live` | live | Changing a salary changes the Bonus on that same row | **FAIL**: in a copy of the file where every Base Salary was raised, 15 of 16 bonuses did not follow, e.g. Arjun Wang (row 2): with Base Salary 74,000 the Bonus is 6,100, expected 11,100; Ava Yilmaz (row 3): with Base Salary 54,500 the Bonus is 18,450, expected 2,725; Dina Yilmaz (row 5): with Base Salary 108,000 the Bonus is 2,725, expected 16,200 |
 
 Files: [`failure/staff.xlsx`](failure/staff.xlsx) (graded in [`failure/grade.json`](failure/grade.json)); the steps that produced it: [`failure.py`](failure.py).
 
@@ -92,7 +92,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 **排序后，每个公式仍指向原来的行**
 
-> **关于这条记录：** 失败产物由 [`failure.py`](failure.py) 执行下述朴素步骤生成，是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
+> **关于这条记录：** 失败产物由脚本 [`failure.py`](failure.py) 生成，它会犯下文“失败产物中观察到的情况”所述的错误。这是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
 
 ### 任务
 
@@ -114,7 +114,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 ### 失败产物中观察到的情况
 
-智能体读出表格，在 Python 里排序后写回。姓名、部门、薪资和比例都一起正确移动了，但 Bonus 公式是按原文本复制的：现在存放 Ava 数据的那一行，公式仍是 =C2*D2，指向的是别人的行。每个奖金都是一个真实、合理的数字，却属于另一个人。
+各行已按部门、再按姓名排序，每个人的 Name、Department、Base Salary、Bonus Rate 仍在同一行，但每个 Bonus 公式都是此人原来所在行的公式文本。Ava Yilmaz 现在在第 3 行，她的 Bonus 是 =C13*D13：第 13 行是她排序前所在的行，现在放的是 Yuki Quist，所以她显示的是 Yuki 的 16,650，而不是她自己的 2,625。16 个奖金中有 15 个等于另一个人的 Base Salary × Bonus Rate；只有位置没变的 Dina Khan（第 4 行，=C4*D4）是她自己的。
 
 与该复现配套的示例声明（为本案例撰写，并非摘自真实运行）：
 
@@ -129,8 +129,8 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 | `header-kept` | 无连带破坏 | 表头仍在第一行 | pass |
 | `same-people` | 无连带破坏 | 每个人的行完整：无丢失、无重复、无串行 | pass |
 | `sorted` | 内容 | 已按部门、再按姓名排序 | pass |
-| `bonus-matches-row` | 数值 | 每行的 Bonus 等于同一行的 Base Salary × Bonus Rate | **FAIL**: 15 bonus(es) belong to another row, e.g. Arjun Wang (row 2): 5,850 instead of 10,950; Ava Yilmaz (row 3): 16,650 instead of 2,625; Dina Yilmaz (row 5): 2,625 instead of 15,600 |
-| `bonus-is-live` | 实时性 | 修改某人的薪资后，同一行的 Bonus 随之变化 | **FAIL**: after changing Arjun Wang's salary, their Bonus is 6,100, expected 11,100 |
+| `bonus-matches-row` | 数值 | 每行的 Bonus 等于同一行的 Base Salary × Bonus Rate | **FAIL**: 15 of 16 bonuses equal another person's Base Salary x Bonus Rate instead of their own, e.g. Arjun Wang (row 2): 5,850, the Base Salary x Bonus Rate of Gao Huang (row 6), instead of 10,950; Ava Yilmaz (row 3): 16,650, the Base Salary x Bonus Rate of Yuki Quist (row 13), instead of 2,625; Dina Yilmaz (row 5): 2,625, the Base Salary x Bonus Rate of Ava Yilmaz (row 3), instead of 15,600 |
+| `bonus-is-live` | 实时性 | 修改某人的薪资后，同一行的 Bonus 随之变化 | **FAIL**: in a copy of the file where every Base Salary was raised, 15 of 16 bonuses did not follow, e.g. Arjun Wang (row 2): with Base Salary 74,000 the Bonus is 6,100, expected 11,100; Ava Yilmaz (row 3): with Base Salary 54,500 the Bonus is 18,450, expected 2,725; Dina Yilmaz (row 5): with Base Salary 108,000 the Bonus is 2,725, expected 16,200 |
 
 ### 解释
 

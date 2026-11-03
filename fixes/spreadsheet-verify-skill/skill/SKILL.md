@@ -42,29 +42,39 @@ behave like a spreadsheet application: most of them never rewrite formulas for y
 ## Verify before you report
 
 0. Before the first edit, keep a copy of the original: `cp data.xlsx /tmp/original-data.xlsx`.
-   After saving, run the audit script that ships with this skill (in its `scripts/` folder):
+1. After saving, run the audit script that ships with this skill (in its `scripts/` folder). It
+   recalculates every formula with LibreOffice, if installed, and saves that recalculated copy:
 
    ```bash
-   python3 <this-skill-dir>/scripts/audit_xlsx.py --before /tmp/original-data.xlsx data.xlsx
+   python3 <this-skill-dir>/scripts/audit_xlsx.py --before /tmp/original-data.xlsx --recalculated /tmp/recalc/data.xlsx data.xlsx
    ```
 
-   It needs only openpyxl (and LibreOffice, if installed, to recalculate). Fix every `[error]`.
-   Treat every `[warning]` as a question you must answer: either fix it or explain why it is intended.
-   The script does not know your task, so a clean result is necessary, not sufficient.
-1. Recalculate the saved file with a real engine, for example:
+   It needs only openpyxl (and LibreOffice to recalculate). Fix every `[error]`. Treat every
+   `[warning]` as a question you must answer: either fix it or explain why it is intended. A
+   finding marked "also in the original file" was there before your edit: change it if the task
+   needs it (for example, a total that must now update), otherwise leave it and mention it in your
+   report. The script does not know your task, so a clean result is
+   necessary, not sufficient. If it reports `recalculation-unavailable`, the values were not
+   checked: say so in your report.
+2. Read the results from the recalculated copy with
+   `openpyxl.load_workbook("/tmp/recalc/data.xlsx", data_only=True)`. (openpyxl writes formulas
+   without results, so reading your own output with `data_only=True` shows `None`, not the value.)
+   A plain `soffice --headless --convert-to xlsx` is not a recalculation: with its default
+   settings LibreOffice keeps the results already cached in an .xlsx file, so a file with stale
+   cached values (for example after editing the XML) still shows the old numbers. To recalculate
+   without the script, use a LibreOffice profile that sets `OOXMLRecalcMode` to 0 (always):
 
    ```bash
-   soffice --headless --convert-to xlsx --outdir /tmp/recalc your-file.xlsx
+   mkdir -p /tmp/lo-recalc/user
+   printf '%s\n' '<oor:items xmlns:oor="http://openoffice.org/2001/registry"><item oor:path="/org.openoffice.Office.Calc/Formula/Load"><prop oor:name="OOXMLRecalcMode" oor:op="fuse"><value>0</value></prop></item></oor:items>' > /tmp/lo-recalc/user/registrymodifications.xcu
+   soffice --headless --norestore -env:UserInstallation=file:///tmp/lo-recalc --convert-to xlsx --outdir /tmp/recalc data.xlsx
    ```
-
-   then read `/tmp/recalc/your-file.xlsx` with `openpyxl.load_workbook(..., data_only=True)`.
-   (openpyxl writes formulas without results, so reading your own output with `data_only=True`
-   shows `None`, not the value.)
-2. Compare the key results (totals, lookups, the cells you were asked about) with an independent
+3. Compare the key results (totals, lookups, the cells you were asked about) with an independent
    calculation in Python from the raw data.
-3. Search all sheets for `#REF!`, `#NAME?`, `#VALUE!`, `#N/A` and `#DIV/0!`.
-4. When formulas must stay live, change one input in a copy, recalculate, and confirm the result moves.
-5. Compare against the original: sheets, other cells, formats, column widths, validation,
+4. Search all sheets of the recalculated copy for `#REF!`, `#NAME?`, `#VALUE!`, `#N/A` and `#DIV/0!`.
+5. When formulas must stay live, change one input in a copy, recalculate it (step 1 or 2), and
+   confirm the result moves.
+6. Compare against the original: sheets, other cells, formats, column widths, validation,
    conditional formatting and charts should be unchanged unless the task asked for a change.
 
 ## Reporting

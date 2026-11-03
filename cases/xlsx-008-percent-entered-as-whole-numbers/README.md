@@ -6,9 +6,9 @@
 
 中文版见下方 / [Chinese version below](#中文)
 
-> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), which
-> performs the naive steps described below. It is a reconstruction of a commonly reported pattern, not a
-> recording of a particular model. Recorded agent runs, when there are any, are listed under
+> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), a script
+> that makes the mistake described under "Observed in the failure artifact" below. It is a reconstruction
+> of a commonly reported pattern, not a recording of a particular model. Recorded agent runs, when there are any, are listed under
 > [Retests](#retests).
 
 ## Task
@@ -27,15 +27,15 @@ Replace the growth targets with the new ones:
 | West | 4.5% |
 | Central | 8% |
 
-The 2025 Target column, the Total row and the overall growth figure must reflect the new targets.
+The 2025 Target column, the Total row and the overall growth figure must reflect the new targets, and keep being calculated from the revenue and growth figures, as they are now.
 
 ## Expected
 
-Growth targets are stored as fractions (12% = 0.12) in the percentage-formatted cells, and every 2025 target equals revenue × (1 + growth).
+Growth targets are stored as fractions (12% = 0.12) in the percentage-formatted cells, every 2025 target equals revenue × (1 + growth), and the 2025 Target column, the Total row and the overall growth keep being calculated from the revenue and growth figures.
 
 ## Observed in the failure artifact
 
-The agent wrote the growth targets as 12, 8.5, 15 ... into cells formatted as percentages. A cell formatted as 0.0% that holds 12 displays 1200.0%, and the 2025 Target formula multiplies revenue by (1 + 12). The plan now forecasts 13 times this year's revenue.
+In the failure file the Growth Target cells C2 to C6 hold 8.5, 15, 8.5, 4.5 and 8, still formatted as 0.0%, so they display as 850.0%, 1500.0%, 850.0%, 450.0% and 800.0%. The 2025 Target formulas are unchanged (=B2*(1+C2) and so on), so after recalculation each 2025 Target is the revenue multiplied by 9.5, 16, 9.5, 5.5 and 9: North's is 15,238,000 instead of 1,740,340. The Total 2025 Target is 100,014,500 against 9,986,000 of 2024 revenue, about 10 times as much, and the overall growth shows 901.5% instead of 9.0%.
 
 The illustrative claim that goes with this reconstruction (written for the case, not quoted from a run):
 
@@ -50,6 +50,7 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 | `growth-values` | content | Each growth target holds the new percentage as a fraction (12% = 0.12) | **FAIL**: North: stored as 8.5, which is 850%, not 8.5%; South: stored as 15, which is 1500%, not 15%; East: stored as 8.5, which is 850%, not 8.5% (and 2 more) |
 | `percent-format-kept` | structure | The Growth Target cells are still formatted as percentages | pass |
 | `targets-correct` | value | 2025 Target, the Total row and the overall growth reflect the new targets | **FAIL**: 2025 Target of North is 15,238,000, expected 1,740,340 |
+| `targets-still-calculated` | no collateral damage | 2025 Target, the Total row and the overall growth still follow the revenue and growth targets | pass |
 | `revenue-unchanged` | no collateral damage | Regions and 2024 revenue are unchanged | pass |
 
 Files: [`failure/targets.xlsx`](failure/targets.xlsx) (graded in [`failure/grade.json`](failure/grade.json)); the steps that produced it: [`failure.py`](failure.py).
@@ -78,7 +79,7 @@ failbook run xlsx-008 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-008 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-008 --seeds 3`): [`reference.py`](reference.py) must pass, also after LibreOffice opens and re-saves its output; the failure must fail on the rules listed in `case.yaml`; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-008 --seeds 3`): [`reference.py`](reference.py) and [`alt_percent_formula.py`](alt_percent_formula.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_targets_pasted.py`](fail_targets_pasted.py) (another wrong solution) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -87,6 +88,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 ## Limitations
 
 - A value stored as the text '12%' is reported as not a number; the rule does not try to interpret text.
+- Whether the 2025 Target column, the Total row and the overall growth are still calculated is tested in one changed copy of the file (every 2024 Revenue and Growth Target changed by a different amount); formula text is never inspected.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
 ---
@@ -95,7 +97,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 **百分比按整数录入，结果放大了 100 倍**
 
-> **关于这条记录：** 失败产物由 [`failure.py`](failure.py) 执行下述朴素步骤生成，是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
+> **关于这条记录：** 失败产物由脚本 [`failure.py`](failure.py) 生成，它会犯下文“失败产物中观察到的情况”所述的错误。这是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
 
 ### 任务
 
@@ -113,15 +115,15 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 | West | 4.5% |
 | Central | 8% |
 
-2025 Target 列、Total 合计行以及整体增长率都必须反映新的目标。
+2025 Target 列、Total 合计行以及整体增长率都必须反映新的目标，并像现在一样继续由收入和增长率计算得出。
 
 ### 预期结果
 
-增长目标以小数（12% = 0.12）存入百分比格式单元格，每个 2025 目标 = 收入 × (1 + 增长率)。
+增长目标以小数（12% = 0.12）存入百分比格式单元格，每个 2025 目标 = 收入 × (1 + 增长率)，2025 Target 列、Total 行和整体增长率仍由收入和增长率计算得出。
 
 ### 失败产物中观察到的情况
 
-智能体把增长目标按 12、8.5、15……写进了百分比格式的单元格。格式为 0.0% 的单元格存 12 会显示成 1200.0%，2025 Target 公式则把收入乘以 (1 + 12)。计划里的预测变成了今年收入的 13 倍。
+失败文件中，Growth Target 单元格 C2 至 C6 存的是 8.5、15、8.5、4.5 和 8，格式仍为 0.0%，因此显示为 850.0%、1500.0%、850.0%、450.0% 和 800.0%。2025 Target 公式未变（=B2*(1+C2) 等），所以重新计算后，每个 2025 Target 都是收入乘以 9.5、16、9.5、5.5 和 9：North 为 15,238,000，应为 1,740,340。Total 的 2025 Target 为 100,014,500，而 2024 年收入合计为 9,986,000，约为其 10 倍；整体增长率显示 901.5%，应为 9.0%。
 
 与该复现配套的示例声明（为本案例撰写，并非摘自真实运行）：
 
@@ -136,6 +138,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 | `growth-values` | 内容 | 每个增长目标都以小数存储新的百分比（12% = 0.12） | **FAIL**: North: stored as 8.5, which is 850%, not 8.5%; South: stored as 15, which is 1500%, not 15%; East: stored as 8.5, which is 850%, not 8.5% (and 2 more) |
 | `percent-format-kept` | 结构 | Growth Target 单元格仍为百分比格式 | pass |
 | `targets-correct` | 数值 | 2025 Target、Total 行和整体增长率都反映新的目标 | **FAIL**: 2025 Target of North is 15,238,000, expected 1,740,340 |
+| `targets-still-calculated` | 无连带破坏 | 2025 Target、Total 行和整体增长率仍随收入和增长目标变化 | pass |
 | `revenue-unchanged` | 无连带破坏 | 区域与 2024 年收入保持不变 | pass |
 
 ### 解释
@@ -155,4 +158,5 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 ### 限制
 
 - 以文本 '12%' 存储的值会被判为非数字，规则不尝试解析文本。
+- 2025 Target 列、Total 行和整体增长率是否仍随收入和增长率变化，只在一个修改过的副本中检验（每个 2024 Revenue 和 Growth Target 各改为不同的值）；检查不读公式文本。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-03T02:54:00+00:00",
+  "generated_at": "2026-11-03T05:37:45+00:00",
   "failbook_version": "0.1.0",
   "engine": "LibreOffice 24.2.7.2 420(Build:2)",
   "seed": 0,
@@ -32,8 +32,7 @@
       "expected": "fail",
       "failed_rules": [
         "new-orders-added",
-        "totals-include-all-orders",
-        "totals-are-live"
+        "totals-include-all-orders"
       ],
       "inconclusive_rules": []
     },
@@ -438,6 +437,7 @@
       "failed_rules": [
         "columns-in-order",
         "discounts-entered",
+        "discounts-percent-format",
         "line-totals-correct",
         "line-totals-live",
         "summary-correct",
@@ -856,10 +856,11 @@
       "failed_rules": [
         "categories-correct",
         "prices-correct",
-        "amounts-correct",
-        "lookups-live"
+        "amounts-correct"
       ],
-      "inconclusive_rules": []
+      "inconclusive_rules": [
+        "lookups-live"
+      ]
     },
     {
       "case": "xlsx-009",

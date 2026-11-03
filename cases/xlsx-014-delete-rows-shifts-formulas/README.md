@@ -6,9 +6,9 @@
 
 中文版见下方 / [Chinese version below](#中文)
 
-> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), which
-> performs the naive steps described below. It is a reconstruction of a commonly reported pattern, not a
-> recording of a particular model. Recorded agent runs, when there are any, are listed under
+> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), a script
+> that makes the mistake described under "Observed in the failure artifact" below. It is a reconstruction
+> of a commonly reported pattern, not a recording of a particular model. Recorded agent runs, when there are any, are listed under
 > [Retests](#retests).
 
 ## Task
@@ -27,7 +27,7 @@ Discontinued rows are deleted without gaps, and the Value, Total and Summary for
 
 ## Observed in the failure artifact
 
-The agent removed the discontinued items with openpyxl's delete_rows(). The rows are gone, but no formula was rewritten. Each remaining Value formula still points at its old row number, so most items show another item's value. The Total row's SUM still ends at the old last row, which now includes the Total row itself. The Summary sheet still reads the cell where the total used to be.
+The four Discontinued rows are gone and the 14 remaining items are in rows 2 to 15, but no formula was rewritten. Thirteen of the 14 Value formulas still use the old row numbers (row 3 holds =D4*E4), so they show another item's value. The Total row, now row 16, still sums D2:D19 and F2:F19, a range that includes the Total row itself; LibreOffice reports #VALUE! for both totals. The Summary sheet still reads Stock!D20 and Stock!F20, where the Total row used to be; those cells are now empty.
 
 The illustrative claim that goes with this reconstruction (written for the case, not quoted from a run):
 
@@ -44,7 +44,7 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 | `values-correct` | value | Value = Qty x Unit Cost on every remaining row | **FAIL**: 13 Value cell(s) are wrong, e.g. S-303 (row 3): 19,347.50 instead of 27,600.54; S-304 (row 4): 7,500.35 instead of 19,347.50; S-305 (row 5): 276.64 instead of 7,500.35 |
 | `stock-totals-correct` | value | The Total row sums Qty and Value over the remaining items | **FAIL**: Total Qty (Stock!D16) evaluates to #VALUE! |
 | `summary-correct` | value | Summary shows the right active count, total units and total stock value | **FAIL**: Total units is 0.00, expected 1,990.00 |
-| `totals-live` | live | Totals and Summary update when a quantity changes | **FAIL**: Total Qty (Stock!D16) evaluates to #VALUE! |
+| `totals-live` | live | Values, totals and Summary update when quantities or costs change | **FAIL**: adding 10 units to every remaining item changed the Value of S-303 (row 3) by +887.50, expected +1,295.80 |
 
 Files: [`failure/inventory.xlsx`](failure/inventory.xlsx) (graded in [`failure/grade.json`](failure/grade.json)); the steps that produced it: [`failure.py`](failure.py).
 
@@ -72,7 +72,7 @@ failbook run xlsx-014 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-014 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-014 --seeds 3`): [`reference.py`](reference.py) must pass, also after LibreOffice opens and re-saves its output; the failure must fail on the rules listed in `case.yaml`; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-014 --seeds 3`): [`reference.py`](reference.py) must pass, also after LibreOffice opens and re-saves its output; the failure must fail on the rules listed in `case.yaml`; [`fail_static_units.py`](fail_static_units.py) (another wrong solution) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -93,7 +93,7 @@ Further reading:
 
 **删除行之后，公式指向了错误的行**
 
-> **关于这条记录：** 失败产物由 [`failure.py`](failure.py) 执行下述朴素步骤生成，是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
+> **关于这条记录：** 失败产物由脚本 [`failure.py`](failure.py) 生成，它会犯下文“失败产物中观察到的情况”所述的错误。这是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
 
 ### 任务
 
@@ -111,7 +111,7 @@ Further reading:
 
 ### 失败产物中观察到的情况
 
-智能体用 openpyxl 的 delete_rows() 删除了已停产的商品。行确实删掉了，但没有改写任何公式：剩下每行的 Value 公式仍指向原来的行号，多数商品显示的是别的商品的值；合计行的 SUM 仍止于原来的最后一行，如今把合计行自己也包含了进去；Summary 表还在读取合计原来所在的单元格。
+四个 Discontinued 行已删除，剩下的 14 个商品位于第 2–15 行，但没有改写任何公式：14 个 Value 公式中有 13 个仍使用原来的行号（第 3 行是 =D4*E4），显示的是别的商品的值；合计行现在位于第 16 行，仍对 D2:D19 和 F2:F19 求和，这个区域把合计行自己也包含了进去，LibreOffice 对两个合计都报 #VALUE!；Summary 表仍读取合计行原来所在的 Stock!D20 和 Stock!F20，这两个单元格现在是空的。
 
 与该复现配套的示例声明（为本案例撰写，并非摘自真实运行）：
 
@@ -128,7 +128,7 @@ Further reading:
 | `values-correct` | 数值 | 剩余每一行 Value = Qty × Unit Cost | **FAIL**: 13 Value cell(s) are wrong, e.g. S-303 (row 3): 19,347.50 instead of 27,600.54; S-304 (row 4): 7,500.35 instead of 19,347.50; S-305 (row 5): 276.64 instead of 7,500.35 |
 | `stock-totals-correct` | 数值 | Total 行对剩余商品的 Qty 与 Value 求和 | **FAIL**: Total Qty (Stock!D16) evaluates to #VALUE! |
 | `summary-correct` | 数值 | Summary 的在售商品数、总数量、库存总值正确 | **FAIL**: Total units is 0.00, expected 1,990.00 |
-| `totals-live` | 实时性 | 数量变化时，合计与 Summary 随之更新 | **FAIL**: Total Qty (Stock!D16) evaluates to #VALUE! |
+| `totals-live` | 实时性 | 数量或成本变化时，Value、合计与 Summary 随之更新 | **FAIL**: adding 10 units to every remaining item changed the Value of S-303 (row 3) by +887.50, expected +1,295.80 |
 
 ### 解释
 

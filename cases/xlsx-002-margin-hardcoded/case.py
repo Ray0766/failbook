@@ -53,15 +53,18 @@ def _expected(p, cost=None, price=None):
     return (price - cost) / price
 
 
+def _repriced(p):
+    """Cost and Price of a product in the "reprice" scenario (a copy of the file in which both change)."""
+    return round(p["cost"] * 0.5, 2), round(p["price"] * 1.5, 2)
+
+
 def scenarios(ctx):
-    n = len(ctx.meta["products"])
-    first, last = ctx.meta["products"][0], ctx.meta["products"][-1]
-    return {
-        "reprice": {
-            X.make_ref(SHEET, (2, 4)): round(first["price"] * 1.5, 2),
-            X.make_ref(SHEET, (n + 1, 3)): round(last["cost"] * 0.5, 2),
-        }
-    }
+    overrides = {}
+    for r, p in zip(_rows(ctx), ctx.meta["products"]):
+        cost, price = _repriced(p)
+        overrides[X.make_ref(SHEET, (r, 3))] = cost
+        overrides[X.make_ref(SHEET, (r, 4))] = price
+    return {"reprice": overrides}
 
 
 @rule(
@@ -80,14 +83,18 @@ def margin_column_added(ctx):
     "Every product's margin equals (Price - Cost) / Price",
     kind="value",
     title_zh="每个产品的毛利率都等于 (Price − Cost) / Price",
-    requirement="Fill it in for every product row.",
+    requirement="Margin % = (Price - Cost) / Price. Fill it in for every product row. Do not round the margin.",
 )
 def margins_correct(ctx):
     col = _margin_col(ctx)
     values = ctx.values()
+    wrong = []
     for r, p in zip(_rows(ctx), ctx.meta["products"]):
         got = ctx.num(values, X.make_ref(SHEET, (r, col)), f"margin of {p['sku']}")
-        require(X.close(got, _expected(p)), f"margin of {p['sku']} is {got:.4f}, expected {_expected(p):.4f}")
+        exp = _expected(p)
+        if not X.close(got, exp):
+            wrong.append(f"{p['sku']} (row {r}): {got:.6g}, expected {exp:.6g} (difference {got - exp:+.2g})")
+    require(not wrong, f"{len(wrong)} of {len(ctx.meta['products'])} margins are wrong: " + "; ".join(wrong[:3]))
 
 
 @rule(
@@ -99,20 +106,21 @@ def margins_correct(ctx):
 )
 def margins_are_live(ctx):
     col = _margin_col(ctx)
-    values = ctx.values(scenario="reprice")
-    products = ctx.meta["products"]
-    first, last = products[0], products[-1]
-    checks = [
-        (2, first, _expected(first, price=round(first["price"] * 1.5, 2)), "its Price"),
-        (1 + len(products), last, _expected(last, cost=round(last["cost"] * 0.5, 2)), "its Cost"),
-    ]
-    for r, p, exp, what in checks:
-        got = ctx.num(values, X.make_ref(SHEET, (r, col)), f"margin of {p['sku']}")
-        require(
-            X.close(got, exp),
-            f"after changing {what}, the margin of {p['sku']} is {got:.4f}, expected {exp:.4f}; "
-            "the column holds fixed numbers instead of formulas",
-        )
+    base, values = ctx.values(), ctx.values(scenario="reprice")
+    wrong = []
+    for r, p in zip(_rows(ctx), ctx.meta["products"]):
+        ref = X.make_ref(SHEET, (r, col))
+        got = ctx.num(values, ref, f"margin of {p['sku']}")
+        cost, price = _repriced(p)
+        exp = _expected(p, cost=cost, price=price)
+        if X.close(got, exp):
+            continue
+        before = base[ref]
+        same = ", the same as before the change" if X.is_number(before) and X.close(before, got) else ""
+        wrong.append(f"{p['sku']} (row {r}): with Cost {cost:.2f} and Price {price:.2f} its margin is {got:.6g}, "
+                     f"expected {exp:.6g} (difference {got - exp:+.2g}){same}")
+    require(not wrong, f"in a copy of the file where every Cost and Price was changed, {len(wrong)} of "
+                       f"{len(ctx.meta['products'])} margins did not follow: " + "; ".join(wrong[:3]))
 
 
 @rule(

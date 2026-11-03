@@ -26,6 +26,13 @@
       "detail": "2025 Target of North is 15,238,000, expected 1,740,340"
     },
     {
+      "id": "targets-still-calculated",
+      "kind": "preserve",
+      "title": "2025 Target, the Total row and the overall growth still follow the revenue and growth targets",
+      "status": "pass",
+      "detail": ""
+    },
+    {
       "id": "revenue-unchanged",
       "kind": "preserve",
       "title": "Regions and 2024 revenue are unchanged",

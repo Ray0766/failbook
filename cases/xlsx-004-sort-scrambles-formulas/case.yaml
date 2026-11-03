@@ -17,13 +17,17 @@ failure:
   expected_zh: >
     各行按部门、再按姓名排序，每个人的数据在同一行，每个 Bonus 公式都指向本行。
   observed: >
-    The agent read the table, sorted the rows in Python and wrote them back. Names, departments,
-    salaries and rates moved together correctly, but the Bonus formulas were copied as text: the
-    row that now holds Ava's data still says =C2*D2, which is someone else's row. Every bonus is a
-    real, plausible number that belongs to a different person.
+    The rows are sorted by Department, then Name, and each person's Name, Department, Base Salary
+    and Bonus Rate are still together, but each Bonus formula is the text from that person's
+    original row. Ava Yilmaz is now on row 3 and her Bonus is =C13*D13: row 13 was her row before
+    the sort and now holds Yuki Quist, so she shows Yuki's 16,650 instead of her own 2,625. 15 of
+    the 16 bonuses equal another person's Base Salary × Bonus Rate; only Dina Khan, whose row did
+    not move (row 4, =C4*D4), has her own.
   observed_zh: >
-    智能体读出表格，在 Python 里排序后写回。姓名、部门、薪资和比例都一起正确移动了，但 Bonus 公式是按原文本复制的：
-    现在存放 Ava 数据的那一行，公式仍是 =C2*D2，指向的是别人的行。每个奖金都是一个真实、合理的数字，却属于另一个人。
+    各行已按部门、再按姓名排序，每个人的 Name、Department、Base Salary、Bonus Rate 仍在同一行，但每个 Bonus
+    公式都是此人原来所在行的公式文本。Ava Yilmaz 现在在第 3 行，她的 Bonus 是 =C13*D13：第 13 行是她排序前所在的行，
+    现在放的是 Yuki Quist，所以她显示的是 Yuki 的 16,650，而不是她自己的 2,625。16 个奖金中有 15 个等于另一个人的
+    Base Salary × Bonus Rate；只有位置没变的 Dina Khan（第 4 行，=C4*D4）是她自己的。
   claim: >
     The Staff table is now sorted by Department and then by Name. All rows were kept intact and the
     Bonus column still uses its formula.

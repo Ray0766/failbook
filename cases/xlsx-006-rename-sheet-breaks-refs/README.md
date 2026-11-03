@@ -6,9 +6,9 @@
 
 中文版见下方 / [Chinese version below](#中文)
 
-> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), which
-> performs the naive steps described below. It is a reconstruction of a commonly reported pattern, not a
-> recording of a particular model. Recorded agent runs, when there are any, are listed under
+> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), a script
+> that makes the mistake described under "Observed in the failure artifact" below. It is a reconstruction
+> of a commonly reported pattern, not a recording of a particular model. Recorded agent runs, when there are any, are listed under
 > [Retests](#retests).
 
 ## Task
@@ -27,7 +27,7 @@ The sheet is called 'Sales 2024', every formula and the RevenueRange name refer 
 
 ## Observed in the failure artifact
 
-The agent renamed the sheet by setting its title with openpyxl. The Dashboard formulas still say Data!C:C and the named range RevenueRange still points to Data!$C$2:$C$13, a sheet that no longer exists. When the workbook is recalculated, every Dashboard figure turns into an error.
+In the failure file the sheet is called 'Sales 2024' and holds the original data, but nothing that referred to it was updated. The Dashboard formulas still read the old sheet name (=SUMIFS(Data!C:C,Data!A:A,A2) for each region and =AVERAGE(Data!C2:C13)), and the defined name RevenueRange, used by =SUM(RevenueRange), still points to Data!$C$2:$C$13. The file stores no cached results for these formulas and asks for a full recalculation when it is opened. After recalculation every Dashboard figure (B2 to B7) is #NAME?.
 
 The illustrative claim that goes with this reconstruction (written for the case, not quoted from a run):
 
@@ -47,7 +47,7 @@ Files: [`failure/report.xlsx`](failure/report.xlsx) (graded in [`failure/grade.j
 
 ## Explanation
 
-Renaming a sheet in a spreadsheet application updates all references automatically, so it feels like a one-line change. Library-level renames do not, and the stale cached values keep showing the old numbers until something triggers a recalculation.
+Renaming a sheet in a spreadsheet application updates all references automatically, so it feels like a one-line change. Setting the title with openpyxl does not. openpyxl also drops the cached results and marks the file for a full recalculation on load, so the errors appear as soon as the workbook is opened in a spreadsheet application; a tool that edits the XML directly and keeps the cached values could instead go on showing the old numbers until the next recalculation.
 
 Classification: **model/agent failure** (reconstructed). Tool behaviour involved: Setting Worksheet.title in openpyxl renames only the sheet; formulas and defined names are left unchanged.
 
@@ -69,7 +69,7 @@ failbook run xlsx-006 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-006 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-006 --seeds 3`): [`reference.py`](reference.py) must pass, also after LibreOffice opens and re-saves its output; the failure must fail on the rules listed in `case.yaml`; [`fail_stale_defined_name.py`](fail_stale_defined_name.py) (another wrong solution) must be graded fail; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-006 --seeds 3`): [`reference.py`](reference.py) must pass, also after LibreOffice opens and re-saves its output; the failure must fail on the rules listed in `case.yaml`; [`fail_regions_typed.py`](fail_regions_typed.py) and [`fail_stale_defined_name.py`](fail_stale_defined_name.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -78,6 +78,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 ## Limitations
 
 - LibreOffice reports the broken references as #NAME?; the grader explains them by finding the formula that names a missing sheet.
+- Liveness is tested in one changed copy of the file (every revenue on 'Sales 2024' raised by a different amount); formula text is never inspected.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
 ---
@@ -86,7 +87,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 **重命名工作表后，所有引用它的公式都失效了**
 
-> **关于这条记录：** 失败产物由 [`failure.py`](failure.py) 执行下述朴素步骤生成，是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
+> **关于这条记录：** 失败产物由脚本 [`failure.py`](failure.py) 生成，它会犯下文“失败产物中观察到的情况”所述的错误。这是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
 
 ### 任务
 
@@ -104,7 +105,7 @@ Dashboard 上的一切必须和之前完全一样正常工作：数字相同，�
 
 ### 失败产物中观察到的情况
 
-智能体用 openpyxl 直接修改了工作表标题来完成重命名。但 Dashboard 上的公式仍写着 Data!C:C，命名区域 RevenueRange 也仍指向 Data!$C$2:$C$13，而这张表已经不存在了。工作簿一重新计算，Dashboard 上的所有数字都变成错误值。
+失败文件中，工作表已改名为 'Sales 2024'，数据与原来相同，但所有引用它的地方都没有更新。Dashboard 上的公式仍写着旧表名（各区域为 =SUMIFS(Data!C:C,Data!A:A,A2)，另有 =AVERAGE(Data!C2:C13)），=SUM(RevenueRange) 所用的命名区域 RevenueRange 也仍指向 Data!$C$2:$C$13。文件中没有保存这些公式的缓存结果，并要求在打开时完整重新计算。重新计算后，Dashboard 上的每个数字（B2 至 B7）都是 #NAME?。
 
 与该复现配套的示例声明（为本案例撰写，并非摘自真实运行）：
 
@@ -122,7 +123,7 @@ Dashboard 上的一切必须和之前完全一样正常工作：数字相同，�
 
 ### 解释
 
-在表格软件里重命名工作表会自动更新所有引用，所以这感觉只是一行代码的事；但在代码库层面重命名不会更新引用，而且旧的缓存值会一直显示原来的数字，直到某个操作触发重新计算。
+在表格软件里重命名工作表会自动更新所有引用，所以这感觉只是一行代码的事；用 openpyxl 修改标题却不会更新引用。openpyxl 还会丢弃缓存结果，并把文件标记为打开时完整重新计算，因此在表格软件中一打开工作簿就会出现这些错误；若某个工具直接改写 XML 并保留缓存值，则可能在下一次重新计算之前一直显示旧的数字。
 
 分类：**模型/智能体失败**（证据级别：reconstructed）。
 
@@ -137,4 +138,5 @@ Dashboard 上的一切必须和之前完全一样正常工作：数字相同，�
 ### 限制
 
 - LibreOffice 把失效引用显示为 #NAME?；评分器会找出引用了不存在工作表的公式来说明原因。
+- 实时性只在一个修改过的副本中检验（'Sales 2024' 上的每笔收入各加上不同的值）；检查不读公式文本。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

@@ -18,6 +18,7 @@ failbook export skillevaluator --fix spreadsheet-verify-skill --out dist/se
 skillevaluator tier3 evaluate dist/se/spreadsheet-verify --agents claude-code
 ```
 
-For Claude Code the skill is installed as a project skill (`.claude/skills/`); other agents receive the
-skill text as their instructions file (`AGENTS.md`, `GEMINI.md`). Run the baseline and the fix with the
+For Claude Code the skill is installed as a project skill (`.claude/skills/`). Other agents get the whole
+skill folder, scripts included, in `skills/<skill-name>/` of their working directory, plus an instructions
+file (`AGENTS.md`, `GEMINI.md`) that contains the skill text and points at that folder. Run the baseline and the fix with the
 same agent version, model, seed and number of attempts.

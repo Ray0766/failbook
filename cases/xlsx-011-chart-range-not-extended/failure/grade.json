@@ -28,7 +28,7 @@
     {
       "id": "chart-covers-all-months",
       "kind": "structure",
-      "title": "Both series cover January to December",
+      "title": "The Revenue and Costs series cover January to December, aligned with the month labels",
       "status": "fail",
       "detail": "the Revenue series covers rows 2-11, not 2-13 (Jan-Dec)"
     }

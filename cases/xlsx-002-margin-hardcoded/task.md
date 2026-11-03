@@ -7,5 +7,5 @@ Add a new column **Margin %** in column E, right after Price, with the gross mar
 Requirements:
 
 - Fill it in for every product row.
-- Format the column as a percentage.
+- Format the column as a percentage. Do not round the margin; the percentage format decides how many decimals are shown.
 - It must stay correct when someone later changes a Cost or a Price, so calculate it with formulas.

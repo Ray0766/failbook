@@ -26,18 +26,25 @@
       "detail": ""
     },
     {
+      "id": "amounts-are-live",
+      "kind": "live",
+      "title": "Every order's Amount follows its Qty and Unit Price (new rows and original rows)",
+      "status": "pass",
+      "detail": ""
+    },
+    {
       "id": "totals-include-all-orders",
       "kind": "value",
       "title": "The Total row sums Qty and Amount over all orders, old and new",
       "status": "fail",
-      "detail": "Total Qty is 198, expected 269 (difference 71)"
+      "detail": "Total Qty is 198, expected 269 (difference -71)"
     },
     {
       "id": "totals-are-live",
       "kind": "live",
-      "title": "Changing a new order's Qty updates its Amount and the totals",
+      "title": "Changing the Qty and Unit Price of the orders updates Total Qty and Total Amount",
       "status": "fail",
-      "detail": "adding 10 to the Qty of SO-1161 changed Total Qty by 0, expected +10"
+      "detail": "in a copy of the file where each order's Qty was raised by a different amount (+91 in all) and every Unit Price by 1.00, Total Qty changed by +55, expected +91 (difference -36)"
     },
     {
       "id": "total-row-last",

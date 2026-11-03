@@ -82,12 +82,35 @@ def _all_orders(meta):
     return meta["existing"] + meta["new"]
 
 
+def _amt(x, sign=False):
+    """A money amount with as many decimals as it needs (at least 2, at most 6)."""
+    whole, _, frac = (f"{x:+,.6f}" if sign else f"{x:,.6f}").rstrip("0").partition(".")
+    return f"{whole}.{frac.ljust(2, '0')}"
+
+
+#: The "bump" scenario changes, in a copy of the file, every order's Qty (by a different
+#: amount per order) and every Unit Price, so a typed Amount or a total that leaves out
+#: any row no longer matches.
+PRICE_BUMP = 1.0
+
+
+def _bumped(ctx):
+    """[(order, row, new qty, new price)] for every order row found in the output."""
+    _, _, _, rows = _order_rows(ctx)
+    out = []
+    for k, o in enumerate(_all_orders(ctx.meta), start=1):
+        for r in rows.get(o["id"], []):
+            out.append((o, r, o["qty"] + k, o["price"] + PRICE_BUMP))
+    return out
+
+
 def scenarios(ctx):
-    ws, cols, total_row, rows = _order_rows(ctx)
-    last_new = ctx.meta["new"][-1]["id"]
-    require(last_new in rows, f"new order {last_new} not found")
-    r = rows[last_new][0]
-    return {"bump": {X.make_ref(SHEET, (r, cols["Qty"])): ctx.meta["new"][-1]["qty"] + 10}}
+    _, cols, _, _ = _order_rows(ctx)
+    overrides = {}
+    for _, r, qty, price in _bumped(ctx):
+        overrides[X.make_ref(SHEET, (r, cols["Qty"]))] = qty
+        overrides[X.make_ref(SHEET, (r, cols["Unit Price"]))] = price
+    return {"bump": overrides}
 
 
 # -- rules -------------------------------------------------------------------------------
@@ -151,7 +174,40 @@ def amounts_correct(ctx):
     for o in _all_orders(ctx.meta):
         for r in rows.get(o["id"], []):
             got = ctx.num(values, X.make_ref(SHEET, (r, cols["Amount"])), f"Amount of {o['id']}")
-            require(X.close(got, o["qty"] * o["price"]), f"Amount of {o['id']} is {got:.2f}, expected {o['qty'] * o['price']:.2f}")
+            exp = o["qty"] * o["price"]
+            require(X.close(got, exp), f"Amount of {o['id']} is {_amt(got)}, expected {_amt(exp)} "
+                                      f"(difference {_amt(got - exp, sign=True)})")
+
+
+@rule(
+    "amounts-are-live",
+    "Every order's Amount follows its Qty and Unit Price (new rows and original rows)",
+    kind="live",
+    title_zh="每笔订单（新行和原有行）的 Amount 都随 Qty 和 Unit Price 变化",
+    requirement="The Amount of each new order is Qty x Unit Price, calculated the same way as in the existing rows "
+                "(with a formula). Do not change anything the task does not ask you to change.",
+)
+def amounts_are_live(ctx):
+    _, cols, _, _ = _order_rows(ctx)
+    base, bumped = ctx.values(), ctx.values(scenario="bump")
+    new_ids = {o["id"] for o in ctx.meta["new"]}
+    changes = _bumped(ctx)
+    wrong = []
+    for o, r, qty, price in changes:
+        ref = X.make_ref(SHEET, (r, cols["Amount"]))
+        got = ctx.num(bumped, ref, f"Amount of {o['id']}")
+        exp = qty * price
+        if X.close(got, exp):
+            continue
+        which = "new order" if o["id"] in new_ids else "original order"
+        note = ""
+        before = base[ref]
+        if X.is_number(before) and X.close(got, before):
+            note = ", the same as before the change"
+        wrong.append(f"{which} {o['id']} (row {r}): with Qty {qty} and Unit Price {price:.2f} its Amount is "
+                     f"{_amt(got)}, expected {_amt(exp)}{note}")
+    require(not wrong, f"in a copy of the file where every order's Qty and Unit Price were changed, {len(wrong)} of "
+                       f"{len(changes)} Amounts did not follow: " + "; ".join(wrong[:3]))
 
 
 @rule(
@@ -169,28 +225,39 @@ def totals_include_all_orders(ctx):
     exp_amt = sum(o["qty"] * o["price"] for o in orders)
     got_qty = ctx.num(values, X.make_ref(SHEET, (total_row, cols["Qty"])), "Total Qty")
     got_amt = ctx.num(values, X.make_ref(SHEET, (total_row, cols["Amount"])), "Total Amount")
-    require(X.close(got_qty, exp_qty), f"Total Qty is {got_qty:g}, expected {exp_qty} (difference {exp_qty - got_qty:g})")
-    require(X.close(got_amt, exp_amt), f"Total Amount is {got_amt:,.2f}, expected {exp_amt:,.2f} (short by {exp_amt - got_amt:,.2f})")
+    require(X.close(got_qty, exp_qty), f"Total Qty is {got_qty:g}, expected {exp_qty} (difference {got_qty - exp_qty:+g})")
+    require(X.close(got_amt, exp_amt), f"Total Amount is {_amt(got_amt)}, expected {_amt(exp_amt)} "
+                                       f"(difference {_amt(got_amt - exp_amt, sign=True)})")
 
 
 @rule(
     "totals-are-live",
-    "Changing a new order's Qty updates its Amount and the totals",
+    "Changing the Qty and Unit Price of the orders updates Total Qty and Total Amount",
     kind="live",
-    title_zh="修改新订单的数量后，金额与合计随之更新",
+    title_zh="修改各订单的数量和单价后，合计的 Qty 与 Amount 随之更新",
     requirement="Keep the totals as formulas so that they update when the data changes.",
 )
 def totals_are_live(ctx):
     _, cols, total_row, _ = _order_rows(ctx)
     base, bumped = ctx.values(), ctx.values(scenario="bump")
-    price = ctx.meta["new"][-1]["price"]
+    changes = _bumped(ctx)
+    exp_dq = sum(qty - o["qty"] for o, _, qty, _ in changes)
+    exp_da = sum(qty * price - o["qty"] * o["price"] for o, _, qty, price in changes)
     q = X.make_ref(SHEET, (total_row, cols["Qty"]))
     a = X.make_ref(SHEET, (total_row, cols["Amount"]))
     dq = ctx.num(bumped, q, "Total Qty") - ctx.num(base, q, "Total Qty")
     da = ctx.num(bumped, a, "Total Amount") - ctx.num(base, a, "Total Amount")
-    who = ctx.meta["new"][-1]["id"]
-    require(X.close(dq, 10), f"adding 10 to the Qty of {who} changed Total Qty by {dq:g}, expected +10")
-    require(X.close(da, 10 * price), f"adding 10 to the Qty of {who} changed Total Amount by {da:,.2f}, expected +{10 * price:,.2f}")
+    what = (f"in a copy of the file where each order's Qty was raised by a different amount ({exp_dq:+g} in all) "
+            f"and every Unit Price by {PRICE_BUMP:.2f}")
+    require(X.close(dq, exp_dq), f"{what}, Total Qty changed by {dq:+g}, expected {exp_dq:+g} (difference {dq - exp_dq:+g})")
+    if not X.close(da, exp_da):
+        shown = [bumped[X.make_ref(SHEET, (r, cols["Amount"]))] for _, r, _, _ in changes]
+        note = ""
+        if all(X.is_number(v) for v in shown) and X.close(sum(shown), ctx.num(bumped, a, "Total Amount")):
+            note = ("; Total Amount does equal the sum of the order Amounts in that copy, so the gap comes from "
+                    "Amounts that did not follow (see amounts-are-live)")
+        raise Fail(f"{what}, Total Amount changed by {_amt(da, sign=True)}, expected {_amt(exp_da, sign=True)} "
+                   f"(difference {_amt(da - exp_da, sign=True)}){note}")
 
 
 @rule(

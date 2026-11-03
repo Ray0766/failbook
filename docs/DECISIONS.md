@@ -42,6 +42,9 @@ project's own repository, package metadata or installed source, as each note say
   real cause (a formula that points at a missing sheet or name), so engine gaps never count against the agent.
   The Harbor image uses Debian trixie, whose LibreOffice 25.2 supports XLOOKUP; Ubuntu 24.04's 24.2 does not.
 - **Validation.** Every reference solution also passes after LibreOffice re-saves it (`failbook verify`).
+- **The audit script follows the same rule.** `audit_xlsx.py` in the skill recalculates with the same profile
+  setting; when LibreOffice is unavailable it says so and, with `--no-recalc`, falls back to the stored values
+  with a `recalculation-skipped` warning instead of silently trusting them.
 
 ## D3. Deterministic rules that check the outcome, not the method
 
@@ -171,4 +174,28 @@ project's own repository, package metadata or installed source, as each note say
 - **Handling.** Each was fixed in the file group that owns it. Wrong solutions the reviewers wrote became
   `fail_*.py` regression fixtures and valid ones `alt_*.py`, so `failbook verify` keeps checking them.
 - **Limits.** The reviewers are models, not ground truth; their findings were accepted only with a reproduced
-  failure. A second review was not run after the fixes.
+  failure. After the fixes, each finding's reproduction was run again (wrong solutions now fail, valid ones
+  pass or are inconclusive with a stated reason; logs were kept outside the repository). A fresh,
+  independent review of the fixed code has not been run.
+
+## D10. Grading policies made explicit by the review
+
+The review showed that several graders encoded a policy nobody had written down. These are now decisions,
+each backed by an `alt_*.py` (accepted) or `fail_*.py` (rejected) fixture that `failbook verify` re-runs:
+
+| Policy | Cases | Fixture |
+|---|---|---|
+| Liveness checks change many inputs at once (every row in most cases; a different row per quarter in xlsx-010; the rate in xlsx-003) and check every dependent figure, so a partly typed answer does not pass | 001, 002, 003, 005, 006, 007, 008, 009, 010, 014 | e.g. `fail_partial_values.py`, `fail_typed_new_amounts.py` |
+| Money may be rounded to whole cents per line (at most 1 cent from exact) if the totals agree with those lines; the tasks do not forbid it and it is common accounting practice | 003, 005 | `alt_round_cents.py` |
+| A ratio the task says not to round must not be rounded (the task text now says so in both languages) | 002 | `fail_rounded_margin.py` |
+| A valid form the checker cannot read (a chart series over an `OFFSET` name, a conditional-format type the evaluator does not implement) is **inconclusive** with the exact reason, never fail | 011, 013 | `alt_named_range.py`, `alt_begins_with.py` |
+| What the user sees is checked, not only that something exists: chart series start at the first data row, carry the column's legend name and month labels; conditional formats are evaluated per cell (priority, `stopIfTrue`, colour resolved to a hue) | 011, 013 | `fail_header_in_values.py`, `fail_green_highlight.py` |
+
+- **Cross-check of the conditional-format evaluator.** For 10 solutions of xlsx-013 (seed 0) the checker's
+  per-cell "red or not" agreed with the background colour LibreOffice paints when it exports HTML on 170 of
+  170 cells. This is agreement with one engine, not with Excel.
+- **Case versions stay at 1.** Every rule and task change above was made before the first release, and no
+  result record references any case version, so there is nothing that a version bump would keep apart. From
+  the first release on, a change to a task or a rule bumps the version ([DATASHEET.md](DATASHEET.md)).
+- **Limits.** Each policy is a judgment about what a careful person would accept; a contributor can contest
+  one through the "checker dispute" issue form.

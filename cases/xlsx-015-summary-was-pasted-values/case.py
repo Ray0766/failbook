@@ -60,10 +60,14 @@ def build(meta, outdir):
 )
 def corrections_applied(ctx):
     vals = ctx.values().ws(DATA)
-    for i, row in enumerate(_corrected(ctx.meta), start=2):
-        got = (vals.cell(i, 1).value, vals.cell(i, 2).value, vals.cell(i, 3).value)
-        require(got[:2] == (row["dept"], row["month"]), f"row {i} is {got[:2]}, expected {row['dept']} {row['month']}")
-        require(X.close(got[2], row["spend"]), f"{row['dept']} {row['month']} is {X.show(got[2])}, expected {row['spend']:,}")
+    for c in ctx.meta["corrections"]:
+        hits = [r for r in range(2, vals.max_row + 1)
+                if (vals.cell(r, 1).value, vals.cell(r, 2).value) == (c["dept"], c["month"])]
+        require(hits, f"there is no {c['dept']} {c['month']} row in {DATA} any more")
+        require(len(hits) == 1, f"{c['dept']} {c['month']} appears on {len(hits)} rows ({hits})")
+        got = vals.cell(hits[0], 3).value
+        require(X.close(got, c["new"]), f"{c['dept']} {c['month']} (row {hits[0]}) is {X.show(got)}, "
+                f"expected the corrected {c['new']:,}")
 
 
 @rule(
@@ -124,4 +128,12 @@ def summary_layout_kept(ctx):
 )
 def other_data_unchanged(ctx):
     vals = ctx.values().ws(DATA)
+    fixed = {(c["dept"], c["month"]) for c in ctx.meta["corrections"]}
+    for i, row in enumerate(ctx.meta["rows"], start=2):
+        got = (vals.cell(i, 1).value, vals.cell(i, 2).value, vals.cell(i, 3).value)
+        require(got[:2] == (row["dept"], row["month"]),
+                f"row {i} is {got[:2]}, expected {row['dept']} {row['month']} (rows must stay in place)")
+        if (row["dept"], row["month"]) not in fixed:
+            require(X.close(got[2], row["spend"]), f"{row['dept']} {row['month']} (row {i}) is {X.show(got[2])}, "
+                    f"expected {row['spend']:,}; it is not one of the corrections")
     require(vals.cell(2 + len(ctx.meta["rows"]), 1).value in (None, ""), "there are extra rows below the data")

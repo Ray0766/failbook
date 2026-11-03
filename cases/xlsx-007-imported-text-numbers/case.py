@@ -87,6 +87,62 @@ def build(meta, outdir):
     wb.save(outdir / "expenses.xlsx")
 
 
+def _amt(x, places=2, sign=False):
+    """A number with at least ``places`` and at most 6 decimals, so that two numbers the checker
+    tells apart never print the same."""
+    whole, _, frac = (f"{x:+,.6f}" if sign else f"{x:,.6f}").rstrip("0").partition(".")
+    frac = frac.ljust(places, "0")
+    return f"{whole}.{frac}" if frac else whole
+
+
+def _reshuffled(meta):
+    """[(row, original expense, new date, new category, new amount)] in the "reshuffled" scenario.
+
+    In a copy of the file, every existing expense gets a different amount (20,000 or more, so
+    every total moves), and the existing rows are spread over every category and every month
+    (Jan, Feb, Mar), so each Summary total has rows whose change it must follow. The new rows the
+    agent appended are left as they are, so the change of each total does not depend on them.
+    """
+    out = []
+    for i, e in enumerate(meta["existing"]):
+        day = kit.from_iso(e["date"]).day
+        month = MONTHS[i % len(MONTHS)][1]
+        out.append((2 + i, e, dt.date(2024, month, day), CATEGORIES[i % len(CATEGORIES)], 20000 + 37.25 * (i + 1)))
+    return out
+
+
+def scenarios(ctx):
+    overrides = {}
+    for r, _, date, category, amount in _reshuffled(ctx.meta):
+        overrides[X.make_ref(EXP, (r, 1))] = date
+        overrides[X.make_ref(EXP, (r, 2))] = category
+        overrides[X.make_ref(EXP, (r, 4))] = amount
+    return {"reshuffled": overrides}
+
+
+def _as_rows(expenses):
+    return [(kit.from_iso(e["date"]), e["category"], e["amount"]) for e in expenses]
+
+
+def _totals(expenses):
+    """Summary label -> total, for a list of (date, category, amount)."""
+    out = {cat: sum(a for _, c, a in expenses if c == cat) for cat in CATEGORIES}
+    for name, m in MONTHS:
+        out[name] = sum(a for d, _, a in expenses if d.month == m)
+    out["Grand total"] = sum(a for _, _, a in expenses)
+    return out
+
+
+def _summary_refs(ctx):
+    ws = ctx.ws(SUM)
+    refs = {}
+    for label in [*CATEGORIES, *(name for name, _ in MONTHS), "Grand total"]:
+        hit = X.find_cell(ws, label, col=1)
+        require(hit, f"Summary label {label!r} is missing")
+        refs[label] = X.make_ref(SUM, (hit[0], 2))
+    return refs
+
+
 def _new_rows(ctx):
     ws = ctx.ws(EXP)
     first_new = 2 + len(ctx.meta["existing"])
@@ -111,7 +167,9 @@ def rows_appended(ctx):
     rows = _new_rows(ctx)
     ws = ctx.ws(EXP)
     for r, e in rows:
-        require(X.norm_text(ws.cell(r, 2).value) == X.norm_text(e["category"]), f"row {r}: wrong category")
+        got = ws.cell(r, 2).value
+        require(X.norm_text(got) == X.norm_text(e["category"]),
+                f"row {r} ({e['description']}): category is {X.show(got)}, expected {e['category']!r}")
     after = rows[-1][0] + 1
     require(all(ws.cell(after, c).value in (None, "") for c in range(1, 5)), f"unexpected data in row {after}")
 
@@ -163,17 +221,47 @@ def dates_are_dates(ctx):
 )
 def summary_includes_new(ctx):
     values = ctx.values()
-    ws = ctx.ws(SUM)
-    every = ctx.meta["existing"] + ctx.meta["new"]
-    expected = {cat: sum(e["amount"] for e in every if e["category"] == cat) for cat in CATEGORIES}
-    for name, m in MONTHS:
-        expected[name] = sum(e["amount"] for e in every if kit.from_iso(e["date"]).month == m)
-    expected["Grand total"] = sum(e["amount"] for e in every)
-    for label, exp in expected.items():
-        hit = X.find_cell(ws, label, col=1)
-        require(hit, f"Summary label {label!r} is missing")
-        got = ctx.num(values, X.make_ref(SUM, (hit[0], 2)), f"Summary '{label}'")
-        require(X.close(got, exp), f"Summary '{label}' is {got:,.2f}, expected {exp:,.2f} (missing {exp - got:,.2f})")
+    expected = _totals(_as_rows(ctx.meta["existing"] + ctx.meta["new"]))
+    new_only = _totals(_as_rows(ctx.meta["new"]))
+    refs = _summary_refs(ctx)
+    wrong = []
+    for label, ref in refs.items():
+        got = ctx.num(values, ref, f"Summary '{label}'")
+        exp = expected[label]
+        if X.close(got, exp):
+            continue
+        note = ""
+        if new_only[label] and X.close(exp - got, new_only[label], abs_tol=0.005):
+            note = ", short by exactly the new expenses it should include"
+        wrong.append(f"'{label}' is {_amt(got)}, expected {_amt(exp)} (difference {_amt(got - exp, sign=True)}){note}")
+    require(not wrong, f"{len(wrong)} of {len(refs)} Summary totals are wrong: " + "; ".join(wrong[:3])
+            + (f" (and {len(wrong) - 3} more)" if len(wrong) > 3 else ""))
+
+
+@rule(
+    "summary-still-calculated",
+    "Every Summary total still follows changes of the expenses (category, month, grand total)",
+    kind="preserve",
+    title_zh="Summary 的每项合计（类别、月份、总计）仍随费用数据变化",
+    requirement="Do not change anything the task does not ask you to change (the Summary sheet totals the "
+                "Expenses sheet by category, by month and overall).",
+)
+def summary_still_calculated(ctx):
+    base, changed = ctx.values(), ctx.values(scenario="reshuffled")
+    rows = _reshuffled(ctx.meta)
+    before = _totals(_as_rows(e for _, e, *_ in rows))
+    after = _totals([(date, category, amount) for _, _, date, category, amount in rows])
+    refs = _summary_refs(ctx)
+    wrong = []
+    for label, ref in refs.items():
+        moved = ctx.num(changed, ref, f"Summary '{label}'") - ctx.num(base, ref, f"Summary '{label}'")
+        exp = after[label] - before[label]
+        if not X.close(moved, exp, abs_tol=0.005):
+            same = ", so it did not change at all" if X.close(moved, 0) else ""
+            wrong.append(f"'{label}' changed by {_amt(moved, sign=True)}, expected {_amt(exp, sign=True)}{same}")
+    require(not wrong, "in a copy of the file where every existing expense got a different amount, category and "
+                       f"month, {len(wrong)} of {len(refs)} Summary totals did not follow: " + "; ".join(wrong[:3])
+                       + (f" (and {len(wrong) - 3} more)" if len(wrong) > 3 else ""))
 
 
 @rule(

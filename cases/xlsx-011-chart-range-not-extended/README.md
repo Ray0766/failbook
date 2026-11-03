@@ -6,9 +6,9 @@
 
 中文版见下方 / [Chinese version below](#中文)
 
-> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), which
-> performs the naive steps described below. It is a reconstruction of a commonly reported pattern, not a
-> recording of a particular model. Recorded agent runs, when there are any, are listed under
+> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), a script
+> that makes the mistake described under "Observed in the failure artifact" below. It is a reconstruction
+> of a commonly reported pattern, not a recording of a particular model. Recorded agent runs, when there are any, are listed under
 > [Retests](#retests).
 
 ## Task
@@ -28,11 +28,11 @@ The existing chart must show all twelve months, January to December, for both Re
 
 ## Expected
 
-The existing line chart keeps its title, and both series and the month labels cover January to December (rows 2–13).
+The existing line chart keeps its title, and the Revenue and Costs series and the month labels cover January to December (rows 2–13), starting at the same row and keeping their names.
 
 ## Observed in the failure artifact
 
-The agent appended the November and December rows and reported that the chart now covers all twelve months. The chart's series still point to rows 2 to 11 (January to October). The new data is in the sheet but not in the chart.
+November and December are in rows 12 and 13 with the given figures. The chart's Revenue and Costs series and its month labels still point to rows 2 to 11 (Monthly!$B$2:$B$11, $C$2:$C$11 and $A$2:$A$11, January to October). The new data is in the sheet but not in the chart.
 
 The illustrative claim that goes with this reconstruction (written for the case, not quoted from a run):
 
@@ -47,7 +47,7 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 | `new-months-added` | content | November and December are added directly below October with the given figures | pass |
 | `existing-data-unchanged` | no collateral damage | January to October are unchanged | pass |
 | `chart-present` | structure | The line chart with the original title is still on the sheet | pass |
-| `chart-covers-all-months` | structure | Both series cover January to December | **FAIL**: the Revenue series covers rows 2-11, not 2-13 (Jan-Dec) |
+| `chart-covers-all-months` | structure | The Revenue and Costs series cover January to December, aligned with the month labels | **FAIL**: the Revenue series covers rows 2-11, not 2-13 (Jan-Dec) |
 
 Files: [`failure/monthly.xlsx`](failure/monthly.xlsx) (graded in [`failure/grade.json`](failure/grade.json)); the steps that produced it: [`failure.py`](failure.py).
 
@@ -75,7 +75,7 @@ failbook run xlsx-011 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-011 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-011 --seeds 3`): [`reference.py`](reference.py) must pass, also after LibreOffice opens and re-saves its output; the failure must fail on the rules listed in `case.yaml`; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-011 --seeds 3`): [`reference.py`](reference.py) and [`alt_named_range.py`](alt_named_range.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_header_in_values.py`](fail_header_in_values.py), [`fail_labels_wrong_column.py`](fail_labels_wrong_column.py) and [`fail_series_names_swapped.py`](fail_series_names_swapped.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -83,7 +83,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 ## Limitations
 
-- The rule reads series ranges from the chart XML. Charts fed by Excel tables or dynamic named ranges are not resolved and would need a rule extension.
+- The rule reads the series ranges, month labels and series names from the chart XML. A series that points at a defined name standing for a fixed range is resolved through the name; a name computed by a formula (OFFSET, INDEX) is not, and the rule then reports inconclusive rather than pass or fail.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
 ---
@@ -92,7 +92,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 **新月份数据加上了，图表却仍停在 10 月**
 
-> **关于这条记录：** 失败产物由 [`failure.py`](failure.py) 执行下述朴素步骤生成，是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
+> **关于这条记录：** 失败产物由脚本 [`failure.py`](failure.py) 生成，它会犯下文“失败产物中观察到的情况”所述的错误。这是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
 
 ### 任务
 
@@ -111,11 +111,11 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 ### 预期结果
 
-原折线图标题不变，两条系列和月份标签都覆盖 1 月到 12 月（第 2–13 行）。
+原折线图标题不变，Revenue 和 Costs 两条系列及月份标签都覆盖 1 月到 12 月（第 2–13 行），起始行一致，系列名称保持不变。
 
 ### 失败产物中观察到的情况
 
-智能体追加了 11 月和 12 月两行，并汇报说图表现在覆盖全部十二个月。但图表的数据系列仍指向第 2–11 行（1 月至 10 月）：新数据在表里，却不在图上。
+11 月和 12 月已按给定数值写在第 12、13 行。但图表的 Revenue、Costs 两条系列和月份标签仍指向第 2–11 行（Monthly!$B$2:$B$11、$C$2:$C$11 和 $A$2:$A$11，即 1 月至 10 月）：新数据在表里，却不在图上。
 
 与该复现配套的示例声明（为本案例撰写，并非摘自真实运行）：
 
@@ -130,7 +130,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 | `new-months-added` | 内容 | 11 月和 12 月的数据紧接在 10 月下方，数值正确 | pass |
 | `existing-data-unchanged` | 无连带破坏 | 1 月至 10 月的数据保持不变 | pass |
 | `chart-present` | 结构 | 原标题的折线图仍在工作表上 | pass |
-| `chart-covers-all-months` | 结构 | 两条数据系列都覆盖 1 月到 12 月 | **FAIL**: the Revenue series covers rows 2-11, not 2-13 (Jan-Dec) |
+| `chart-covers-all-months` | 结构 | Revenue 和 Costs 两条系列覆盖 1 月到 12 月，并与月份标签对齐 | **FAIL**: the Revenue series covers rows 2-11, not 2-13 (Jan-Dec) |
 
 ### 解释
 
@@ -148,5 +148,5 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 ### 限制
 
-- 规则从图表 XML 读取系列区域；由 Excel 表格或动态命名区域驱动的图表暂不解析，需要扩展规则。
+- 规则从图表 XML 读取系列区域、月份标签和系列名称。指向固定区域的命名区域会被解析；由公式计算的名称（OFFSET、INDEX）无法解析，此时规则判为"无法判定"，而不是通过或失败。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

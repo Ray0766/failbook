@@ -6,9 +6,9 @@
 
 中文版见下方 / [Chinese version below](#中文)
 
-> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), which
-> performs the naive steps described below. It is a reconstruction of a commonly reported pattern, not a
-> recording of a particular model. Recorded agent runs, when there are any, are listed under
+> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), a script
+> that makes the mistake described under "Observed in the failure artifact" below. It is a reconstruction
+> of a commonly reported pattern, not a recording of a particular model. Recorded agent runs, when there are any, are listed under
 > [Retests](#retests).
 
 ## Task
@@ -33,11 +33,11 @@ Store the dates as real dates and the amounts as real numbers (not text), format
 
 ## Expected
 
-The six new rows hold real dates and real numbers, and every Summary total (category, month, grand total) includes them.
+The six new rows hold real dates and real numbers, every Summary total (category, month, grand total) includes them, and the Summary totals still follow the expense log.
 
 ## Observed in the failure artifact
 
-The agent pasted the bank export into the sheet row by row, exactly as the CSV text. Amounts such as "1,280.00" and dates such as "2024-03-04" went in as strings. They look normal in the grid, but SUMIF and SUMIFS skip text, so the Summary totals do not include any of the new expenses.
+In the failure file the six new expenses are in rows 17 to 22 of Expenses, but every date and amount in them is a text string exactly as in the CSV, for example '2024-03-02' in A17 and '1,766.34' in D17 (format General), while the existing rows hold real dates and numbers. The Summary formulas are unchanged (=SUMIF(Expenses!B:B,A2,Expenses!D:D) and so on). After recalculation no total includes any of the new expenses: Travel is 854.66 instead of 2,621.00, March is 0.00 instead of 7,410.42 and the grand total is 7,835.07 instead of 15,245.49. January and February are right, because all new expenses are in March.
 
 The illustrative claim that goes with this reconstruction (written for the case, not quoted from a run):
 
@@ -52,14 +52,15 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 | `rows-appended` | content | The new expenses are appended after the existing ones, in order | pass |
 | `amounts-are-numbers` | content | New amounts are stored as numbers with the right value | **FAIL**: amounts are wrong: row 17: '1,766.34' is text; row 18: '79.75' is text; row 19: '72.94' is text |
 | `dates-are-dates` | content | New dates are stored as real dates with the right value | **FAIL**: dates are wrong: row 17: '2024-03-02' is not a date; row 18: '2024-03-03' is not a date; row 19: '2024-03-07' is not a date |
-| `summary-includes-new` | value | Every Summary total (category, month, grand total) includes the new expenses | **FAIL**: Summary 'Travel' is 854.66, expected 2,621.00 (missing 1,766.34) |
+| `summary-includes-new` | value | Every Summary total (category, month, grand total) includes the new expenses | **FAIL**: 7 of 9 Summary totals are wrong: 'Travel' is 854.66, expected 2,621.00 (difference -1,766.34), short by exactly the new expenses it should include; 'Meals' is 3,018.00, expected 3,681.62 (difference -663.62), short by exactly the new expenses it should include; 'Office' is 1,811.80, expected 1,884.74 (difference -72.94), short by exactly the new expenses it should include (and 4 more) |
+| `summary-still-calculated` | no collateral damage | Every Summary total still follows changes of the expenses (category, month, grand total) | pass |
 | `existing-unchanged` | no collateral damage | The existing expenses are unchanged | pass |
 
 Files: [`failure/expenses.xlsx`](failure/expenses.xlsx) (graded in [`failure/grade.json`](failure/grade.json)); the steps that produced it: [`failure.py`](failure.py).
 
 ## Explanation
 
-Text that looks like a number is still text. The claim about whole-column formulas is true, so the reasoning sounds right; the agent simply never checked a total after the change.
+Text that looks like a number is still text, and SUMIF, SUMIFS and SUM skip it. The illustrative claim about whole-column formulas is true, so the reasoning sounds right; a look at the March total or the grand total after the change would have shown the gap.
 
 Classification: **model/agent failure** (reconstructed). Tool behaviour involved: csv.reader returns strings; writing them unchanged stores text in the cells.
 
@@ -81,7 +82,7 @@ failbook run xlsx-007 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-007 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-007 --seeds 3`): [`reference.py`](reference.py) must pass, also after LibreOffice opens and re-saves its output; the failure must fail on the rules listed in `case.yaml`; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-007 --seeds 3`): [`reference.py`](reference.py) and [`alt_serial_dates.py`](alt_serial_dates.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_summary_pasted.py`](fail_summary_pasted.py) (another wrong solution) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -90,6 +91,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 ## Limitations
 
 - Only ISO dates and comma thousands separators appear in the export; other locales' formats are not exercised.
+- Whether the Summary totals still follow the expense log is tested in one changed copy of the file (every existing expense given a different amount, category and month; the appended rows are left as they are); formula text is never inspected.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
 ---
@@ -98,7 +100,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 **导入的金额和日期被存成文本，汇总公式直接忽略了它们**
 
-> **关于这条记录：** 失败产物由 [`failure.py`](failure.py) 执行下述朴素步骤生成，是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
+> **关于这条记录：** 失败产物由脚本 [`failure.py`](failure.py) 生成，它会犯下文“失败产物中观察到的情况”所述的错误。这是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
 
 ### 任务
 
@@ -122,11 +124,11 @@ date,category,description,amount
 
 ### 预期结果
 
-六条新记录存的是真正的日期和数字，Summary 的每项合计（类别、月份、总计）都包含它们。
+六条新记录存的是真正的日期和数字，Summary 的每项合计（类别、月份、总计）都包含它们，并且仍随费用记录变化。
 
 ### 失败产物中观察到的情况
 
-智能体把银行导出的 CSV 原样逐行写进表格，"1,280.00" 这样的金额和 "2024-03-04" 这样的日期都成了字符串。它们在表格里看起来正常，但 SUMIF/SUMIFS 会跳过文本，于是 Summary 的各项合计一笔新费用都没算进去。
+失败文件中，六笔新费用位于 Expenses 表第 17 至 22 行，但其中每个日期和金额都是与 CSV 一字不差的文本，例如 A17 为 '2024-03-02'，D17 为 '1,766.34'（格式为 General），而原有各行存的是真正的日期和数字。Summary 的公式未变（=SUMIF(Expenses!B:B,A2,Expenses!D:D) 等）。重新计算后，没有一项合计计入了任何一笔新费用：Travel 为 854.66，应为 2,621.00；March 为 0.00，应为 7,410.42；总计为 7,835.07，应为 15,245.49。January 和 February 是对的，因为新费用都在三月。
 
 与该复现配套的示例声明（为本案例撰写，并非摘自真实运行）：
 
@@ -141,12 +143,13 @@ date,category,description,amount
 | `rows-appended` | 内容 | 新费用按顺序追加在现有记录之后 | pass |
 | `amounts-are-numbers` | 内容 | 新金额存为数字，且数值正确 | **FAIL**: amounts are wrong: row 17: '1,766.34' is text; row 18: '79.75' is text; row 19: '72.94' is text |
 | `dates-are-dates` | 内容 | 新日期存为真正的日期，且日期正确 | **FAIL**: dates are wrong: row 17: '2024-03-02' is not a date; row 18: '2024-03-03' is not a date; row 19: '2024-03-07' is not a date |
-| `summary-includes-new` | 数值 | Summary 的每项合计（类别、月份、总计）都包含新费用 | **FAIL**: Summary 'Travel' is 854.66, expected 2,621.00 (missing 1,766.34) |
+| `summary-includes-new` | 数值 | Summary 的每项合计（类别、月份、总计）都包含新费用 | **FAIL**: 7 of 9 Summary totals are wrong: 'Travel' is 854.66, expected 2,621.00 (difference -1,766.34), short by exactly the new expenses it should include; 'Meals' is 3,018.00, expected 3,681.62 (difference -663.62), short by exactly the new expenses it should include; 'Office' is 1,811.80, expected 1,884.74 (difference -72.94), short by exactly the new expenses it should include (and 4 more) |
+| `summary-still-calculated` | 无连带破坏 | Summary 的每项合计（类别、月份、总计）仍随费用数据变化 | pass |
 | `existing-unchanged` | 无连带破坏 | 原有费用记录保持不变 | pass |
 
 ### 解释
 
-看起来像数字的文本仍然是文本。关于"公式覆盖整列"的说法本身没错，所以推理听起来很合理；只是智能体改完后从没核对过任何一个合计。
+看起来像数字的文本仍然是文本，SUMIF、SUMIFS 和 SUM 都会跳过它。示例声明中"公式覆盖整列"的说法本身没错，所以推理听起来很合理；改完后看一眼 March 合计或总计，就能发现缺口。
 
 分类：**模型/智能体失败**（证据级别：reconstructed）。
 
@@ -161,4 +164,5 @@ date,category,description,amount
 ### 限制
 
 - 导出中只有 ISO 日期和逗号千分位，其他地区格式未覆盖。
+- Summary 各项合计是否仍随费用记录变化，只在一个修改过的副本中检验（每笔原有费用各改为不同的金额、类别和月份，新追加的行保持不变）；检查不读公式文本。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

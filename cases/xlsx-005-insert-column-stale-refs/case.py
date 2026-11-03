@@ -52,9 +52,41 @@ def _discount(meta, product):
     return 0.0
 
 
-def _total(meta, line, qty=None):
-    qty = line["qty"] if qty is None else qty
-    return line["price"] * qty * (1 - _discount(meta, line["product"]))
+def _total(meta, line):
+    return line["price"] * line["qty"] * (1 - _discount(meta, line["product"]))
+
+
+def _amt(x, places=2, sign=False):
+    """A number with at least ``places`` and at most 6 decimals, so that two numbers the checker
+    tells apart never print the same."""
+    whole, _, frac = (f"{x:+,.6f}" if sign else f"{x:,.6f}").rstrip("0").partition(".")
+    frac = frac.ljust(places, "0")
+    return f"{whole}.{frac}" if frac else whole
+
+
+def _whole_cents(x):
+    return abs(x * 100 - round(x * 100)) < 1e-6
+
+
+def _money_ok(got, exact):
+    """The exact amount, or that amount rounded to whole cents (in either direction).
+
+    The task gives Line Total = Unit Price x Qty x (1 - Discount) and does not ask for
+    unrounded values; rounding a money amount to the cent is normal, so it is accepted.
+    "Within one cent" keeps a round-down of a value whose binary form is just below a whole
+    cent from failing.
+    """
+    return X.close(got, exact) or (_whole_cents(got) and abs(got - exact) <= 0.01 + 1e-9)
+
+
+def _revenue_ok(values, got, exact, line_exacts):
+    """Total revenue is right if it is the exact amount, that amount rounded to whole cents, or the
+    sum of the Line Totals shown in the same file when each of them is accepted by _money_ok."""
+    if _money_ok(got, exact):
+        return True
+    shown = [values[X.make_ref(LINES, (r, 5))] for r, _ in line_exacts]
+    return (all(X.is_number(v) and _money_ok(v, e) for v, (_, e) in zip(shown, line_exacts))
+            and X.close(got, sum(shown)))
 
 
 def _rows(ctx):
@@ -75,12 +107,35 @@ def _layout_ok(ctx):
             f"Lines headers are {got}, expected {NEW_HEADERS}")
 
 
+def _changed(meta):
+    """[(row, line, unit price, discount, qty)] in the "changed" scenario.
+
+    In a copy of the file, every line gets a different Unit Price, Discount and Qty
+    (each changed by a different amount per line), so a typed Line Total, a formula
+    that reads another line, or a Summary figure that is a typed number no longer matches.
+    """
+    out = []
+    for k, line in enumerate(meta["lines"], start=1):
+        out.append((k + 1, line, round(line["price"] + 0.5 * k, 2), round(0.3 + 0.01 * k, 2), line["qty"] + k))
+    return out
+
+
 def scenarios(ctx):
     _layout_ok(ctx)
-    return {
-        "more_units": {X.make_ref(LINES, (2, 4)): ctx.meta["lines"][0]["qty"] + 5},
-        "half_off": {X.make_ref(LINES, (2, 3)): 0.5},
-    }
+    overrides = {}
+    for r, _, price, discount, qty in _changed(ctx.meta):
+        overrides[X.make_ref(LINES, (r, 2))] = price
+        overrides[X.make_ref(LINES, (r, 3))] = discount
+        overrides[X.make_ref(LINES, (r, 4))] = qty
+    return {"changed": overrides}
+
+
+CHANGED = "in a copy of the file where every line's Unit Price, Discount and Qty were changed"
+
+
+def _same_as_before(base, ref, got):
+    before = base[ref]
+    return ", the same as before the change" if X.is_number(before) and X.close(before, got) else ""
 
 
 @rule(
@@ -115,6 +170,27 @@ def discounts_entered(ctx):
 
 
 @rule(
+    "discounts-percent-format",
+    "The discount cells are formatted as percentages",
+    kind="structure",
+    title_zh="折扣单元格为百分比格式",
+    requirement="Enter these discounts (as fractions, e.g. 5% is 0.05, formatted as a percentage).",
+)
+def discounts_percent_format(ctx):
+    _layout_ok(ctx)
+    ws = ctx.ws(LINES)
+    bad = []
+    for r, line in zip(_rows(ctx), ctx.meta["lines"]):
+        if ws.cell(r, 3).value is None:
+            continue  # an empty cell shows nothing; discounts-entered decides whether it may be empty
+        fmt = X.number_format(ws, r, 3)
+        if not X.is_percent_format(fmt):
+            bad.append(f"{line['product']} ({X.make_ref(LINES, (r, 3))}, format {fmt!r})")
+    require(not bad, f"{len(bad)} discount cell(s) are not formatted as a percentage: " + ", ".join(bad[:3])
+            + (f" (and {len(bad) - 3} more)" if len(bad) > 3 else ""))
+
+
+@rule(
     "line-totals-correct",
     "Line Total = Unit Price x Qty x (1 - Discount) on every line",
     kind="value",
@@ -126,22 +202,29 @@ def line_totals_correct(ctx):
     for r, line in zip(_rows(ctx), ctx.meta["lines"]):
         got = ctx.num(values, X.make_ref(LINES, (r, 5)), f"Line Total of {line['product']}")
         exp = _total(ctx.meta, line)
-        require(X.close(got, exp), f"Line Total of {line['product']} is {got:,.2f}, expected {exp:,.2f}")
+        require(_money_ok(got, exp), f"Line Total of {line['product']} is {_amt(got)}, expected {_amt(exp)} "
+                                  f"(difference {_amt(got - exp, sign=True)})")
 
 
 @rule(
     "line-totals-live",
-    "Line Total follows a change of Discount",
+    "Every Line Total follows changes of its Unit Price, Discount and Qty",
     kind="live",
-    title_zh="修改 Discount 后，Line Total 随之变化",
+    title_zh="每行 Line Total 都随本行的 Unit Price、Discount 和 Qty 变化",
     requirement="Change Line Total to Unit Price x Qty x (1 - Discount), as a formula on every line.",
 )
 def line_totals_live(ctx):
-    half = ctx.values(scenario="half_off")
-    first = ctx.meta["lines"][0]
-    got = ctx.num(half, X.make_ref(LINES, (2, 5)), "Line Total of the first line")
-    exp = first["price"] * first["qty"] * 0.5
-    require(X.close(got, exp), f"with a 50% discount on the first line, its Line Total is {got:,.2f}, expected {exp:,.2f}")
+    base, changed = ctx.values(), ctx.values(scenario="changed")
+    rows = _changed(ctx.meta)
+    wrong = []
+    for r, line, price, discount, qty in rows:
+        ref = X.make_ref(LINES, (r, 5))
+        got = ctx.num(changed, ref, f"Line Total of {line['product']}")
+        exp = price * qty * (1 - discount)
+        if not _money_ok(got, exp):
+            wrong.append(f"{line['product']} (row {r}): with Unit Price {price:.2f}, Discount {discount:.0%} and "
+                         f"Qty {qty} its Line Total is {_amt(got)}, expected {_amt(exp)}{_same_as_before(base, ref, got)}")
+    require(not wrong, f"{CHANGED}, {len(wrong)} of {len(rows)} Line Totals did not follow: " + "; ".join(wrong[:3]))
 
 
 @rule(
@@ -159,26 +242,44 @@ def summary_correct(ctx):
         "units": sum(line["qty"] for line in lines),
         "avg": sum(line["price"] for line in lines) / len(lines),
     }
+    line_exacts = [(r, _total(ctx.meta, line)) for r, line in zip(_rows(ctx), lines)]
     for key, exp in expected.items():
         got = ctx.num(values, _summary_cell(ctx, key), LABELS[key])
-        require(X.close(got, exp), f"{LABELS[key]} is {got:,.2f}, expected {exp:,.2f}")
+        ok = _revenue_ok(values, got, exp, line_exacts) if key == "revenue" else X.close(got, exp)
+        require(ok, f"{LABELS[key]} is {_amt(got)}, expected {_amt(exp)} (difference {_amt(got - exp, sign=True)})")
 
 
 @rule(
     "summary-live",
-    "Summary updates when a quantity on Lines changes",
+    "Summary total revenue, total units and average unit price follow changes on Lines",
     kind="live",
-    title_zh="Lines 表的数量变化时，Summary 随之更新",
+    title_zh="Lines 表的数据变化时，Summary 的总收入、总数量和平均单价随之更新",
     requirement="...and keep updating when the Lines data changes.",
 )
 def summary_live(ctx):
-    base, more = ctx.values(), ctx.values(scenario="more_units")
-    first = ctx.meta["lines"][0]
-    d_units = ctx.num(more, _summary_cell(ctx, "units")) - ctx.num(base, _summary_cell(ctx, "units"))
-    d_rev = ctx.num(more, _summary_cell(ctx, "revenue")) - ctx.num(base, _summary_cell(ctx, "revenue"))
-    exp_rev = _total(ctx.meta, first, first["qty"] + 5) - _total(ctx.meta, first)
-    require(X.close(d_units, 5), f"adding 5 units to the first line changed Total units by {d_units:g}, expected +5")
-    require(X.close(d_rev, exp_rev), f"adding 5 units to the first line changed Total revenue by {d_rev:,.2f}, expected +{exp_rev:,.2f}")
+    base, changed = ctx.values(), ctx.values(scenario="changed")
+    rows = _changed(ctx.meta)
+    expected = {
+        "revenue": sum(price * qty * (1 - discount) for _, _, price, discount, qty in rows),
+        "units": sum(qty for *_, qty in rows),
+        "avg": sum(price for _, _, price, _, _ in rows) / len(rows),
+    }
+    line_exacts = [(r, price * qty * (1 - discount)) for r, _, price, discount, qty in rows]
+    wrong = []
+    for key, exp in expected.items():
+        ref = _summary_cell(ctx, key)
+        got = ctx.num(changed, ref, LABELS[key])
+        ok = _revenue_ok(changed, got, exp, line_exacts) if key == "revenue" else X.close(got, exp)
+        if ok:
+            continue
+        note = _same_as_before(base, ref, got)
+        if key == "revenue":
+            shown = [changed[X.make_ref(LINES, (r, 5))] for r, *_ in rows]
+            if all(X.is_number(v) for v in shown) and X.close(sum(shown), got):
+                note += ("; it does equal the sum of the Line Totals in that copy, so the gap comes from Line Totals "
+                         "that are wrong in that copy (see line-totals-live)")
+        wrong.append(f"{LABELS[key]} is {_amt(got)}, expected {_amt(exp)} (difference {_amt(got - exp, sign=True)}){note}")
+    require(not wrong, f"{CHANGED}, " + "; ".join(wrong))
 
 
 @rule(
@@ -192,6 +293,9 @@ def lines_unchanged(ctx):
     _layout_ok(ctx)
     vals = ctx.values().ws(LINES)
     for r, line in zip(_rows(ctx), ctx.meta["lines"]):
-        require(vals.cell(r, 1).value == line["product"], f"row {r} no longer holds {line['product']}")
-        require(X.close(vals.cell(r, 2).value, line["price"]), f"Unit Price of {line['product']} changed")
-        require(X.close(vals.cell(r, 4).value, line["qty"]), f"Qty of {line['product']} changed")
+        got = vals.cell(r, 1).value
+        require(got == line["product"], f"row {r} holds {X.show(got)}, expected {line['product']!r}")
+        got = vals.cell(r, 2).value
+        require(X.close(got, line["price"]), f"Unit Price of {line['product']} is {X.show(got)}, expected {line['price']}")
+        got = vals.cell(r, 4).value
+        require(X.close(got, line["qty"]), f"Qty of {line['product']} is {X.show(got)}, expected {line['qty']}")

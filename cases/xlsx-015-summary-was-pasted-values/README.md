@@ -6,9 +6,9 @@
 
 中文版见下方 / [Chinese version below](#中文)
 
-> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), which
-> performs the naive steps described below. It is a reconstruction of a commonly reported pattern, not a
-> recording of a particular model. Recorded agent runs, when there are any, are listed under
+> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), a script
+> that makes the mistake described under "Observed in the failure artifact" below. It is a reconstruction
+> of a commonly reported pattern, not a recording of a particular model. Recorded agent runs, when there are any, are listed under
 > [Retests](#retests).
 
 ## Task
@@ -33,7 +33,7 @@ Q3 Data holds the three corrected figures and the Summary totals match the corre
 
 ## Observed in the failure artifact
 
-The agent applied the three corrections to the Q3 Data sheet and stated that the Summary would update automatically. The Summary sheet does not contain formulas: someone had pasted the department totals in as plain numbers. The totals still show the old, uncorrected figures.
+The three corrections are applied in Q3 Data. The Summary sheet, as in the input, holds plain numbers rather than formulas, and they were not changed: Marketing, Operations and Engineering still show their old totals (Engineering 117,810 instead of 115,520), and the grand total is 690,630 instead of 686,420.
 
 The illustrative claim that goes with this reconstruction (written for the case, not quoted from a run):
 
@@ -77,7 +77,7 @@ failbook run xlsx-015 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-015 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-015 --seeds 3`): [`reference.py`](reference.py) and [`alt_static_values.py`](alt_static_values.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-015 --seeds 3`): [`reference.py`](reference.py) and [`alt_static_values.py`](alt_static_values.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_other_row_changed.py`](fail_other_row_changed.py) (another wrong solution) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -94,7 +94,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 **数据改对了，但汇总表是粘贴的静态数值，根本不会更新**
 
-> **关于这条记录：** 失败产物由 [`failure.py`](failure.py) 执行下述朴素步骤生成，是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
+> **关于这条记录：** 失败产物由脚本 [`failure.py`](failure.py) 生成，它会犯下文“失败产物中观察到的情况”所述的错误。这是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
 
 ### 任务
 
@@ -118,7 +118,7 @@ Q3 Data 中三处数字已更正，Summary 的合计（公式或数值均可）�
 
 ### 失败产物中观察到的情况
 
-智能体在 Q3 Data 表中改好了三处数据，并声称 Summary 会自动更新。可 Summary 表里根本没有公式—— 之前有人把各部门合计作为普通数字粘贴了进去。于是汇总仍显示旧的、未更正的数字。
+Q3 Data 中的三处更正已完成。但 Summary 表和输入文件一样，存的是普通数字而不是公式，而且没有被改动：Marketing、Operations 和 Engineering 仍显示旧的合计（Engineering 为 117,810，而不是 115,520），总计为 690,630，而不是 686,420。
 
 与该复现配套的示例声明（为本案例撰写，并非摘自真实运行）：
 

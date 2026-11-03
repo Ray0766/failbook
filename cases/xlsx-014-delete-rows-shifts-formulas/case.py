@@ -77,8 +77,11 @@ def _summary_ref(ctx, key):
 
 
 def scenarios(ctx):
-    first = _kept(ctx.meta)[0]
-    return {"more": {X.make_ref(STOCK, (2, 4)): first["qty"] + 10}}
+    rows = _kept_rows(ctx)
+    return {
+        "more": {X.make_ref(STOCK, (r, 4)): it["qty"] + 10 for r, it in rows},
+        "dearer": {X.make_ref(STOCK, (r, 5)): round(it["cost"] + 1, 2) for r, it in rows},
+    }
 
 
 @rule(
@@ -168,19 +171,35 @@ def summary_correct(ctx):
 
 @rule(
     "totals-live",
-    "Totals and Summary update when a quantity changes",
+    "Values, totals and Summary update when quantities or costs change",
     kind="live",
-    title_zh="数量变化时，合计与 Summary 随之更新",
+    title_zh="数量或成本变化时，Value、合计与 Summary 随之更新",
     requirement="...and keep updating (as formulas) when quantities or costs change.",
 )
 def totals_live(ctx):
-    base, more = ctx.values(), ctx.values(scenario="more")
-    cost = _kept(ctx.meta)[0]["cost"]
+    base = ctx.values()
     total = _total_row(ctx)
-    for ref, label, exp in (
-        (X.make_ref(STOCK, (total, 4)), "Total Qty", 10),
-        (X.make_ref(STOCK, (total, 6)), "Total Value", 10 * cost),
-        (_summary_ref(ctx, "value"), LABELS["value"], 10 * cost),
-    ):
-        delta = ctx.num(more, ref, label) - ctx.num(base, ref, label)
-        require(X.close(delta, exp), f"adding 10 units to the first item changed {label} by {delta:,.2f}, expected +{exp:,.2f}")
+    for scenario, change, col in (("more", "adding 10 units to every remaining item", 4),
+                                  ("dearer", "raising every remaining unit cost by 1", 5)):
+        changed = ctx.values(scenario=scenario)
+        d_qty = d_value = 0.0
+        other_col = 5 if col == 4 else 4  # Value = Qty x Unit Cost
+        for r, it in _kept_rows(ctx):
+            ref_in, ref_other = X.make_ref(STOCK, (r, col)), X.make_ref(STOCK, (r, other_col))
+            what = f"{HEADERS[col - 1]} of {it['sku']}"
+            d_in = ctx.num(changed, ref_in, what) - ctx.num(base, ref_in, what)
+            expected = d_in * ctx.num(base, ref_other, f"{HEADERS[other_col - 1]} of {it['sku']}")
+            d_qty += d_in if col == 4 else 0.0
+            d_value += expected
+            ref = X.make_ref(STOCK, (r, 6))
+            got = ctx.num(changed, ref, f"Value of {it['sku']}") - ctx.num(base, ref, f"Value of {it['sku']}")
+            require(X.close(got, expected), f"{change} changed the Value of {it['sku']} (row {r}) by {got:+,.2f}, "
+                    f"expected {expected:+,.2f}")
+        for ref, label, exp in (
+            (X.make_ref(STOCK, (total, 4)), "Total Qty", d_qty),
+            (X.make_ref(STOCK, (total, 6)), "Total Value", d_value),
+            (_summary_ref(ctx, "units"), LABELS["units"], d_qty),
+            (_summary_ref(ctx, "value"), LABELS["value"], d_value),
+        ):
+            delta = ctx.num(changed, ref, label) - ctx.num(base, ref, label)
+            require(X.close(delta, exp), f"{change} changed {label} by {delta:+,.2f}, expected {exp:+,.2f}")

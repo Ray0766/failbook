@@ -21,9 +21,9 @@
     {
       "id": "highlight-covers-new-rows",
       "kind": "structure",
-      "title": "The red 'Blocked' highlight applies to every task row, including the new ones",
+      "title": "Every task row, including the new ones, is highlighted in red exactly when its Status is 'Blocked'",
       "status": "fail",
-      "detail": "the 'Blocked' highlight does not cover D14, D15, D16, D17, D18"
+      "detail": "D15, D16 (Status 'Blocked') are not highlighted in red; for D15: no conditional format with a colour applies to it"
     },
     {
       "id": "existing-unchanged",

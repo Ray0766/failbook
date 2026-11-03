@@ -2,7 +2,7 @@ import openpyxl
 
 from failbook import kit
 from failbook import xlsx as X
-from failbook.checks import require, rule
+from failbook.checks import Fail, Inconclusive, require, rule
 
 PRODUCTS, ORDERS = "Products", "Orders"
 CATEGORIES = ["Furniture", "Stationery", "Electronics", "Kitchen", "Storage"]
@@ -52,13 +52,24 @@ def _rows(ctx):
     return list(zip(range(2, 2 + len(ctx.meta["orders"])), ctx.meta["orders"]))
 
 
+def _changed(meta):
+    """The "change-products" scenario: every product moves to the next category and costs 10 more."""
+    out = {}
+    for p in meta["products"]:
+        category = CATEGORIES[(CATEGORIES.index(p["category"]) + 1) % len(CATEGORIES)]
+        out[p["sku"]] = {"category": category, "price": round(p["price"] + 10, 2)}
+    return out
+
+
 def scenarios(ctx):
     ws = ctx.ws(PRODUCTS)
-    sku = ctx.meta["orders"][0]["sku"]
-    hit = X.find_cell(ws, sku, col=1)
-    require(hit, f"product {sku} not found on the Products sheet")
-    p = _product(ctx.meta, sku)
-    return {"reprice": {X.make_ref(PRODUCTS, (hit[0], 3)): round(p["price"] + 10, 2)}}
+    overrides = {}
+    for sku, new in _changed(ctx.meta).items():
+        hit = X.find_cell(ws, sku, col=1)
+        require(hit, f"product {sku} not found on the Products sheet")
+        overrides[X.make_ref(PRODUCTS, (hit[0], 2))] = new["category"]
+        overrides[X.make_ref(PRODUCTS, (hit[0], 3))] = new["price"]
+    return {"change-products": overrides}
 
 
 def _mismatches(ctx, col, expected):
@@ -116,22 +127,44 @@ def amounts_correct(ctx):
 
 @rule(
     "lookups-live",
-    "Changing a price on Products updates the matching orders",
+    "Orders follow when every category and price on Products is changed",
     kind="live",
-    title_zh="修改 Products 表中的价格后，对应订单随之更新",
+    title_zh="修改 Products 表中所有类别和价格后，订单随之更新",
     requirement="Use formulas, so that the orders update automatically if a product's category or price is changed.",
 )
 def lookups_live(ctx):
-    values = ctx.values(scenario="reprice")
-    sku = ctx.meta["orders"][0]["sku"]
-    new_price = round(_product(ctx.meta, sku)["price"] + 10, 2)
+    base, values = ctx.values(), ctx.values(scenario="change-products")
+    changed = _changed(ctx.meta)
+    stale, checked = [], 0
     for r, order in _rows(ctx):
-        if order["sku"] != sku:
-            continue
-        got = ctx.num(values, X.make_ref(ORDERS, (r, 5)), f"Unit Price of {order['order']}")
-        require(X.close(got, new_price), f"after changing the price of {sku} to {new_price}, {order['order']} shows {got}")
-        amt = ctx.num(values, X.make_ref(ORDERS, (r, 6)), f"Amount of {order['order']}")
-        require(X.close(amt, new_price * order["qty"]), f"after the price change, {order['order']}'s Amount is {amt}")
+        p, new, qty = _product(ctx.meta, order["sku"]), changed[order["sku"]], order["qty"]
+        label = f"{order['order']} ({order['sku']})"
+        for col, what, before, after in ((4, "Category", p["category"], new["category"]),
+                                         (5, "Unit Price", p["price"], new["price"]),
+                                         (6, "Amount", qty * p["price"], qty * new["price"])):
+            ref = X.make_ref(ORDERS, (r, col))
+            if X.is_error(base[ref]):
+                try:
+                    ctx.value(base, ref)  # an engine gap raises Inconclusive, which applies here too
+                except Fail:
+                    continue  # a definite error before the change: the value rules report it
+            if not _same(base[ref], before):
+                continue  # already wrong before the change: the value rules report it
+            checked += 1
+            got = ctx.value(values, ref) if isinstance(after, str) else ctx.num(values, ref, f"{what} of {label}")
+            if not _same(got, after):
+                stale.append(f"{label} {what} is still {X.show(got)}, expected {X.show(after)}")
+    if not checked:
+        raise Inconclusive("no order shows the right Category, Unit Price or Amount before the change, so "
+                           "whether they follow a change on Products is not assessed (see the value rules)")
+    require(not stale, "after moving every product to another category and raising every price by 10 on "
+            f"Products, {len(stale)} of {checked} order cells did not follow, e.g. " + "; ".join(stale[:3]))
+
+
+def _same(got, expected):
+    if isinstance(expected, str):
+        return isinstance(got, str) and X.norm_text(got) == X.norm_text(expected)
+    return X.is_number(got) and X.close(got, expected)
 
 
 @rule(

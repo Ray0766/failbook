@@ -3,7 +3,7 @@ from openpyxl.chart import LineChart, Reference
 
 from failbook import kit
 from failbook import xlsx as X
-from failbook.checks import require, rule
+from failbook.checks import Inconclusive, require, rule
 
 SHEET = "Monthly"
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -101,24 +101,91 @@ def chart_present(ctx):
 
 @rule(
     "chart-covers-all-months",
-    "Both series cover January to December",
+    "The Revenue and Costs series cover January to December, aligned with the month labels",
     kind="structure",
-    title_zh="两条数据系列都覆盖 1 月到 12 月",
+    title_zh="Revenue 和 Costs 两条系列覆盖 1 月到 12 月，并与月份标签对齐",
     requirement="The existing chart must show all twelve months, January to December, for both Revenue and Costs.",
 )
 def chart_covers_all_months(ctx):
     for chart in _titled_charts(ctx):
-        _check_chart(chart)
+        _check_chart(ctx, chart)
 
 
-def _check_chart(chart):
-    found = {}
+SERIES = ((2, "Revenue"), (3, "Costs"))
+
+
+def _check_chart(ctx, chart):
+    wb, vals = ctx.wb(), ctx.values().ws(SHEET)
+    found, unresolved = {}, []
     for s in chart["series"]:
-        rng = X.parse_range(s["val"] or "")
-        if rng and rng[0] == SHEET and rng[2] == rng[4]:
-            found[rng[2]] = (rng, X.parse_range(s["cat"] or ""))
-    for col, label in ((2, "Revenue"), (3, "Costs")):
-        require(col in found, f"the chart has no {label} series (series: {[s['val'] for s in chart['series']]})")
-        (sheet, r1, _, r2, _), cat = found[col]
-        require(r1 <= 2 and r2 >= 13, f"the {label} series covers rows {r1}-{r2}, not 2-13 (Jan-Dec)")
-        require(cat is not None and cat[1] <= 2 and cat[3] >= 13, f"the {label} series' month labels do not cover Jan-Dec")
+        rng = X.resolve_range(s["val"], wb, SHEET)
+        if rng is None:
+            unresolved.append(_describe(wb, s["val"]))
+        elif rng[0] == SHEET and rng[2] == rng[4]:
+            found.setdefault(rng[2], (s, rng))
+    for col, label in SERIES:
+        if col not in found:
+            if unresolved:
+                raise Inconclusive(
+                    f"no chart series resolves to a fixed range in the {label} column. The checker resolves "
+                    "plain ranges and names that stand for a fixed range, not "
+                    f"{'; '.join(unresolved)}, so whether the chart shows January to December is not checked")
+            require(False, f"the chart has no {label} series (series: {[s['val'] for s in chart['series']]})")
+        s, (_, r1, _, r2, _) = found[col]
+        where = s["val"]
+        first = X.show(vals.cell(r1, col).value)
+        require(r1 == 2, f"the {label} series ({where}) starts at row {r1} ({first}"
+                + (", the header" if r1 == 1 else "") + "), not at row 2 (Jan)")
+        require(r2 >= 13, f"the {label} series covers rows {r1}-{r2}, not 2-13 (Jan-Dec)")
+        extra = [r for r in range(14, r2 + 1) if vals.cell(r, col).value not in (None, "")]
+        require(not extra, f"the {label} series ({where}) also plots row {extra[0] if extra else ''}, which is not a month")
+        _check_labels(wb, vals, label, s)
+        _check_name(ctx, wb, label, s)
+
+
+def _describe(wb, ref):
+    """What an unresolved series reference is, for an inconclusive message."""
+    if not ref:
+        return "a series whose values are typed into the chart"
+    name = ref.split("!", 1)[1] if ref.startswith("[0]!") else ref
+    for key, defn in wb.defined_names.items():
+        if key.casefold() == name.casefold():
+            return f"{ref} (the name {key} = {defn.attr_text})"
+    return ref
+
+
+def _check_labels(wb, vals, label, s):
+    if not s["cat"]:
+        require(False, f"the {label} series has no month labels")
+    cat = X.resolve_range(s["cat"], wb, SHEET)
+    if cat is None:
+        raise Inconclusive(f"the month labels of the {label} series ({s['cat']}) do not resolve to a fixed range "
+                           "the checker can read; they are not checked")
+    sheet, c1_row, c1, c2_row, c2 = cat
+    require(sheet == SHEET, f"the month labels of the {label} series come from sheet {sheet!r}, not {SHEET}")
+    if c1 != c2:
+        raise Inconclusive(f"the month labels of the {label} series span several columns ({s['cat']}); "
+                           "multi-level labels are not checked")
+    require(c1_row == 2, f"the month labels of the {label} series ({s['cat']}) start at row {c1_row}, not row 2, "
+            "so they do not line up with the values")
+    require(c2_row >= 13, f"the month labels of the {label} series cover rows {c1_row}-{c2_row}, not 2-13 (Jan-Dec)")
+    for r, month in enumerate(MONTHS, start=2):
+        got = vals.cell(r, c1).value
+        require(X.norm_text(got) == X.norm_text(month),
+                f"the month labels of the {label} series ({s['cat']}) read {X.show(got)} in row {r}, not {month!r}")
+
+
+def _check_name(ctx, wb, label, s):
+    if s["name"]:
+        ref = X.resolve_range(s["name"], wb, SHEET)
+        if ref is None or ref[1] != ref[3] or ref[2] != ref[4]:
+            raise Inconclusive(f"the name of the {label} series comes from {s['name']}, which the checker cannot "
+                               "resolve to one cell; the legend text is not checked")
+        shown, source = ctx.values().ws(ref[0]).cell(ref[1], ref[2]).value, f"from {s['name']}"
+    elif s.get("name_text"):
+        shown, source = s["name_text"], "typed into the chart"
+    else:
+        require(False, f"the {label} series has no name, so the legend no longer says which line is {label} "
+                "(the original chart took the names from the header row)")
+    require(X.norm_text(shown) == X.norm_text(label),
+            f"the series that plots the {label} column is named {X.show(shown)} ({source}), not {label!r}")

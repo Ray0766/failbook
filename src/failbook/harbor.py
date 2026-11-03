@@ -250,7 +250,7 @@ def export_skillevaluator(cases: list[Case], out: Path, *, fix: str, seed: int =
     ``skillevaluator tier3 evaluate <dir>`` then runs every case with and without
     the skill and reports the lift.
     """
-    from .fixes import load_fix
+    from .fixes import SKILL_COPY_IGNORE, load_fix
 
     f = load_fix(fix)
     if f.kind != "skill":
@@ -258,7 +258,7 @@ def export_skillevaluator(cases: list[Case], out: Path, *, fix: str, seed: int =
     skill_root = Path(out) / f.skill_name
     if skill_root.exists():
         shutil.rmtree(skill_root)
-    shutil.copytree(f.skill_dir, skill_root)
+    shutil.copytree(f.skill_dir, skill_root, ignore=SKILL_COPY_IGNORE)
     harbor_dir = skill_root / "evals" / "harbor"
     harbor_dir.mkdir(parents=True)
     tasks = [export_task(c, harbor_dir, seed=seed, lang=lang, skills_dir="/workspace/skills") for c in cases]

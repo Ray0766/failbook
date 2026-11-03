@@ -6,9 +6,9 @@
 
 中文版见下方 / [Chinese version below](#中文)
 
-> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), which
-> performs the naive steps described below. It is a reconstruction of a commonly reported pattern, not a
-> recording of a particular model. Recorded agent runs, when there are any, are listed under
+> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), a script
+> that makes the mistake described under "Observed in the failure artifact" below. It is a reconstruction
+> of a commonly reported pattern, not a recording of a particular model. Recorded agent runs, when there are any, are listed under
 > [Retests](#retests).
 
 ## Task
@@ -25,7 +25,7 @@ The Grand Total equals the sum over rep rows (equivalently, the sum of the subto
 
 ## Observed in the failure artifact
 
-The sales sheet is grouped by region, and each group ends with a subtotal row. The agent added a Grand Total row with =SUM(C2:C17) over the whole column. That range contains the subtotal rows too, so every figure in the Grand Total is exactly twice the real total.
+Row 18 is labelled Grand Total and holds =SUM(C2:C17) to =SUM(G2:G17), one sum over the whole column. That range includes the four subtotal rows, so every Grand Total figure is exactly twice the total over the reps (Q1 805,400 instead of 402,700).
 
 The illustrative claim that goes with this reconstruction (written for the case, not quoted from a run):
 
@@ -39,7 +39,7 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 |---|---|---|---|
 | `grand-total-row` | content | A 'Grand Total' row sits directly below the last subtotal | pass |
 | `grand-total-values` | value | Grand Total equals the sum over all reps (subtotals not counted twice) | **FAIL**: Grand Total Q1 is 805,400, expected 402,700 (exactly double: the subtotals are counted too) |
-| `grand-total-live` | live | Adding 100 to one rep's Q2 adds exactly 100 to the Grand Total | **FAIL**: adding 100 to one rep's Q2 changed Grand Total Q2 by 200, expected +100 |
+| `grand-total-live` | live | Adding 100 to one rep's figure in each quarter adds exactly 100 to each quarter's Grand Total and 400 to Year | **FAIL**: adding 100 to one rep's Q1 (row 10) changed Grand Total Q1 by 200, expected +100 |
 | `sales-unchanged` | no collateral damage | Rep rows and subtotal rows are unchanged | pass |
 
 Files: [`failure/regional.xlsx`](failure/regional.xlsx) (graded in [`failure/grade.json`](failure/grade.json)); the steps that produced it: [`failure.py`](failure.py).
@@ -68,7 +68,7 @@ failbook run xlsx-010 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-010 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-010 --seeds 3`): [`reference.py`](reference.py) and [`alt_sumif_reps.py`](alt_sumif_reps.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-010 --seeds 3`): [`reference.py`](reference.py) and [`alt_sumif_reps.py`](alt_sumif_reps.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_static_quarters.py`](fail_static_quarters.py) (another wrong solution) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -76,7 +76,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 ## Limitations
 
-- The live rule bumps one rep's Q2; formulas that are correct for Q2 but double count another column are caught by the value rule.
+- The live rule adds 100 to one figure in each quarter, each in a different rep's row, and expects +100 in each quarter's Grand Total and +400 in Year. A Grand Total that leaves out rows other than the four bumped ones is caught only by the value rule.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
 ---
@@ -85,7 +85,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 **总计把小计也一起加了进去，所有数字都算了两遍**
 
-> **关于这条记录：** 失败产物由 [`failure.py`](failure.py) 执行下述朴素步骤生成，是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
+> **关于这条记录：** 失败产物由脚本 [`failure.py`](failure.py) 生成，它会犯下文“失败产物中观察到的情况”所述的错误。这是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
 
 ### 任务
 
@@ -101,7 +101,7 @@ Grand Total 的 Q1–Q4 与 Year 等于所有代表行之和（即各小计之�
 
 ### 失败产物中观察到的情况
 
-销售表按区域分组，每组末尾有一行小计。智能体新增的 Grand Total 行对整列使用 =SUM(C2:C17)，而这个区域把小计行也包含在内，于是 Grand Total 的每个数字都恰好是真实总额的两倍。
+第 18 行标为 Grand Total，内容是 =SUM(C2:C17) 到 =SUM(G2:G17)，即对整列求和。这个区域包含了四个小计行，于是 Grand Total 的每个数字都恰好是全部代表合计的两倍（Q1 为 805,400，而不是 402,700）。
 
 与该复现配套的示例声明（为本案例撰写，并非摘自真实运行）：
 
@@ -115,7 +115,7 @@ Grand Total 的 Q1–Q4 与 Year 等于所有代表行之和（即各小计之�
 |---|---|---|---|
 | `grand-total-row` | 内容 | 'Grand Total' 行位于最后一个小计行的正下方 | pass |
 | `grand-total-values` | 数值 | Grand Total 等于全部销售代表的合计（小计未被重复计入） | **FAIL**: Grand Total Q1 is 805,400, expected 402,700 (exactly double: the subtotals are counted too) |
-| `grand-total-live` | 实时性 | 某位代表的 Q2 增加 100，Grand Total 恰好增加 100 | **FAIL**: adding 100 to one rep's Q2 changed Grand Total Q2 by 200, expected +100 |
+| `grand-total-live` | 实时性 | 每个季度各给一位代表加 100，各季度 Grand Total 恰好增加 100，Year 增加 400 | **FAIL**: adding 100 to one rep's Q1 (row 10) changed Grand Total Q1 by 200, expected +100 |
 | `sales-unchanged` | 无连带破坏 | 销售代表行与小计行保持不变 | pass |
 
 ### 解释
@@ -134,5 +134,5 @@ Grand Total 的 Q1–Q4 与 Year 等于所有代表行之和（即各小计之�
 
 ### 限制
 
-- 实时性规则只改一位代表的 Q2；若某列重复计算而 Q2 正确，则由数值规则抓出。
+- 实时性规则在每个季度各给一位不同代表的数字加 100，要求各季度 Grand Total 增加 100、Year 增加 400。若 Grand Total 漏掉的是这四行以外的行，只能由数值规则抓出。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

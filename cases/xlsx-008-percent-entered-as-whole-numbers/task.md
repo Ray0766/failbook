@@ -4,4 +4,4 @@ Replace the growth targets with the new ones:
 
 {{targets_md}}
 
-The 2025 Target column, the Total row and the overall growth figure must reflect the new targets.
+The 2025 Target column, the Total row and the overall growth figure must reflect the new targets, and keep being calculated from the revenue and growth figures, as they are now.

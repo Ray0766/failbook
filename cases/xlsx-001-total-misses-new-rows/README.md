@@ -6,9 +6,9 @@
 
 中文版见下方 / [Chinese version below](#中文)
 
-> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), which
-> performs the naive steps described below. It is a reconstruction of a commonly reported pattern, not a
-> recording of a particular model. Recorded agent runs, when there are any, are listed under
+> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), a script
+> that makes the mistake described under "Observed in the failure artifact" below. It is a reconstruction
+> of a commonly reported pattern, not a recording of a particular model. Recorded agent runs, when there are any, are listed under
 > [Retests](#retests).
 
 ## Task
@@ -33,11 +33,11 @@ Requirements:
 
 ## Expected
 
-The three orders sit directly above the Total row with Amount formulas, and Total Qty and Total Amount include every order and change when any order changes.
+The three orders sit directly above the Total row, and every order's Amount (new and original) is Qty × Unit Price and follows its Qty and Unit Price. Total Qty and Total Amount include every order and change when any order changes.
 
 ## Observed in the failure artifact
 
-The agent inserted three blank rows above the Total row and filled in the new orders, but the SUM formulas in the Total row still cover only the original rows (for example SUM(F2:F11)). The new orders are visible in the sheet, yet the total is short by exactly their amount.
+The three new orders (SO-1159 to SO-1161) are in rows 12 to 14, directly above the Total row (row 15), with Amount formulas like the other rows (=D12*E12). The Total row still reads =SUM(D2:D11) and =SUM(F2:F11), which cover the original order rows only: Total Qty is 198 instead of 269 and Total Amount is 5,412.50 instead of 10,626.25, short by exactly the three new orders. In a copy of the file where every order's Qty is raised, Total Qty changes by +55 instead of +91.
 
 The illustrative claim that goes with this reconstruction (written for the case, not quoted from a run):
 
@@ -52,8 +52,9 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 | `new-orders-added` | content | Each new order appears once, with the given date, customer, qty and price | pass |
 | `existing-orders-unchanged` | no collateral damage | The original orders are unchanged and in their original order | pass |
 | `amounts-correct` | value | Amount equals Qty x Unit Price on every order row | pass |
-| `totals-include-all-orders` | value | The Total row sums Qty and Amount over all orders, old and new | **FAIL**: Total Qty is 198, expected 269 (difference 71) |
-| `totals-are-live` | live | Changing a new order's Qty updates its Amount and the totals | **FAIL**: adding 10 to the Qty of SO-1161 changed Total Qty by 0, expected +10 |
+| `amounts-are-live` | live | Every order's Amount follows its Qty and Unit Price (new rows and original rows) | pass |
+| `totals-include-all-orders` | value | The Total row sums Qty and Amount over all orders, old and new | **FAIL**: Total Qty is 198, expected 269 (difference -71) |
+| `totals-are-live` | live | Changing the Qty and Unit Price of the orders updates Total Qty and Total Amount | **FAIL**: in a copy of the file where each order's Qty was raised by a different amount (+91 in all) and every Unit Price by 1.00, Total Qty changed by +55, expected +91 (difference -36) |
 | `total-row-last` | content | The Total row is directly below the last order | pass |
 
 Files: [`failure/sales.xlsx`](failure/sales.xlsx) (graded in [`failure/grade.json`](failure/grade.json)); the steps that produced it: [`failure.py`](failure.py).
@@ -82,7 +83,7 @@ failbook run xlsx-001 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-001 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-001 --seeds 3`): [`reference.py`](reference.py) and [`alt_subtotal.py`](alt_subtotal.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-001 --seeds 3`): [`reference.py`](reference.py) and [`alt_subtotal.py`](alt_subtotal.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_data_only_roundtrip.py`](fail_data_only_roundtrip.py) and [`fail_typed_new_amounts.py`](fail_typed_new_amounts.py) (other wrong solutions) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -90,7 +91,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 ## Limitations
 
-- The live rule perturbs only the last new order; a total that covers every row except one of the other new rows would be caught by the value rule instead.
+- Liveness is tested in one changed copy of the file (every order's Qty raised by a different amount, every Unit Price by 1.00). Formula text is never inspected, so a formula that happens to give the right results for both the original and the changed inputs would pass.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
 Further reading:
@@ -103,7 +104,7 @@ Further reading:
 
 **在合计行上方插入新订单后，合计没有包含新订单**
 
-> **关于这条记录：** 失败产物由 [`failure.py`](failure.py) 执行下述朴素步骤生成，是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
+> **关于这条记录：** 失败产物由脚本 [`failure.py`](failure.py) 生成，它会犯下文“失败产物中观察到的情况”所述的错误。这是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
 
 ### 任务
 
@@ -127,11 +128,11 @@ Further reading:
 
 ### 预期结果
 
-三笔订单紧贴合计行上方，Amount 为公式；合计的 Qty 与 Amount 包含全部订单，并随任一订单变化。
+三笔订单紧贴合计行上方；每笔订单（新的和原有的）的 Amount 都等于 Qty × Unit Price，并随数量和单价变化。合计的 Qty 与 Amount 包含全部订单，并随任一订单变化。
 
 ### 失败产物中观察到的情况
 
-智能体在合计行上方插入三行并填入新订单，但合计行的 SUM 公式仍只覆盖原来的行（例如 SUM(F2:F11)）。新订单在表里看得见，合计却正好少了这几笔金额。
+三笔新订单（SO-1159 至 SO-1161）位于第 12–14 行，紧贴合计行（第 15 行）上方，Amount 与其他行一样是公式（如 =D12*E12）。合计行仍是 =SUM(D2:D11) 和 =SUM(F2:F11)，只覆盖原有订单行：Total Qty 为 198（应为 269），Total Amount 为 5,412.50（应为 10,626.25），正好少了三笔新订单。在把每笔订单的数量都调高的副本中，Total Qty 只变化了 +55，应为 +91。
 
 与该复现配套的示例声明（为本案例撰写，并非摘自真实运行）：
 
@@ -146,8 +147,9 @@ Further reading:
 | `new-orders-added` | 内容 | 每笔新订单出现且仅出现一次，日期、客户、数量和单价正确 | pass |
 | `existing-orders-unchanged` | 无连带破坏 | 原有订单保持不变，顺序不变 | pass |
 | `amounts-correct` | 数值 | 每一行的 Amount 都等于 Qty × Unit Price | pass |
-| `totals-include-all-orders` | 数值 | 合计行的 Qty 与 Amount 覆盖全部订单（新旧都算） | **FAIL**: Total Qty is 198, expected 269 (difference 71) |
-| `totals-are-live` | 实时性 | 修改新订单的数量后，金额与合计随之更新 | **FAIL**: adding 10 to the Qty of SO-1161 changed Total Qty by 0, expected +10 |
+| `amounts-are-live` | 实时性 | 每笔订单（新行和原有行）的 Amount 都随 Qty 和 Unit Price 变化 | pass |
+| `totals-include-all-orders` | 数值 | 合计行的 Qty 与 Amount 覆盖全部订单（新旧都算） | **FAIL**: Total Qty is 198, expected 269 (difference -71) |
+| `totals-are-live` | 实时性 | 修改各订单的数量和单价后，合计的 Qty 与 Amount 随之更新 | **FAIL**: in a copy of the file where each order's Qty was raised by a different amount (+91 in all) and every Unit Price by 1.00, Total Qty changed by +55, expected +91 (difference -36) |
 | `total-row-last` | 内容 | 合计行紧接在最后一笔订单之后 | pass |
 
 ### 解释
@@ -166,5 +168,5 @@ Further reading:
 
 ### 限制
 
-- 实时性规则只扰动最后一笔新订单；若合计漏掉了其他某一新行，则由数值规则抓出。
+- 实时性只在一个修改过的副本中检验（每笔订单的数量各加上不同的值，每个单价加 1.00）。检查不读公式文本，因此若某个公式恰好在原始输入和修改后的输入下都给出正确结果，也会通过。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

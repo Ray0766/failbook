@@ -28,9 +28,9 @@
     {
       "id": "formatting-kept",
       "kind": "structure",
-      "title": "Header style, number formats, column widths and the frozen header are kept",
+      "title": "Cell formatting, column widths, the frozen header and the filter settings are kept",
       "status": "fail",
-      "detail": "header 'ID' lost its bold font"
+      "detail": "bold of A1 changed from on to off"
     },
     {
       "id": "dropdown-kept",

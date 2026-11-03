@@ -6,9 +6,9 @@
 
 中文版见下方 / [Chinese version below](#中文)
 
-> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), which
-> performs the naive steps described below. It is a reconstruction of a commonly reported pattern, not a
-> recording of a particular model. Recorded agent runs, when there are any, are listed under
+> **About this record.** The failure artifact was produced by running [`failure.py`](failure.py), a script
+> that makes the mistake described under "Observed in the failure artifact" below. It is a reconstruction
+> of a commonly reported pattern, not a recording of a particular model. Recorded agent runs, when there are any, are listed under
 > [Retests](#retests).
 
 ## Task
@@ -24,16 +24,16 @@ Add a new column **Margin %** in column E, right after Price, with the gross mar
 Requirements:
 
 - Fill it in for every product row.
-- Format the column as a percentage.
+- Format the column as a percentage. Do not round the margin; the percentage format decides how many decimals are shown.
 - It must stay correct when someone later changes a Cost or a Price, so calculate it with formulas.
 
 ## Expected
 
-Column E holds a formula per product equal to (Price − Cost) / Price, formatted as a percentage, so margins follow later changes of Cost or Price.
+Column E holds, for every product, (Price − Cost) / Price, not rounded and formatted as a percentage, and the margins follow later changes of Cost or Price.
 
 ## Observed in the failure artifact
 
-Asked for a Margin % column that stays correct when prices change, the agent computed every margin in Python and wrote the results into the sheet as plain numbers. Today's values are right, so the sheet looks finished, but the column will be wrong after the next price change.
+Column E ("Margin %", formatted 0.0%) holds plain numbers, not formulas, for all 17 products, for example 0.518127… in E2 for P-62860. Each equals (Price − Cost) / Price for today's data, so the sheet looks finished. In a copy of the file where every Cost and Price is changed, all 17 margins stay as they were (P-62860 stays 0.518127 instead of 0.839401).
 
 The illustrative claim that goes with this reconstruction (written for the case, not quoted from a run):
 
@@ -47,7 +47,7 @@ Every rule traces back to a sentence of the task. Values are recalculated by Lib
 |---|---|---|---|
 | `margin-column-added` | content | A 'Margin %' column is added right after Price (column E) | pass |
 | `margins-correct` | value | Every product's margin equals (Price - Cost) / Price | pass |
-| `margins-are-live` | live | Margins update when a Price or a Cost changes | **FAIL**: after changing its Price, the margin of P-62860 is 0.5181, expected 0.6787; the column holds fixed numbers instead of formulas |
+| `margins-are-live` | live | Margins update when a Price or a Cost changes | **FAIL**: in a copy of the file where every Cost and Price was changed, 17 of 17 margins did not follow: P-62860 (row 2): with Cost 26.91 and Price 167.56 its margin is 0.518127, expected 0.839401 (difference -0.32), the same as before the change; P-31271 (row 3): with Cost 24.75 and Price 86.52 its margin is 0.14199, expected 0.713939 (difference -0.57), the same as before the change; P-82072 (row 4): with Cost 19.82 and Price 85.02 its margin is 0.300635, expected 0.766878 (difference -0.47), the same as before the change |
 | `percent-format` | structure | The margin cells are formatted as percentages | pass |
 | `products-unchanged` | no collateral damage | SKU, Product, Cost and Price are unchanged | pass |
 
@@ -77,7 +77,7 @@ failbook run xlsx-002 --agent claude-code --model <model> --fix spreadsheet-veri
 failbook export harbor xlsx-002 --out dist/harbor
 ```
 
-How the checker itself is validated (`failbook verify xlsx-002 --seeds 3`): [`reference.py`](reference.py) and [`alt_equivalent_formula.py`](alt_equivalent_formula.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; and the untouched input must fail.
+How the checker itself is validated (`failbook verify xlsx-002 --seeds 3`): [`reference.py`](reference.py) and [`alt_equivalent_formula.py`](alt_equivalent_formula.py) must pass, also after LibreOffice opens and re-saves their output; the failure must fail on the rules listed in `case.yaml`; [`fail_rounded_margin.py`](fail_rounded_margin.py) (another wrong solution) must be graded fail; and the untouched input must fail.
 
 ## Retests
 
@@ -85,7 +85,8 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 ## Limitations
 
-- Liveness is tested on two rows (first and last product); a sheet where only those two rows are formulas would pass.
+- Liveness is tested in one changed copy of the file (every Cost halved, every Price raised by half); formula text is never inspected.
+- Margins are compared with (Price − Cost) / Price to within 0.000001, so a margin rounded with ROUND() fails; the task says not to round it.
 - Inputs are synthetic (synthetic, license MIT). See [docs/DATASHEET.md](../../docs/DATASHEET.md) for collection-wide caveats.
 
 ---
@@ -94,7 +95,7 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 
 **计算列被写成了固定数值，而不是公式**
 
-> **关于这条记录：** 失败产物由 [`failure.py`](failure.py) 执行下述朴素步骤生成，是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
+> **关于这条记录：** 失败产物由脚本 [`failure.py`](failure.py) 生成，它会犯下文“失败产物中观察到的情况”所述的错误。这是对常见失败模式的复现，不是某个模型的运行记录。若有真实智能体的复测记录，列在"复测记录"一节。
 
 ### 任务
 
@@ -109,16 +110,16 @@ No recorded runs yet. Run one of the commands above and open a pull request with
 要求：
 
 - 每个产品行都要填写。
-- 该列设为百分比格式。
+- 该列设为百分比格式。不要对毛利率取整（ROUND），显示几位小数由百分比格式决定。
 - 以后有人修改 Cost 或 Price 时，它必须仍然正确，所以请用公式计算。
 
 ### 预期结果
 
-E 列每个产品都是 (Price − Cost) / Price 的公式，百分比格式，毛利率会随之后的成本或价格变化。
+E 列每个产品都是未取整的 (Price − Cost) / Price，百分比格式，毛利率会随之后的成本或价格变化。
 
 ### 失败产物中观察到的情况
 
-任务要求新增一个毛利率（Margin %）列，并在价格变化时保持正确。智能体却在 Python 里算好每个毛利率，再把结果作为普通数字写进表格。眼下的数值都对，看上去已经完成；但下次调价后，这一列就错了。
+E 列（“Margin %”，格式 0.0%）中 17 个产品存放的都是普通数字而非公式，例如 P-62860 的 E2 为 0.518127…。每个值都等于当前数据下的 (Price − Cost) / Price，表格看上去已经完成。在把所有 Cost 和 Price 都改掉的副本中，17 个毛利率全部保持不变（P-62860 仍是 0.518127，应为 0.839401）。
 
 与该复现配套的示例声明（为本案例撰写，并非摘自真实运行）：
 
@@ -132,7 +133,7 @@ E 列每个产品都是 (Price − Cost) / Price 的公式，百分比格式，�
 |---|---|---|---|
 | `margin-column-added` | 内容 | 在 Price 之后（E 列）新增了 Margin % 列 | pass |
 | `margins-correct` | 数值 | 每个产品的毛利率都等于 (Price − Cost) / Price | pass |
-| `margins-are-live` | 实时性 | 修改 Price 或 Cost 后，毛利率随之更新 | **FAIL**: after changing its Price, the margin of P-62860 is 0.5181, expected 0.6787; the column holds fixed numbers instead of formulas |
+| `margins-are-live` | 实时性 | 修改 Price 或 Cost 后，毛利率随之更新 | **FAIL**: in a copy of the file where every Cost and Price was changed, 17 of 17 margins did not follow: P-62860 (row 2): with Cost 26.91 and Price 167.56 its margin is 0.518127, expected 0.839401 (difference -0.32), the same as before the change; P-31271 (row 3): with Cost 24.75 and Price 86.52 its margin is 0.14199, expected 0.713939 (difference -0.57), the same as before the change; P-82072 (row 4): with Cost 19.82 and Price 85.02 its margin is 0.300635, expected 0.766878 (difference -0.47), the same as before the change |
 | `percent-format` | 结构 | 毛利率单元格为百分比格式 | pass |
 | `products-unchanged` | 无连带破坏 | SKU、Product、Cost、Price 保持不变 | pass |
 
@@ -152,5 +153,6 @@ E 列每个产品都是 (Price − Cost) / Price 的公式，百分比格式，�
 
 ### 限制
 
-- 实时性只在两行（第一个和最后一个产品）上测试；若只有这两行是公式，也能通过。
+- 实时性只在一个修改过的副本中检验（每个 Cost 减半、每个 Price 提高一半）；检查不读公式文本。
+- 毛利率与 (Price − Cost) / Price 的比较容差为 0.000001，因此用 ROUND() 取整的毛利率判为失败；任务已要求不要取整。
 - 输入为合成数据，许可 MIT；整体注意事项见 [docs/DATASHEET.md](../../docs/DATASHEET.md)。

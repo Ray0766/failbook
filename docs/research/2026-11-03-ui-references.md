@@ -1,6 +1,6 @@
 # Failbook UI references: teardown, direction, visual system
 
-> Research note from 2026-11-03. The screenshots it cites were taken during the session and are not published: three of the tools showed synthetic data made for the teardown, which must not be mistaken for real evaluation results. The site in `src/failbook/site.py` implements the direction and visual system proposed in sections 2 and 4.
+> Research note from 2026-11-03. The screenshots it cites were taken during the session and are not published: three of the tools showed synthetic data made for the teardown, which must not be mistaken for real evaluation results. The site in `src/failbook/site.py` implements the direction and visual system proposed in sections 2 and 4. Checker messages and rule counts quoted in the mock-ups are as they were during the design pass; after the review fixes xlsx-001 has 7 rules and different messages (current text: `cases/*/failure/grade.json`).
 
 Date viewed for every reference: **2026-11-03**.
 Screenshots: `(session scratch, not published)/refs/`

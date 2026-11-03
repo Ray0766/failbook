@@ -284,7 +284,9 @@ def cmd_ablation(args) -> int:
 def cmd_audit(args) -> int:
     from .audit import main as audit_main
 
-    argv = [args.after] + (["--before", args.before] if args.before else []) + (["--json"] if args.json else [])
+    argv = [args.after] + (["--before", args.before] if args.before else [])
+    argv += (["--recalculated", args.recalculated] if args.recalculated else [])
+    argv += (["--no-recalc"] if args.no_recalc else []) + (["--json"] if args.json else [])
     return audit_main(argv)
 
 
@@ -433,6 +435,10 @@ def main(argv: list[str] | None = None) -> int:
     sp = sub.add_parser("audit", help="check an edited workbook for silent spreadsheet mistakes (case-agnostic)")
     sp.add_argument("after")
     sp.add_argument("--before", help="the original workbook, to detect collateral damage")
+    sp.add_argument("--recalculated", metavar="COPY.xlsx",
+                    help="also save the copy LibreOffice recalculated (read it with openpyxl data_only=True)")
+    sp.add_argument("--no-recalc", action="store_true",
+                    help="skip LibreOffice and read the values saved in the file (reported as a warning: they may be stale)")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=cmd_audit)
 

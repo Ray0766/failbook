@@ -30,7 +30,14 @@
       "kind": "value",
       "title": "Every Summary total (category, month, grand total) includes the new expenses",
       "status": "fail",
-      "detail": "Summary 'Travel' is 854.66, expected 2,621.00 (missing 1,766.34)"
+      "detail": "7 of 9 Summary totals are wrong: 'Travel' is 854.66, expected 2,621.00 (difference -1,766.34), short by exactly the new expenses it should include; 'Meals' is 3,018.00, expected 3,681.62 (difference -663.62), short by exactly the new expenses it should include; 'Office' is 1,811.80, expected 1,884.74 (difference -72.94), short by exactly the new expenses it should include (and 4 more)"
+    },
+    {
+      "id": "summary-still-calculated",
+      "kind": "preserve",
+      "title": "Every Summary total still follows changes of the expenses (category, month, grand total)",
+      "status": "pass",
+      "detail": ""
     },
     {
       "id": "existing-unchanged",
