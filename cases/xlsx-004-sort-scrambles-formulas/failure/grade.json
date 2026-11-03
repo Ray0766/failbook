@@ -1,0 +1,43 @@
+{
+  "case": "xlsx-004",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "header-kept",
+      "kind": "preserve",
+      "title": "The header row is still at the top",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "same-people",
+      "kind": "preserve",
+      "title": "Every person's row is intact: nobody lost, duplicated or mixed up",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "sorted",
+      "kind": "content",
+      "title": "Rows are sorted by Department, then by Name",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "bonus-matches-row",
+      "kind": "value",
+      "title": "Each Bonus equals Base Salary x Bonus Rate of the same row",
+      "status": "fail",
+      "detail": "15 bonus(es) belong to another row, e.g. Arjun Wang (row 2): 5,850 instead of 10,950; Ava Yilmaz (row 3): 16,650 instead of 2,625; Dina Yilmaz (row 5): 2,625 instead of 15,600"
+    },
+    {
+      "id": "bonus-is-live",
+      "kind": "live",
+      "title": "Changing a salary changes the Bonus on that same row",
+      "status": "fail",
+      "detail": "after changing Arjun Wang's salary, their Bonus is 6,100, expected 11,100"
+    }
+  ]
+}

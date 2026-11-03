@@ -1,0 +1,50 @@
+{
+  "case": "xlsx-014",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "discontinued-removed",
+      "kind": "content",
+      "title": "No Discontinued item is left, and no blank rows were left behind",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "remaining-items-kept",
+      "kind": "preserve",
+      "title": "All other items remain, in their original order, with unchanged data",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "values-correct",
+      "kind": "value",
+      "title": "Value = Qty x Unit Cost on every remaining row",
+      "status": "fail",
+      "detail": "13 Value cell(s) are wrong, e.g. S-303 (row 3): 19,347.50 instead of 27,600.54; S-304 (row 4): 7,500.35 instead of 19,347.50; S-305 (row 5): 276.64 instead of 7,500.35"
+    },
+    {
+      "id": "stock-totals-correct",
+      "kind": "value",
+      "title": "The Total row sums Qty and Value over the remaining items",
+      "status": "fail",
+      "detail": "Total Qty (Stock!D16) evaluates to #VALUE!"
+    },
+    {
+      "id": "summary-correct",
+      "kind": "value",
+      "title": "Summary shows the right active count, total units and total stock value",
+      "status": "fail",
+      "detail": "Total units is 0.00, expected 1,990.00"
+    },
+    {
+      "id": "totals-live",
+      "kind": "live",
+      "title": "Totals and Summary update when a quantity changes",
+      "status": "fail",
+      "detail": "Total Qty (Stock!D16) evaluates to #VALUE!"
+    }
+  ]
+}

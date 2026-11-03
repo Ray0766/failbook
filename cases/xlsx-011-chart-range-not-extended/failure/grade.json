@@ -1,0 +1,36 @@
+{
+  "case": "xlsx-011",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "new-months-added",
+      "kind": "content",
+      "title": "November and December are added directly below October with the given figures",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "existing-data-unchanged",
+      "kind": "preserve",
+      "title": "January to October are unchanged",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "chart-present",
+      "kind": "structure",
+      "title": "The line chart with the original title is still on the sheet",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "chart-covers-all-months",
+      "kind": "structure",
+      "title": "Both series cover January to December",
+      "status": "fail",
+      "detail": "the Revenue series covers rows 2-11, not 2-13 (Jan-Dec)"
+    }
+  ]
+}

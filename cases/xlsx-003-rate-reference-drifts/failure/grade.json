@@ -1,0 +1,43 @@
+{
+  "case": "xlsx-003",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "vat-correct",
+      "kind": "value",
+      "title": "VAT = Net x rate on every line",
+      "status": "fail",
+      "detail": "VAT of 'Headset' (row 5) is 0.00, expected 744.59"
+    },
+    {
+      "id": "gross-correct",
+      "kind": "value",
+      "title": "Gross = Net + VAT on every line",
+      "status": "fail",
+      "detail": "Gross of 'Headset' (row 5) is 3,918.88, expected 4,663.47"
+    },
+    {
+      "id": "vat-follows-rate",
+      "kind": "live",
+      "title": "Changing the rate in B1 updates the VAT of every line",
+      "status": "fail",
+      "detail": "with B1 changed to 24%, VAT of 'Headset' (row 5) is 0.00, expected 940.53"
+    },
+    {
+      "id": "totals-correct",
+      "kind": "value",
+      "title": "The Total row shows the correct Net, VAT and Gross totals",
+      "status": "fail",
+      "detail": "Total VAT (Invoice!E16) evaluates to #VALUE!"
+    },
+    {
+      "id": "invoice-unchanged",
+      "kind": "preserve",
+      "title": "Line items, quantities, prices and the rate are unchanged",
+      "status": "pass",
+      "detail": ""
+    }
+  ]
+}

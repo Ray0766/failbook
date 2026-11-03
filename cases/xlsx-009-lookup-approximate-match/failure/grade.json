@@ -1,0 +1,43 @@
+{
+  "case": "xlsx-009",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "categories-correct",
+      "kind": "value",
+      "title": "Every order shows the category of its own SKU",
+      "status": "fail",
+      "detail": "9 of 21 categories are wrong, e.g. O-5003 (P-410): 'Electronics' instead of 'Stationery'; O-5012 (P-469): 'Electronics' instead of 'Kitchen'; O-5015 (P-410): 'Electronics' instead of 'Stationery'"
+    },
+    {
+      "id": "prices-correct",
+      "kind": "value",
+      "title": "Every order shows the unit price of its own SKU",
+      "status": "fail",
+      "detail": "14 of 21 unit prices are wrong, e.g. O-5002 (P-575): 74.57 instead of 109.11; O-5003 (P-410): 310.22 instead of 152.06; O-5004 (P-575): 74.57 instead of 109.11"
+    },
+    {
+      "id": "amounts-correct",
+      "kind": "value",
+      "title": "Amount = Qty x the product's unit price on every order",
+      "status": "fail",
+      "detail": "14 of 21 amounts are wrong, e.g. O-5002 (P-575): 1715.11 instead of 2509.53; O-5003 (P-410): 930.66 instead of 456.18; O-5004 (P-575): 1715.11 instead of 2509.53"
+    },
+    {
+      "id": "lookups-live",
+      "kind": "live",
+      "title": "Changing a price on Products updates the matching orders",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "data-unchanged",
+      "kind": "preserve",
+      "title": "Orders (Order, SKU, Qty) and the Products sheet are unchanged",
+      "status": "pass",
+      "detail": ""
+    }
+  ]
+}

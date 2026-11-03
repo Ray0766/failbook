@@ -1,0 +1,57 @@
+{
+  "case": "xlsx-005",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "columns-in-order",
+      "kind": "content",
+      "title": "Lines columns are Product, Unit Price, Discount, Qty, Line Total",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "discounts-entered",
+      "kind": "content",
+      "title": "Each line has the listed discount as a fraction (0 when not listed)",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "line-totals-correct",
+      "kind": "value",
+      "title": "Line Total = Unit Price x Qty x (1 - Discount) on every line",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "line-totals-live",
+      "kind": "live",
+      "title": "Line Total follows a change of Discount",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "summary-correct",
+      "kind": "value",
+      "title": "Summary shows the correct total revenue, total units and average unit price",
+      "status": "fail",
+      "detail": "Total revenue is 333.00, expected 27,468.65"
+    },
+    {
+      "id": "summary-live",
+      "kind": "live",
+      "title": "Summary updates when a quantity on Lines changes",
+      "status": "fail",
+      "detail": "adding 5 units to the first line changed Total units by 0, expected +5"
+    },
+    {
+      "id": "lines-unchanged",
+      "kind": "preserve",
+      "title": "Products, unit prices and quantities are unchanged",
+      "status": "pass",
+      "detail": ""
+    }
+  ]
+}

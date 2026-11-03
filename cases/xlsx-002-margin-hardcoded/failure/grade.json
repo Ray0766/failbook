@@ -1,0 +1,43 @@
+{
+  "case": "xlsx-002",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "margin-column-added",
+      "kind": "content",
+      "title": "A 'Margin %' column is added right after Price (column E)",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "margins-correct",
+      "kind": "value",
+      "title": "Every product's margin equals (Price - Cost) / Price",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "margins-are-live",
+      "kind": "live",
+      "title": "Margins update when a Price or a Cost changes",
+      "status": "fail",
+      "detail": "after changing its Price, the margin of P-62860 is 0.5181, expected 0.6787; the column holds fixed numbers instead of formulas"
+    },
+    {
+      "id": "percent-format",
+      "kind": "structure",
+      "title": "The margin cells are formatted as percentages",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "products-unchanged",
+      "kind": "preserve",
+      "title": "SKU, Product, Cost and Price are unchanged",
+      "status": "pass",
+      "detail": ""
+    }
+  ]
+}

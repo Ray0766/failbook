@@ -1,0 +1,50 @@
+{
+  "case": "xlsx-001",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "new-orders-added",
+      "kind": "content",
+      "title": "Each new order appears once, with the given date, customer, qty and price",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "existing-orders-unchanged",
+      "kind": "preserve",
+      "title": "The original orders are unchanged and in their original order",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "amounts-correct",
+      "kind": "value",
+      "title": "Amount equals Qty x Unit Price on every order row",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "totals-include-all-orders",
+      "kind": "value",
+      "title": "The Total row sums Qty and Amount over all orders, old and new",
+      "status": "fail",
+      "detail": "Total Qty is 198, expected 269 (difference 71)"
+    },
+    {
+      "id": "totals-are-live",
+      "kind": "live",
+      "title": "Changing a new order's Qty updates its Amount and the totals",
+      "status": "fail",
+      "detail": "adding 10 to the Qty of SO-1161 changed Total Qty by 0, expected +10"
+    },
+    {
+      "id": "total-row-last",
+      "kind": "content",
+      "title": "The Total row is directly below the last order",
+      "status": "pass",
+      "detail": ""
+    }
+  ]
+}
