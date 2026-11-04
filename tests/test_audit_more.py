@@ -68,7 +68,8 @@ def test_data_row_between_range_and_total_is_still_an_error(tmp_path):
         "B13": "=AVERAGE(B2:B10)", "A14": "Max", "B14": "=MAX(B2:B10)", "A15": "Share of max", "B15": "=B12/B14"})
     found = audit(after, before, recalc=False)
     assert _levels(found, "range-omits-adjacent-cells")[:1] == ["error"]
-    assert any("rows 11-11" in f.message for f in found if f.check == "range-omits-adjacent-cells")
+    assert any("row 11 between it and the formula holds a value" in f.message
+               for f in found if f.check == "range-omits-adjacent-cells")
 
 
 def test_symptom_already_in_the_original_is_a_warning(tmp_path):
@@ -376,10 +377,12 @@ def test_half_year_sums_below_a_total_are_not_omitted_data(tmp_path):
     plain = _book(tmp_path / "plain.xlsx", rows, "Sales")
     alone = _book(tmp_path / "alone.xlsx", rows, "Sales", {"A14": "H1", "B14": "=SUM(B2:B7)", "A15": "H2", "B15": "=SUM(B8:B13)"})
     assert _findings(alone, plain) == [] and _findings(alone) == []
-    # Two months added below the data and the halves left as they were: still an error.
+    # Two months added below the data and the halves left as they were, with no total: one error, at the
+    # half next to the rows they leave out.
     grown = rows + [["2025-01", 300], ["2025-02", 310]]
     stale = _book(tmp_path / "stale.xlsx", grown, "Sales", {"A16": "H1", "B16": "=SUM(B2:B7)", "A17": "H2", "B17": "=SUM(B8:B13)"})
-    assert _levels(_findings(stale, plain), "range-omits-adjacent-cells") == ["error", "error"]
+    found = [f for f in _findings(stale, plain) if f.check == "range-omits-adjacent-cells"]
+    assert [(f.level, f.where) for f in found] == [("error", "Sales!B17")] and "rows 14-15 are in none" in found[0].message
 
 
 def test_partial_aggregate_left_behind_by_an_extended_total_is_an_error(tmp_path):
@@ -668,7 +671,8 @@ def test_part_kept_below_an_extended_total_is_a_warning_and_a_stale_full_range_a
                                           "A16": "H2 2024", "B16": "=SUM(B8:B13)"})
     halves = sales(tmp_path / "h.xlsx", {"A16": "Total", "B16": "=SUM(B2:B15)", "A17": "H1 2024", "B17": "=SUM(B2:B7)",
                                          "A18": "H2 2024", "B18": "=SUM(B8:B13)"}, 14)
-    assert [f.level for f in _findings(halves, before)] == ["warning", "warning"]
+    # H1 stops where H2 starts; only H2, the last half, is a question about the new months.
+    assert [(f.level, f.where) for f in _findings(halves, before)] == [("warning", "Sales!B18")]
     # Average and Max that covered the whole year, left behind: errors that cite the original total.
     before = sales(tmp_path / "mb.xlsx", {"A14": "Total", "B14": "=SUM(B2:B13)", "A15": "Average", "B15": "=AVERAGE(B2:B13)",
                                           "A16": "Max", "B16": "=MAX(B2:B13)"})
@@ -864,10 +868,11 @@ def test_year_split_that_keeps_a_covering_total_is_clean_with_the_original(tmp_p
         for r, label in enumerate(order, start=16):
             extra[f"A{r}"], extra[f"B{r}"] = label, parts[label]
         assert _findings(_sales(tmp_path / f"{order[0]}.xlsx", extra, 14), before) == [], order
-    # A 'total' that misses a row covers nothing: the old total's warning stays.
+    # A 'total' that misses a row covers nothing: the old total's warning stays, and the total, which leaves
+    # out January although the 2024 part includes it, is an error.
     short = _sales(tmp_path / "short.xlsx", {"A16": "2024", "B16": "=SUM(B2:B13)", "A17": "2025", "B17": "=SUM(B14:B15)",
                                              "A18": "Total", "B18": "=SUM(B3:B15)"}, 14)
-    assert [(f.level, f.where) for f in _findings(short, before)] == [("warning", "Sales!B16")]
+    assert [(f.level, f.where) for f in _findings(short, before)] == [("warning", "Sales!B16"), ("error", "Sales!B18")]
 
 
 def test_plus_total_under_a_numeric_header_ends_the_data_for_charts(tmp_path):
@@ -1180,3 +1185,57 @@ def test_skill_script_is_the_package_audit():
     assert shipped.read_bytes() == (ROOT / "src" / "failbook" / "audit.py").read_bytes()
     proc = subprocess.run([sys.executable, "-I", str(shipped), "--help"], capture_output=True, text=True, timeout=60)
     assert proc.returncode == 0 and "--recalculated" in proc.stdout
+
+
+def test_a_total_that_starts_late_is_a_warning_unless_the_evidence_is_near_certain(tmp_path):
+    months = [["Month", "Revenue"]] + [[MONTHS[r - 2], 100 + 10 * r] for r in range(2, 14)]
+    before = _book(tmp_path / "b.xlsx", months, "Sales", {"A14": "Total", "B14": "=SUM(B2:B13)"})
+    late = _book(tmp_path / "late.xlsx", months, "Sales", {"A14": "Total", "B14": "=SUM(B3:B13)"})
+    # With the original, which covered January in the same cell: an error. Alone: a question.
+    assert [(f.level, f.where) for f in _findings(late, before)] == [("error", "Sales!B14")]
+    assert _levels(_findings(late), "range-omits-adjacent-cells") == ["warning"]
+    # An opening balance left out of a net change on purpose is only a question.
+    flows = [["Item", "Amount"], ["Opening", 500]] + [[MONTHS[r], 10 * r] for r in range(12)]
+    ob = _book(tmp_path / "ob.xlsx", flows, "Cash", {"A15": "Net change", "B15": "=SUM(B3:B14)", "A16": "Closing",
+                                                      "B16": "=B2+B15"})
+    assert _levels(_findings(ob), "range-omits-adjacent-cells") == ["warning"]
+    # A quarter kept below a total of the year, and totals under numeric headers (years), are fine.
+    q4 = _book(tmp_path / "q4.xlsx", months, "Sales", {"A14": "Total", "B14": "=SUM(B2:B13)",
+                                                       "A15": "Q4 2024", "B15": "=SUM(B11:B13)"})
+    assert _findings(q4) == [] and _findings(q4, q4) == []
+    years = _book(tmp_path / "y.xlsx", [["Region", 2023, 2024]] + [[f"R{i}", 100 + i, 200 + i] for i in range(1, 6)],
+                  "Regions", {"A7": "Total", "B7": "=SUM(B2:B6)", "C7": "=SUM(C2:C6)"})
+    assert _findings(years) == []
+
+
+def test_quarter_sums_that_skip_a_month_are_one_error_at_the_part_that_skips_it(tmp_path):
+    months = [["Month", "Revenue"]] + [[MONTHS[r - 2], 100 + 10 * r] for r in range(2, 14)]
+    for quarters, where, rows in [(["B3:B4", "B5:B7", "B8:B10", "B11:B13"], "Sales!B15", "row 2"),
+                                  (["B2:B4", "B6:B7", "B8:B10", "B11:B13"], "Sales!B16", "row 5"),
+                                  (["B2:B4", "B5:B7", "B9:B10", "B11:B13"], "Sales!B17", "row 8"),
+                                  (["B2:B4", "B5:B7", "B8:B10", "B12:B13"], "Sales!B18", "row 11")]:
+        extra = {f"B{15 + i}": f"=SUM({q})" for i, q in enumerate(quarters)}
+        found = _findings(_book(tmp_path / f"{where[-3:]}.xlsx", months, "Sales", extra))
+        assert [(f.level, f.where) for f in found] == [("error", where)], quarters
+        assert f"{rows} is in none of them" in found[0].message
+
+
+def test_a_summary_beside_the_table_is_checked_after_a_sort(tmp_path):
+    prices = [("Apple", 2.1, 3), ("Banana", 1.2, 5), ("Kiwi", 3.4, 2)]
+    by_price = sorted(prices, key=lambda r: -r[1])  # Kiwi, Apple, Banana
+
+    def book(path, rows, summary=None, calc=False):
+        out = [["Product", "Price", "Qty", None, "Figure", "Value"]]
+        for i, (name, price, qty) in enumerate(rows, start=2):
+            out.append([name, price, qty, None, None, f"=B{i}*C{i}" if calc else None])
+        return _book(path, out, "Prices", summary or {})
+
+    before = book(tmp_path / "b.xlsx", prices, {"E2": "Apple price", "F2": "=$B$2"})
+    stale = book(tmp_path / "stale.xlsx", by_price, {"E2": "Apple price", "F2": "=$B$2"})
+    assert [(f.level, f.where) for f in _findings(stale, before)] == [("error", "Prices!F2")]
+    # Updated to Apple's new row: clean. A price corrected in place without a sort: clean.
+    assert _findings(book(tmp_path / "ok.xlsx", by_price, {"E2": "Apple price", "F2": "=$B$3"}), before) == []
+    fixed = book(tmp_path / "fix.xlsx", [("Apple", 2.3, 3)] + prices[1:], {"E2": "Apple price", "F2": "=$B$2"})
+    assert _findings(fixed, before) == []
+    # A calculation column with no label of its own moves with the rows (sorted as Excel does): clean.
+    assert _findings(book(tmp_path / "c_a.xlsx", by_price, calc=True), book(tmp_path / "c_b.xlsx", prices, calc=True)) == []

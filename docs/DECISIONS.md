@@ -162,10 +162,22 @@ project's own repository, package metadata or installed source, as each note say
   and three random families), against the two previous versions, and accepted only if no pair got worse.
   The hand-made probes that do not need large files (204 of the 217, after dropping one duplicate) are
   now in the repository, [tests/audit_corpus/](../tests/audit_corpus/), with 6 that an independent check
-  of the corpus added (210 in all), and run with the tests: each must keep its labelled outcome,
+  of the corpus added and 14 that pin the fixes below (224 in all), and run with the tests: each must keep its labelled outcome,
   and a documented limitation is pinned so that fixing it or making it worse is noticed. The large timing
   pairs and the random families stayed outside. What the script cannot tell is listed in the skill's
   SKILL.md.
+- **Misses fixed with the corpus in place.** Three limits the corpus pinned were then fixed: a total or
+  part that starts below the first data row (`=SUM(B3:B13)` over data from row 2) is now reported, as an
+  error when the parts beside it or the original's formula show the left-out rows belong in it; parts that
+  skip rows (a quarter that leaves out a month) are one error at the part next to the gap, naming the rows,
+  instead of errors on the correct parts; and a summary beside a table (an empty column between them, its
+  own label in the row) is checked after a sort. The 8 probes that pinned these limits now pin the fixed
+  outcomes. Two independent checks then built more than 100 more layouts: they found false errors the first
+  version of these rules gave on correct edits (an opening balance above equal quarters, the halves of a
+  later year, a repeated unit beside a sorted table) and misses (a late Total inside a Total/Average block),
+  which were fixed and pinned by 14 more probes; overlapping parts are now named as such. The other probes
+  kept their outcomes, none of the 1,587 pairs of the full corpus got worse, and the fix self-check above is
+  unchanged.
 - **Limits.** The checks were written with these failures in view, so this is coverage, not generalisation.
   **Whether agents do better with the skill is a hypothesis** until runs with and without it are recorded.
 

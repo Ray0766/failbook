@@ -458,6 +458,27 @@ def _summary_rows(ws, col: int, r1: int, r2: int, rows: list[int]) -> set[int]:
     return summary
 
 
+def _overlapping_part(ws, col: int, row: int, agg: str, r1: int, r2: int, memo: dict):
+    """(first row, last row, formula row) of another ``agg`` in the run of total rows holding ``row`` whose
+    range overlaps r1-r2 without either containing the other (H1 =SUM(B2:B8), H2 =SUM(B8:B13))."""
+    _end, run = _aggregate_run(ws, col, row, memo)
+    for a, lo, hi, t in run:
+        if (t != row and a == agg and lo <= r2 and hi >= r1
+                and not (lo <= r1 and r2 <= hi) and not (r1 <= lo and hi <= r2)):
+            return lo, hi, t
+    return None
+
+
+def _covering_in_run(ws, col: int, row: int, r1: int, gap: list[int], memo: dict):
+    """An aggregate in the run of total rows holding ``row`` (above or below it) that covers rows r1 to
+    the last omitted row, as (row, aggregate): a Year total below Q1..Q4 covers what a part leaves out."""
+    _end, run = _aggregate_run(ws, col, row, memo)
+    for a, lo, hi, t in run:
+        if t != row and lo <= r1 and hi >= gap[-1]:
+            return t, _aggregate_at(ws, t, col, memo)
+    return None
+
+
 def _closing_total(ws, col: int, r1: int, gap: list[int], below: int):
     """A total row between the last omitted row and ``below`` whose aggregate covers rows r1 to the
     last omitted row: the data block ends there, and the formula below it sums part of it."""
@@ -468,44 +489,302 @@ def _closing_total(ws, col: int, r1: int, gap: list[int], below: int):
     return None
 
 
-def _aggregate_run(ws, col: int, row: int) -> tuple[int | None, list[tuple[str, int, int, int]]]:
+def _aggregate_at(ws, row: int, col: int, memo: dict | None):
+    """``_column_aggregate``, remembered in ``memo``."""
+    if memo is None:
+        return _column_aggregate(ws, row, col)
+    key = ("agg", ws.title, row, col)
+    if key not in memo:
+        memo[key] = _column_aggregate(ws, row, col)
+    return memo[key]
+
+
+def _aggregate_run(ws, col: int, row: int, memo: dict | None = None) -> tuple[int | None, list[tuple[str, int, int, int]]]:
     """(end, run) for the run of adjacent aggregate rows of the column that holds ``row``: ``end`` is
     the last row of the data block right above the run (blank spacer rows aside), and ``run`` the
     (function, first row, last row, row) of each aggregate in it; (None, []) when no data block ends
     right above the run."""
     first = row
-    while first > 1 and row - first < 100 and _column_aggregate(ws, first - 1, col):
+    while first > 1 and row - first < 100 and _aggregate_at(ws, first - 1, col, memo):
         first -= 1
+    key = ("run", ws.title, col, first)
+    if memo is not None and key in memo:
+        return memo[key]
     end = first - 1
     while end > 1 and first - end <= 3 and not _has_value(ws, end, col):
         end -= 1
-    if not _has_value(ws, end, col) or _column_aggregate(ws, end, col):
-        return None, []
-    run = []
-    for t in range(first, first + 100):
-        a = _column_aggregate(ws, t, col)
-        if not a:
-            break
-        run.append((a[0], a[1], a[2], t))
-    return end, run
+    if not _has_value(ws, end, col) or _aggregate_at(ws, end, col, memo):
+        result = (None, [])
+    else:
+        run = []
+        for t in range(first, first + 100):
+            a = _aggregate_at(ws, t, col, memo)
+            if not a:
+                break
+            run.append((a[0], a[1], a[2], t))
+        result = (end, run)
+    if memo is not None:
+        memo[key] = result
+    return result
 
 
-def _splits_block(ws, col: int, row: int, agg: str) -> bool:
+def _splits_block(ws, col: int, row: int, agg: str, memo: dict | None = None) -> bool:
     """True when the ``agg`` formula in ``row`` is one of consecutive parts that split the data
     block above them exactly, like H1 =SUM(B2:B7) and H2 =SUM(B8:B13) below data ending in row 13.
 
     The parts sit in a run of adjacent aggregate rows of the column (a covering total such as
     Year =SUM(B2:B13) may be among them, above or below the parts, or absent), and the block they
-    split ends right above that run (blank spacer rows aside)."""
-    end, aggregates = _aggregate_run(ws, col, row)
-    if end is None:
+    split, from its first data row to its last, ends right above that run (blank spacer rows aside)."""
+    info = _split_parts(ws, col, row, agg, memo if memo is not None else {})
+    if info is None:
         return False
+    top, end, parts, gaps, _covering = info
+    return (not [g for g in gaps if g >= parts[0][0]] and parts[-1][1] == end
+            and row in {t for _lo, _hi, t in parts})
+
+
+def _first_rows(ws, memo: dict) -> dict[int, int]:
+    """{column: the first row that holds a value in it}."""
+    key = ("first", ws.title)
+    if key not in memo:
+        first: dict[int, int] = {}
+        for c in _filled(ws):
+            first.setdefault(c.column, c.row)
+        memo[key] = first
+    return memo[key]
+
+
+def _is_data(ws, row: int, col: int, memo: dict | None = None) -> bool:
+    """True when the cell holds a number, or a formula that is not a total of the column above it: a row
+    of a data block. Row 1 is the header row, and so is the first filled cell of the column, even when
+    they hold numbers (years as column headers, below a title row)."""
+    if row <= 1 or (memo is not None and row <= _first_rows(ws, memo).get(col, 0)):
+        return False
+    v = _value(ws, row, col)
+    if isinstance(v, bool):
+        return False
+    if isinstance(v, (int, float)):
+        return True
+    return (bool(_formula(v)) and not _column_aggregate(ws, row, col) and not _adds_above(ws, row, col)
+            and not _from_totals(ws, row, col) and not _wrapped_total(ws, row, col))
+
+
+def _wrapped_total(ws, row: int, col: int) -> bool:
+    """True for an aggregate of the column above wrapped in rounding, like =ROUND(SUM(B2:B13),0)."""
+    f = _formula(_value(ws, row, col)) or ""
+    m = re.match(r"(ROUND|ROUNDUP|ROUNDDOWN|INT|TRUNC|ABS)\((\w+)\(", f[1:].lstrip("+").upper().replace(" ", ""))
+    if not m or m.group(2) not in AGGREGATES:
+        return False
+    refs = [rng for _, rng in _refs(f, ws.title)]
+    return bool(refs) and all(sheet == ws.title and c1 == col and c2 == col and r2 is not None and r2 < row
+                              for sheet, c1, _r1, c2, r2 in refs)
+
+
+def _from_totals(ws, row: int, col: int) -> bool:
+    """True when the formula reads only totals of its own column above it, like a Variance =B11-B6
+    between two blocks: a summary row, not data."""
+    refs = [rng for _, rng in _refs(_formula(_value(ws, row, col)) or "", ws.title)]
+    return bool(refs) and all(
+        sheet == ws.title and c1 == col and c2 == col and r2 is not None and r2 - r1 < 50 and r2 < row
+        and all(_column_aggregate(ws, r, col) for r in range(r1, r2 + 1))
+        for sheet, c1, r1, c2, r2 in refs)
+
+
+def _block_top(ws, col: int, row: int, memo: dict) -> int:
+    """The first row of the run of data cells (``_is_data``) in ``col`` that goes up from ``row``."""
+    tops = memo.setdefault((ws.title, col), {})
+    path, r = [], row
+    while r not in tops:
+        path.append(r)
+        if _is_data(ws, r - 1, col, memo):
+            r -= 1
+        else:
+            tops[r] = r
+    for p in path:
+        tops[p] = tops[r]
+    return tops[r]
+
+
+def _split_parts(ws, col: int, row: int, agg: str, memo: dict):
+    """How the ``agg`` parts of the run of aggregate rows holding ``row`` cover the data block right
+    above the run, or None when there is no such block or fewer than two parts.
+
+    Returns (top, end, parts, gaps, covering): the block's rows ``top``-``end``; the parts, as sorted
+    (first row, last row, formula row), leaving out an aggregate that contains another one (a covering
+    total); the rows of the block in no part; and whether an ``agg`` of the run covers the whole block.
+    Parts that overlap give None: they do not try to split the block."""
+    end, aggregates = _aggregate_run(ws, col, row, memo)
+    if end is None or not aggregates:
+        return None
+    key = ("parts", ws.title, col, aggregates[0][3], agg)
+    if key in memo:
+        return memo[key]
+    memo[key] = _parts_of(ws, col, agg, end, aggregates, memo)
+    return memo[key]
+
+
+def _parts_of(ws, col: int, agg: str, end: int, aggregates, memo: dict):
     run = [(lo, hi, t) for a, lo, hi, t in aggregates if a == agg and hi <= end]
-    # A part that contains another part is a covering total, not a part.
     parts = sorted(p for p in run if not any(q is not p and p[0] <= q[0] and q[1] <= p[1] for q in run))
-    if len(parts) < 2 or parts[-1][1] != end or row not in {t for _lo, _hi, t in parts}:
+    if len(parts) < 2 or any(b[0] <= a[1] for a, b in zip(parts, parts[1:])):
+        return None
+    top = min(_block_top(ws, col, end, memo), parts[0][0])
+    covered = set()
+    for lo, hi, _t in parts:
+        covered.update(range(max(lo, top), hi + 1))
+    gaps = [r for r in range(top, end + 1) if r not in covered and _is_data(ws, r, col, memo)]
+    covering = any(a == agg and lo <= top and hi >= end for a, lo, hi, _t in aggregates)
+    return top, end, parts, gaps, covering
+
+
+def _runs(rows: list[int]) -> list[tuple[int, int]]:
+    """Consecutive runs of sorted rows, as (first, last)."""
+    out: list[tuple[int, int]] = []
+    for r in rows:
+        if out and r == out[-1][1] + 1:
+            out[-1] = (out[-1][0], r)
+        else:
+            out.append((r, r))
+    return out
+
+
+def _rows_text(rows: list[int]) -> str:
+    runs = _runs(rows)
+    if len(rows) == 1:
+        return f"row {rows[0]}"
+    if len(runs) == 1:
+        return f"rows {runs[0][0]}-{runs[0][1]}"
+    return "rows " + ", ".join(str(r) for r in rows[:8]) + (", ..." if len(rows) > 8 else "")
+
+
+def _near_split(ws, col: int, row: int, agg: str, memo: dict):
+    """(top, end, parts, gaps) when the ``agg`` parts around ``row`` are meant to split the block above
+    them (H1/H2, four quarters) but leave rows out: every gap is shorter than the shortest part. Gaps
+    after the last part below a total of the whole block are left alone: sub-period parts of an
+    earlier period (H1 2024 and H2 2024 kept below a total extended to 2025) leave those rows out on
+    purpose; so are rows above the first part, unless that part is the short one. None otherwise."""
+    info = _split_parts(ws, col, row, agg, memo)
+    if info is None:
+        return None
+    top, end, parts, gaps, covering = info
+    if not gaps or row not in {t for _lo, _hi, t in parts}:
+        return None
+    lengths = [hi - lo + 1 for lo, hi, _t in parts]
+    # Rows above the first part are a gap only when that part is the short one (Q1 =SUM(B3:B4) beside
+    # three-month quarters); otherwise they are an opening row or an earlier period, as they are when a
+    # total of the whole block stands in the run.
+    lead = [g for g in gaps if g < parts[0][0]]
+    rest = [g for g in gaps if g >= parts[0][0]]
+    keep_lead = bool(lead) and not covering and lengths[0] + len(lead) <= max(lengths[1:])
+    if any(b - a + 1 >= min(lengths) for a, b in _runs(rest)):
+        return None
+    if covering:  # rows after the last part belong to a later period (H1 2024, H2 2024 below a 2025 total)
+        rest = [g for g in rest if g <= parts[-1][1]]
+    gaps = (lead if keep_lead else []) + rest
+    return (top, end, parts, gaps) if gaps else None
+
+
+def _groups_parts(ws, col: int, row: int, agg: str, r1: int, r2: int, memo: dict) -> bool:
+    """True when rows r1-r2 are exactly some consecutive parts of an exact split of the block in the run
+    of aggregate rows holding ``row`` (H1 =SUM(B2:B7) beside quarters Q1..Q4 of B2:B13)."""
+    info = _split_parts(ws, col, row, agg, memo)
+    if info is None:
         return False
-    return all(b[0] == a[1] + 1 for a, b in zip(parts, parts[1:]))
+    parts = info[2]
+    inside = [p for p in parts if r1 <= p[0] and p[1] <= r2]
+    return len(inside) >= 2 and any(p[0] == r1 for p in parts) and any(p[1] == r2 for p in parts)
+
+
+def _inner_part(ws, col: int, row: int, agg: str, memo: dict) -> bool:
+    """True when the formula in ``row`` is a part, not the last, of parts that follow each other
+    without a gap from the first to the last: its range stops above the next part, not above data."""
+    info = _split_parts(ws, col, row, agg, memo)
+    if info is None:
+        return False
+    parts, gaps = info[2], info[3]
+    rows = [t for _lo, _hi, t in parts]
+    return (row in rows and row != parts[-1][2]
+            and not [g for g in gaps if parts[0][0] <= g <= parts[-1][1]])
+
+
+def _split_gap(sheet: str, col: int, agg: str, top: int, end: int, parts, gaps) -> Finding:
+    """The error for parts that split rows ``top``-``end`` except ``gaps``, at the part next to the first gap."""
+    letter = get_column_letter(col)
+    span = lambda p: f"{letter}{p[0]}:{letter}{p[1]} (row {p[2]})"  # noqa: E731
+    first = gaps[0]
+    if first < parts[0][0]:
+        part, how = parts[0], f"{span(parts[0])} starts at row {parts[0][0]}, below the first data row (row {top})"
+    elif first > parts[-1][1]:
+        part, how = parts[-1], f"{span(parts[-1])} ends at row {parts[-1][1]}, above the last data row (row {end})"
+    else:
+        i = next(i for i, p in enumerate(parts) if p[0] > first)
+        part, how = parts[i], (f"{span(parts[i])} starts at row {parts[i][0]}, but the part before it ends at row "
+                               f"{parts[i - 1][1]}")
+    verb = "is" if len(gaps) == 1 else "are"
+    rows = sorted(t for _lo, _hi, t in parts)
+    where = f"rows {rows[0]}-{rows[-1]}" if rows[-1] - rows[0] == len(rows) - 1 else "rows " + ", ".join(map(str, rows))
+    return Finding("error", "range-omits-adjacent-cells", _ref(sheet, part[2], col),
+                   f"{len(parts)} {agg} parts in {where} split rows {top}-{end} of column {letter}, but "
+                   f"{_rows_text(gaps)} {verb} in none of them: {how}")
+
+
+def _late_start(ws, b_ws, col: int, row: int, agg: str, text: str, r1: int, r2: int, memo: dict, part: bool = False):
+    """(level, message) when the ``agg`` range r1-r2 in ``row`` starts below the first row of the data
+    block it sums (=SUM(B3:B13) over data from row 2), else None. Not for a part below an aggregate of
+    the same rows that covers the left-out ones (a 'Q4 2024' below the year's total). An error when
+    the column's own parts include the left-out rows while this formula contains one of them (a
+    'Total' below 2024 / 2025 parts that leaves out January), or when the original file's formula in
+    this cell covered them and they hold the same values; otherwise a warning, since a total may leave
+    out a first row on purpose (an opening balance). For a ``part`` of an exact split (2024 beside 2025)
+    only the original's evidence counts."""
+    if not _is_data(ws, r1, col, memo):
+        return None
+    top = _block_top(ws, col, r1, memo)
+    # A second header row (years below the column titles) has no label in column A, unlike the rows
+    # the range sums.
+    while top < r1 and _blank(_value(ws, top, 1)) and not _blank(_value(ws, r1, 1)):
+        top += 1
+    if top >= r1:
+        return None
+    omitted = list(range(top, r1))
+
+    def says(rows):
+        holds = "holds a value" if len(rows) == 1 else "hold values"
+        return f"{text} starts at row {r1}, but {_rows_text(rows)} right above it in the same column {holds}"
+
+    # The original's own formula here, or its aggregate with the same label in column A (a 'Total' that
+    # moved down when rows were added), covered the rows, which hold the same values: an error.
+    old = _column_aggregate(b_ws, row, col) if b_ws is not None else None
+    if b_ws is not None and not old and not _blank(_value(ws, row, 1)):
+        label = _value(ws, row, 1)
+        old = next((a for r in range(1, min(_extent(b_ws)[0], row + 200) + 1)
+                    if _value(b_ws, r, 1) == label and (a := _column_aggregate(b_ws, r, col))), None)
+    if (old and old[0] == agg and old[1] <= top and old[2] >= r1
+            and all(_value(b_ws, r, col) == _value(ws, r, col) for r in omitted)):
+        return "error", f"{says(omitted)}; in the original file this formula covered them ({old[3]})"
+    if part:
+        return None
+    _end, run = _aggregate_run(ws, col, row, memo)
+    others = [(a, lo, hi, t) for a, lo, hi, t in run if t != row]
+    if any(a == agg and lo <= top and hi >= r2 for a, lo, hi, _t in others):
+        return None
+    # The rows summed by the parts before it (H2 below H1) are not left out.
+    before_it = set()
+    for a, lo, hi, _t in others:
+        if a == agg and hi < r1:
+            before_it.update(range(lo, hi + 1))
+    omitted = [r for r in omitted if r not in before_it]
+    if not omitted:
+        return None
+    message = says(omitted)
+    contains = any(a == agg and r1 <= lo and hi <= r2 for a, lo, hi, _t in others)
+    inside = [(lo, hi, t) for a, lo, hi, t in others if a == agg and lo <= r1 - 1 and hi >= r1]
+    if contains and inside:
+        lo, hi, t = inside[0]
+        letter = get_column_letter(col)
+        return "error", (f"{message}, which the part {letter}{lo}:{letter}{hi} in row {t} includes, so this total "
+                         "leaves out data its parts cover")
+    return "warning", f"{message}; check that {'it' if len(omitted) == 1 else 'they'} should be left out"
 
 
 def _grown_total(b_ws, ws, positions: dict, col: int, row: int, f: str, r1: int, r2: int, closing) -> tuple | None:
@@ -585,6 +864,8 @@ def check_formulas(wb, findings, before=None):
     """Formula symptoms in ``wb``; ``before`` ({sheet name: the original's worksheet}) lets a stale
     partial aggregate below an extended total be told from a deliberate one."""
     before = before or {}
+    memo: dict = {}
+    reported: set = set()
     for ws in wb.worksheets:
         b_ws, positions, sums = before.get(ws.title), None, None
         for c in _filled(ws):
@@ -609,21 +890,31 @@ def check_formulas(wb, findings, before=None):
                 agg = next((a for a in AGGREGATES if head.startswith(a + "(")), None)
                 if agg is None:
                     continue
+                own = c1 == c.column and r2 < c.row
+                flagged = len(findings)
+                # Parts meant to split the block above them (H1/H2, quarters) that leave rows out: one
+                # error at the part next to the gap, naming the rows; the other parts are not omissions.
+                near = _near_split(ws, c1, c.row, agg, memo) if own else None
+                if near is not None:
+                    top, end, parts, gaps = near
+                    if (ws.title, c1, parts[0][2]) not in reported:
+                        reported.add((ws.title, c1, parts[0][2]))
+                        findings.append(_split_gap(ws.title, c1, agg, top, end, parts, gaps))
                 # Total below a column range that stops short of the data above it. Rows that
                 # summarise the range themselves (a Total/Average/Max block) are not data.
-                if c1 == c.column and r2 < c.row - 1:
+                elif c1 == c.column and r2 < c.row - 1:
                     filled = [r for r in range(r2 + 1, c.row) if _has_value(ws, r, c1)]
                     summary = _summary_rows(ws, c1, r1, r2, filled)
                     gap = [r for r in filled if r not in summary]
-                    rows_text = "" if not gap else f"rows {gap[0]}-{gap[-1]}" if gap[-1] - gap[0] == len(gap) - 1 else \
-                        "rows " + ", ".join(map(str, gap[:8])) + (", ..." if len(gap) > 8 else "")
-                    message = f"{text} stops at row {r2}, but {rows_text} between it and the formula hold values"
+                    rows_text = _rows_text(gap) if gap else ""
+                    holds = "holds a value" if len(gap) == 1 else "hold values"
+                    message = f"{text} stops at row {r2}, but {rows_text} between it and the formula {holds}"
                     # H1/H2 or quarters that split the block above them exactly are parts, not omissions,
                     # unless the original shows that this formula was the total of the whole block,
                     # which has grown since (a stale total followed by a new sum of the added rows), and
                     # no aggregate in the same run totals the grown block (2024 / 2025 / Total).
-                    if gap and _splits_block(ws, c1, c.row, agg):
-                        end, run = _aggregate_run(ws, c1, c.row)
+                    if gap and _splits_block(ws, c1, c.row, agg, memo):
+                        end, run = _aggregate_run(ws, c1, c.row, memo)
                         totalled = any(a == agg and lo <= r1 and hi >= end for a, lo, hi, _t in run)
                         if b_ws is not None and positions is None and not totalled:
                             positions = _formula_positions(_filled(b_ws))
@@ -634,11 +925,21 @@ def check_formulas(wb, findings, before=None):
                                                     f"{message}; in the original file this formula (row {was}) was the "
                                                     f"total of the whole block, rows {r1}-{r2}, which has grown since, so "
                                                     "check that it should not cover the new rows"))
+                    elif gap and (_groups_parts(ws, c1, c.row, agg, r1, r2, memo) or _inner_part(ws, c1, c.row, agg, memo)):
+                        pass  # H1 =SUM(B2:B7) beside quarters: it adds Q1 and Q2; Q1 stops where Q2 starts
                     elif gap:
                         # Below a total that covers the omitted rows, a shorter range may be deliberate,
                         # unless the original shows that it used to end with that total.
-                        closing = _closing_total(ws, c1, r1, gap, c.row)
-                        if closing is None:
+                        closing = _closing_total(ws, c1, r1, gap, c.row) or _covering_in_run(ws, c1, c.row, r1, gap, memo)
+                        twin = _overlapping_part(ws, c1, c.row, agg, r1, r2, memo)
+                        if twin is not None:
+                            letter = get_column_letter(c1)
+                            both = list(range(max(r1, twin[0]), min(r2, twin[1]) + 1))
+                            findings.append(Finding("error", "range-omits-adjacent-cells", where,
+                                                    f"{message}, and the part {letter}{twin[0]}:{letter}{twin[1]} in row "
+                                                    f"{twin[2]} overlaps it: both include {_rows_text(both)}, so the "
+                                                    f"parts count {'it' if len(both) == 1 else 'them'} twice"))
+                        elif closing is None:
                             findings.append(Finding("error", "range-omits-adjacent-cells", where, message))
                         else:
                             if b_ws is not None and positions is None:
@@ -661,6 +962,12 @@ def check_formulas(wb, findings, before=None):
                                 findings.append(Finding("warning", "range-omits-adjacent-cells", where,
                                                         f"{message}; row {closing[0]} ({closing[1][3]}) covers them, "
                                                         "so check that the shorter range is deliberate"))
+                # A range that starts below the first row of the data block it sums.
+                if own and near is None and len(findings) == flagged and _column_aggregate(ws, c.row, c.column):
+                    start = _late_start(ws, b_ws, c1, c.row, agg, text, r1, r2, memo,
+                                        part=_splits_block(ws, c1, c.row, agg, memo))
+                    if start is not None:
+                        findings.append(Finding(start[0], "range-omits-adjacent-cells", where, start[1]))
                 # A sum over a range that contains subtotals of the same range.
                 if agg in ("SUM", "PRODUCT"):
                     sums = _sum_index(ws) if sums is None else sums
@@ -1103,12 +1410,15 @@ def compare(before, after, findings):
         found = [j for j in labels(a_ws, axis).get(old, []) if j != idx and label(b_ws, axis, j) != old]
         return min(found, key=lambda j: (abs(j - idx), j)) - idx if found else None
 
-    def row_values(ws):
-        """{row: (its non-blank constants, in column order)}: what identifies a row's content."""
-        key = ("rows", id(ws))
+    def row_values(ws, cols=None):
+        """{row: (its non-blank constants, in column order)}: what identifies a row's content; with
+        ``cols`` (first, last), only the constants in those columns (one table of the sheet)."""
+        key = ("rows", id(ws), cols)
         if key not in cache:
             rows: dict = {}
             for c in _filled(ws):
+                if cols is not None and not cols[0] <= c.column <= cols[1]:
+                    continue
                 if not _formula(c.value) and not _blank(c.value):
                     rows.setdefault(c.row, []).append(c.value)
             index: dict = {}
@@ -1117,10 +1427,48 @@ def compare(before, after, findings):
             cache[key] = ({r: tuple(v) for r, v in rows.items()}, index)
         return cache[key]
 
-    def unique_row(ws, values):
+    def unique_row(ws, values, cols=None):
         """The one row of ``ws`` holding exactly ``values`` (two or more constants), else None."""
-        found = row_values(ws)[1].get(values, []) if values and len(values) >= 2 else []
+        found = row_values(ws, cols)[1].get(values, []) if values and len(values) >= 2 else []
         return found[0] if len(found) == 1 else None
+
+    def blocks(ws):
+        """{column: (first, last)}: the run of columns holding a value that each column belongs to;
+        runs are separated by columns that hold nothing (a table, and a summary beside it)."""
+        key = ("blocks", id(ws))
+        if key not in cache:
+            out, run = {}, []
+            for col in sorted({c.column for c in _filled(ws)}) + [None]:
+                if run and (col is None or col != run[-1] + 1):
+                    out.update(dict.fromkeys(run, (run[0], run[-1])))
+                    run = []
+                if col is not None:
+                    run.append(col)
+            cache[key] = out
+        return cache[key]
+
+    def beside(b_ws, a_ws, row, col, c1, c2):
+        """True when the formula at (row, col) reads cells c1-c2 of its own row in a table that starts in
+        column A, from another block of columns (an empty column between them in both files), and its
+        own block holds a constant in that row that did not change, such as 'Apple price' next to
+        =$C$2: a summary beside the table, not a formula of the table's row, which moves with it."""
+        for ws in (b_ws, a_ws):
+            bl = blocks(ws)
+            if col not in bl or c1 not in bl or bl.get(c2) != bl[c1] or bl[col] == bl[c1] or bl[c1][0] != 1:
+                return False
+        lo, hi = blocks(a_ws)[col]
+        for k in range(lo, min(hi, lo + 49) + 1):
+            v = _value(a_ws, row, k)
+            if (k != col and isinstance(v, str) and not _blank(v) and not _formula(v) and _value(b_ws, row, k) == v
+                    and column_count(b_ws, k, v) == 1 and column_count(a_ws, k, v) == 1):
+                return True
+        return False
+
+    def column_count(ws, k, v):
+        key = ("colcount", id(ws), k)
+        if key not in cache:
+            cache[key] = Counter(c.value for c in _filled(ws) if c.column == k)
+        return cache[key][v]
 
     def origin(b_ws, a_ws, idx):
         """The row of the original whose content row ``idx`` now holds: found by the row's constants
@@ -1165,13 +1513,15 @@ def compare(before, after, findings):
         return (values is not None and len(values) >= 2 and unique_row(a_ws, values) == idx
                 and not row_values(b_ws)[1].get(values))
 
-    def content_moved(b_ws, a_ws, idx):
+    def content_moved(b_ws, a_ws, idx, cols=None):
         """Where the content of row ``idx`` of the original now is, when it is now at another row
-        (found by its constants, unique in both files) and row ``idx`` holds something else."""
-        values = row_values(b_ws)[0].get(idx)
-        if unique_row(b_ws, values) != idx or row_values(a_ws)[0].get(idx) == values:
+        (found by its constants, unique in both files) and row ``idx`` holds something else. With
+        ``cols``, only the constants of those columns count (the table the reference reads, not a
+        summary beside it in the same rows)."""
+        values = row_values(b_ws, cols)[0].get(idx)
+        if unique_row(b_ws, values, cols) != idx or row_values(a_ws, cols)[0].get(idx) == values:
             return None
-        j = unique_row(a_ws, values)
+        j = unique_row(a_ws, values, cols)
         return j if j is not None and j != idx else None
 
     def filled_down(ws, row, col, f):
@@ -1250,25 +1600,33 @@ def compare(before, after, findings):
                 checks = []
                 if c1 == c2 and (sheet != name or r2 is None or r2 - r1 >= 1) and r1 > 1:
                     checks.append(("column", c1, c.column, _value(b_ws, 1, c1), _value(a_ws, 1, c1), "header"))
-                if r2 == r1 and not (sheet == name and r1 == c.row):
-                    checks.append(("row", r1, c.row, _value(b_ws, r1, 1), _value(a_ws, r1, 1), "label in column A"))
+                # A reference to the formula's own row reads the row it belongs to, unless the formula is a
+                # summary beside the table, which does not move with the table's rows.
+                own_row = sheet == name and r2 == r1 and r1 == c.row
+                across = own_row and beside(b_ws, a_ws, c.row, c.column, c1, c2 if c2 is not None else c1)
+                block = blocks(b_ws).get(c1)
+                table = block if across else None  # row identity from the table's own columns
+                if r2 == r1 and (not own_row or across):
+                    other = block is not None and block[0] != 1  # a table beside the one with column A
+                    checks.append(("row", r1, c.row, None if other else _value(b_ws, r1, 1),
+                                   None if other else _value(a_ws, r1, 1), "label in column A"))
                 broken = False
                 for axis, idx, own, old, new, part in checks:
                     # A relative reference on the formula's own sheet whose own row/column moved by the
                     # same offset as the one it reads (a filled-down running balance or month-on-month
                     # change after inserted or deleted rows) still reads the same neighbour.
-                    neighbour = sheet == name and _relative(text, axis)
+                    neighbour = sheet == name and _relative(text, axis) and not across
                     if old == new:
                         # Same label (a repeated category, or no label): the row's content may still
                         # have moved, as in a sort. Checked for references to another sheet or anchored
                         # ones; a relative one on its own sheet is most likely a filled-down pattern.
-                        j = content_moved(b_ws, a_ws, idx) if axis == "row" and not neighbour else None
+                        j = content_moved(b_ws, a_ws, idx, table) if axis == "row" and not neighbour else None
                         if j is not None:
-                            now = row_values(a_ws)[0].get(idx)
+                            now = row_values(a_ws, table)[0].get(idx)
                             findings.append(Finding(
                                 "error", "reference-meaning-changed", where,
                                 f"{f} refers to row {idx} of '{sheet}', whose values "
-                                f"{preview(row_values(b_ws)[0][idx])} are now in row {j}; row {idx} now holds "
+                                f"{preview(row_values(b_ws, table)[0][idx])} are now in row {j}; row {idx} now holds "
                                 + (preview(now) if now else "no constants")))
                             broken = True
                             break

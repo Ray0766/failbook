@@ -86,10 +86,13 @@ behave like a spreadsheet application: most of them never rewrite formulas for y
   constant values (two or more, unique in both files). Rows with a single constant, and duplicate
   rows, are not tracked. Nor are single-cell references on the formula's own sheet without `$`
   (for example a summary below the table that reads `=C2`) when the label in column A repeats or
-  is blank. A formula that reads a cell in its own row (a summary beside the table, `G2 =$C$2`) is
-  never checked; when the label in column A repeats, a summary beside the table also makes the rows
-  it sits in differ, so they are not tracked either. After sorting or inserting such rows, check
-  those references yourself.
+  is blank. A formula that reads a cell in its own row is taken to belong to that row and move with
+  it; it is checked only when it is a summary beside the table: in other columns than a table that
+  starts in column A, with an empty column between them, and with a text label of its own, unique in
+  its column, that stayed in place (`'Apple price'` next to `G2 =$C$2`); its rows are then told apart
+  by the table's own columns. A reference into a table that does not start in column A (a second
+  table beside the first) is judged by that table's content, not by the label in column A. After
+  sorting or inserting rows, check other such references yourself.
 - A formula filled down a column that reads the row next to it on its own sheet without `$` (a
   running balance `=D6+C7`, a change `=B7-B6`) is an `[error]` `reference-meaning-changed` only
   when that row's label in column A and the cells the formula reads there were cleared. It gets
@@ -104,35 +107,52 @@ behave like a spreadsheet application: most of them never rewrite formulas for y
   the row it reads (a VAT line `=B14*0.2` under the Total) gets none of this leniency, and a
   formula meant to read a fixed position after a sort (for example the top row, `=Data!A2`) is
   still reported as an `[error]`. If the new order was the task, say so in your report.
-- Parts that together cover exactly the rows above them, with no gap or overlap and at most three
-  blank rows between (H1 and H2, four quarters), get no finding. A shorter aggregate below a total
-  that covers more rows (an Average, a 'Q4 2024' sum) is a `[warning]`. It is an `[error]` only with `--before`, when in the original it covered the same
+- Parts that together cover exactly the rows above them, from the first part to the last data row,
+  with no gap or overlap and at most three blank rows between (H1 and H2, four quarters), get no
+  finding, and neither do totals of whole parts (H1 `=SUM(B2:B7)` beside the quarters, a Year over the
+  quarter rows). Rows above the first part are an opening row or an earlier period unless that part
+  is the short one (Q1 `=SUM(B3:B4)` beside three-month quarters). Parts that leave rows out, each gap
+  shorter than the shortest part (a quarter that skips a month), are one `[error]` at the part next to
+  the gap, naming the rows; label and blank rows between sections are not gaps. Parts that overlap are
+  an `[error]` naming the rows counted twice. When a total of the whole block stands in the same run
+  of totals, above or below the parts, rows left out after the last part are a `[warning]` on the last
+  part: H1 2024 and H2 2024 kept below a total extended to 2025 look like a Q4 that misses December.
+- A sum or other aggregate that is the whole formula and starts below the first data row of its
+  column's block (`=SUM(B3:B13)` over data from row 2) is a `[warning]`, since a first row such as an
+  opening balance may be left out on purpose; not when an aggregate of the same function in the same
+  block of totals covers those rows and its own (a 'Q4 2024' below the year's total), or when parts
+  before it sum the rows above it (H2 below H1). It is an `[error]` when a part in that block includes
+  both its first row and the rows above it while this aggregate contains another part (a 'Total' below
+  2024 / 2025 parts that leaves out January), or, with `--before`, when the original's formula in the
+  same cell, or with the same label in column A, covered the left-out rows and they hold the same
+  values. Header rows are not data rows: row 1, the first filled cell of each column, and a row with
+  no label in column A above rows that have one (years below the column titles); nor are a row
+  computed only from totals above it (a Variance) and a rounded total (`=ROUND(SUM(B2:B13),0)`).
+- A shorter aggregate below a total that covers more rows (an Average, a 'Q4 2024' sum) is a
+  `[warning]`. It is an `[error]` only with `--before`, when in the original it covered the same
   rows (the same first and last row) as another aggregate above it with a different formula (two
   identical formulas cannot be told apart) and the total that now covers the new rows starts at the
-  same row. A part that starts lower, such as a quarter or half-year kept
-  below an all-time total, stays a `[warning]`, because correct edits keep such parts too. With
-  `--before`, a total left at its old range and followed by a new sum of only the added rows is a
-  `[warning]` for the same reason (it has the shape of a correct split such as 2024 / 2025),
-  unless a total of all the rows sits in the same block of total rows.
+  same row. A part that starts lower, such as a quarter or half-year kept below an all-time total,
+  stays a `[warning]`, because correct edits keep such parts too. With `--before`, a total left at
+  its old range and followed by a new sum of only the added rows is a `[warning]` for the same
+  reason (it has the shape of a correct split such as 2024 / 2025), unless a total of all the rows
+  sits in the same block of total rows.
 - A new sheet that holds at least half of a removed sheet's constants counts as that sheet
   renamed; formulas are compared only for a sheet that held no constants, so a sheet renamed with
   its values cleared and its formulas kept is reported as removed. A chart sheet counts as renamed
   when a new chart sheet has the same title or a series whose values (the y values of a scatter
-  chart) come from at least one of the same columns or defined names (a name that stands for a range
-  counts as that range), even when the new chart
-  shows only one of the old chart's columns. An old chart with neither a title nor a series over a
-  cell range (for example a series over an `OFFSET` name) is a `[warning]` when a new chart sheet
-  is left over, since nothing tells the two apart. A chart sheet in a file re-saved by
-  LibreOffice 24.2 becomes a worksheet and is reported as removed.
+  chart) come from at least one of the same columns or defined names (a name that stands for a
+  range counts as that range), even when the new chart shows only one of the old chart's columns.
+  An old chart with neither a title nor a series over a cell range (for example a series over an
+  `OFFSET` name) is a `[warning]` when a new chart sheet is left over, since nothing tells the two
+  apart. A chart sheet in a file re-saved by LibreOffice 24.2 becomes a worksheet and is reported
+  as removed.
 - Known misreadings: a total written as `=SUM(B2:B4)+SUM(B5:B7)`, and half-year sums four or more
-  blank rows below the data, are `[error]`s; when quarter or half-year sums below the data leave a
-  month out, every part except the last is an `[error]` saying its range stops above more data,
-  wherever the gap is, and no message names the missing month; conditional formatting on column A
-  that stops above a 'Total' label is a `[warning]`. Known misses: the script does not check where a
-  range starts, so a total or part that leaves out the first data rows (`=SUM(B3:B13)` over data
-  from row 2, or Q1 `=SUM(B3:B4)`) is not reported, with or without `--before`; months appended
-  below half-year sums that have no total are not reported; and 5 of 150 random wrong `insert_rows`
-  edits of invoice tables with repeated values passed clean in our tests.
+  blank rows below the data, are `[error]`s; conditional formatting on column A that stops above a
+  'Total' label is a `[warning]`. Known misses: months appended below half-year sums that have no
+  total are not reported; a part of an exact split that starts late (2024 `=SUM(B3:B13)` beside a
+  2025 part) is reported only with `--before`; and 5 of 150 random wrong `insert_rows` edits of
+  invoice tables with repeated values passed clean in our tests.
 
 ## Reporting
 

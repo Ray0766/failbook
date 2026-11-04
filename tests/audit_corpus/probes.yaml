@@ -616,12 +616,9 @@
 - id: fix2-quarters-gap
   label: error
   edit: The same quarter layout, except that Q4 in B18 is =SUM(B12:B13), so row 11 (m10) is in no quarter.
-  why: 'One month is in no quarter, so the audit must report an error at Q4 (B18). Known limit: because the quarters
-    do not split the block exactly, it reports Q1 to Q3 (B15:B17), which are correct, and nothing at B18; SKILL.md
-    lists this misreading.'
+  why: One month is in no quarter, so the audit must report an error, and the require pattern checks that it is
+    reported at Q4 (B18), the part that skips row 11, not at the correct quarters.
   after: fix2/adv-q_gap.xlsx
-  known_limit: true
-  now: require-unmet
   require: B18
   source: fix-2
 - id: fix2-avg-extended
@@ -873,6 +870,7 @@
     split, and H1 stopping at row 8 while rows 9-13 hold values is an error.'
   after: recheck2/atk-i4_overlap.xlsx
   before: recheck2/atk-i4_b.xlsx
+  require: 'overlaps it: both include row 8'
   source: recheck-2
 - id: recheck2-i4-spacer4
   label: warning|clean
@@ -1042,28 +1040,21 @@
   edit: Prices lists Apple, Banana, Kiwi, Mango and Pear in rows 2-6 (A2:A6 all 'Fruit', prices in C2:C6), with
     'Apple price' =C2 in G2 and 'Kiwi price' =C4 in G3 beside the table. The edit sorts the table by price, highest
     first, and leaves G2:G3 unchanged.
-  why: 'Known limit: G2 ''Apple price'' now shows Kiwi''s 3.4 and G3 ''Kiwi price'' shows Apple''s 2.1, so an error
-    is right. SKILL.md says single-cell references on the formula''s own sheet without $ are not tracked when the
-    label in column A repeats (here ''Fruit''); today clean.'
+  why: G2 'Apple price' now shows Kiwi's 3.4 and G3 'Kiwi price' shows Apple's 2.1, so the audit must report an
+    error. The label in column A repeats ('Fruit'), so the rows are told apart by the table's own constants, not
+    by the summary beside it.
   after: recheck2/atk-i10_ss.xlsx
   before: recheck2/atk-i10_ss_b.xlsx
-  known_limit: true
-  now: clean
   source: recheck-2
 - id: recheck2-i10-same-sheet-fg-anchored
   label: error
   edit: 'The same table and sort, with the summary beside it anchored: G2 =$C$2 (''Apple price'') and G3 =$C$4 (''Kiwi
     price'').'
-  why: 'Known limit: G2 ''Apple price'' now shows Kiwi''s 3.4 and G3 ''Kiwi price'' shows Apple''s 2.1, so an error
-    is right. The summary''s labels in F2:F3 sit in the table''s rows 2-3 and stay there during the sort, so the
-    rows the formulas read no longer hold the same constants: Apple''s old row 2 included ''Apple price'' and its
-    new row 4 does not, and Kiwi''s new row 2 now includes it. SKILL.md says that when the label in column A repeats,
-    rows are told apart by their constant values, unique in both files, so these two moves are not found; today
-    clean.'
+  why: 'As with relative references: both anchored summary cells now read the wrong product, so the audit must report
+    an error. The summary''s labels in F2:F3 sit in the table''s rows, so the rows are told apart by the table''s
+    columns only.'
   after: recheck2/atk-i10_ssa.xlsx
   before: recheck2/atk-i10_ssa_b.xlsx
-  known_limit: true
-  now: clean
   source: recheck-2
 - id: recheck2-i10-delete-stale
   label: error
@@ -1939,12 +1930,10 @@
   label: error|warning
   edit: Two 2025 months are added, with '2024' =SUM(B2:B13) and '2025' =SUM(B14:B15) in rows 16-17. But the 'Total'
     in row 18 is =SUM(B3:B15), which leaves out January 2024 in B2.
-  why: 'No total covers every month, so the ''Total'' in B18, which leaves out B2, must be reported. Known limit:
-    the audit only warns about the 2024 sum in B16 and reports nothing at B18; SKILL.md lists this miss.'
+  why: 'No total covers every month: the ''Total'' in B18 leaves out B2, which the 2024 part includes, so it must
+    be reported (the require pattern checks B18). The warning on the 2024 sum in B16 may stay.'
   after: fix4/yr_split_short_total.xlsx
   before: fix4/yr_b.xlsx
-  known_limit: true
-  now: require-unmet
   require: B18
   source: fix-4
 - id: fix4-year-plus-short
@@ -1961,45 +1950,37 @@
   label: error
   edit: 'Sales holds 2024-01 to 2024-12 in B2:B13 and quarter sums below them: Q1 =SUM(B3:B4), which leaves out
     January, and Q2 to Q4 over B5:B13.'
-  why: 'January is in no quarter, so an error would be right. Known limit: SKILL.md says the script does not check
-    where a range starts, so the parts look like an exact split and nothing is reported.'
+  why: 'January is in no quarter, so the audit must report an error: the parts start one row below the first data
+    row.'
   after: check/quarters_gap_first.xlsx
-  known_limit: true
-  now: clean
   source: check
 - id: check-late-total
   label: error
   edit: Sales holds 2024-01 to 2024-12 in B2:B13. The Total in B14 changes from =SUM(B2:B13) to =SUM(B3:B13), so
     it leaves out January.
-  why: 'The total no longer covers the first month, so an error would be right. Known limit: the script does not
-    check where a range starts, with or without the original (SKILL.md).'
+  why: The total no longer covers the first month, and in the original the same cell covered it, so the audit must
+    report an error.
   after: check/late_total.xlsx
   before: check/late_total_b.xlsx
-  known_limit: true
-  now: clean
   source: check
 - id: check-beside-own-row
   label: error
   edit: 'Prices lists five products with unique names in A and prices in B, and a summary beside the table: ''Apple
     price'' in F2, =$B$2 in G2. The table is sorted by price, highest first, and G2 is left alone, so it now shows
     Kiwi''s 3.4.'
-  why: 'The summary now shows the wrong price, so an error would be right. Known limit: SKILL.md says a formula
-    that reads a cell in its own row is never checked.'
+  why: 'The summary beside the table now shows the wrong price, so the audit must report an error: its label ''Apple
+    price'' stayed in row 2 while the table''s rows moved.'
   after: check/beside_own_row.xlsx
   before: check/beside_own_row_b.xlsx
-  known_limit: true
-  now: clean
   source: check
 - id: check-beside-two
   label: error
   edit: 'The same table and sort, with two summary cells beside it: G2 ''Apple price'' =$B$2 and G3 ''Kiwi price''
     =$B$4. Both are left alone, so both show the wrong price.'
-  why: Both summary cells are wrong. The audit reports G3, which reads another row, so the outcome is an error;
-    G2 reads its own row, which SKILL.md says is never checked, so nothing names G2.
+  why: Both summary cells are wrong, so the audit must report an error, and the require pattern checks that G2,
+    which reads its own row, is reported too, not only G3.
   after: check/beside_two.xlsx
   before: check/beside_two_b.xlsx
-  known_limit: true
-  now: require-unmet
   require: Prices!G2
   source: check
 - id: check-top-row-sorted
@@ -2024,3 +2005,108 @@
   require: 'show other charts: none of them shares a title, or a column or name that a series plots as values'
   forbid: the two share
   source: check
+- id: misses-opening-quarters
+  label: clean
+  edit: Cash holds an opening balance in B2 and twelve monthly flows in B3:B14, with Q1 to Q4 =SUM(B3:B5) ... =SUM(B12:B14)
+    and a Closing =B2+SUM(B15:B18) below.
+  why: Equal quarters of the flows are correct; the opening balance above them is not a month they leave out.
+  after: misses/opening_quarters.xlsx
+  source: misses
+- id: misses-halves-of-a-later-year
+  label: clean
+  edit: 2024-01 to 2025-12 in B2:B25, with 'H1 2025' =SUM(B14:B19), 'H2 2025' =SUM(B20:B25) and a Total =SUM(B2:B25)
+    below.
+  why: The halves split their own year exactly; 2024's rows above them are an earlier period, not a gap.
+  after: misses/halves_2025.xlsx
+  source: misses
+- id: misses-halves-of-quarters
+  label: clean
+  edit: Q1 to Q4 over the twelve months in B15:B18, then H1 =SUM(B15:B16), H2 =SUM(B17:B18) and Year =SUM(B15:B18),
+    which add the quarter rows.
+  why: 'Totals of the quarter rows are correct: they start on the quarters, not below missing months.'
+  after: misses/quarters_of_quarters.xlsx
+  source: misses
+- id: misses-quarters-and-halves
+  label: clean
+  edit: Q1 to Q4 in B15:B18 and H1 =SUM(B2:B7), H2 =SUM(B8:B13) below them, with no year total.
+  why: H1 adds exactly Q1 and Q2, and H2 Q3 and Q4, so no range leaves data out (an error before this fix).
+  after: misses/quarters_and_halves.xlsx
+  source: misses
+- id: misses-two-row-header
+  label: clean
+  edit: Row 1 holds the titles and row 2, with column A blank, the years 2024 and 2025; the months are in rows 3-14,
+    with H1, H2 and Year sums below.
+  why: The years in row 2 are a header, not a first month the sums leave out.
+  after: misses/two_row_header.xlsx
+  source: misses
+- id: misses-two-sections
+  label: clean
+  edit: A P&L with an 'Income' label row, three income lines, an 'Expenses' label row and three expense lines, with
+    Total income =SUM(B3:B5) and Total expenses =SUM(B7:B9) below.
+  why: Section totals separated by a label row split their sections exactly (an error before this fix).
+  after: misses/two_sections.xlsx
+  source: misses
+- id: misses-budget-actual-forecast
+  label: clean
+  edit: Budget and Actual blocks with their totals, a Variance =B11-B6, then a Forecast block with H1, H2 and a
+    total of its own rows.
+  why: The Variance row is computed from two totals, so it is not a row the Forecast total leaves out.
+  after: misses/budget_actual_forecast.xlsx
+  source: misses
+- id: misses-calc-block-sorted
+  label: clean
+  edit: A table in A:C, an empty column D, and a block with a repeated 'EUR' in E and Value =B2*C2 ... in F. Whole
+    rows are sorted by price, as Excel does, so each formula follows its row.
+  why: A per-row calculation moves with its row; a repeated constant such as 'EUR' is not a summary's own label.
+  after: misses/calc_block_sorted.xlsx
+  before: misses/calc_block_b.xlsx
+  source: misses
+- id: misses-second-table-untouched
+  label: clean
+  edit: Products in A:C and regions in E:F side by side; only the product table is sorted. Summary!B1 =Data!$F$4
+    reads East's units in the region table, which did not move.
+  why: The reference reads a table that was not sorted, so its meaning did not change (an error before this fix,
+    which judged the row by the product name in column A).
+  after: misses/two_tables_sorted.xlsx
+  before: misses/two_tables_b.xlsx
+  source: misses
+- id: misses-halves-total-below
+  label: warning|clean
+  edit: 2024-01 to 2025-02 in B2:B15, with 'H1 2024' =SUM(B2:B7), 'H2 2024' =SUM(B8:B13) and a Total =SUM(B2:B15)
+    below them.
+  why: Halves of 2024 kept below a total of all the months are correct, as when the total stands above them; the
+    new months after H2 are at most a question (an error before this fix).
+  after: misses/halves_total_below.xlsx
+  source: misses
+- id: misses-quarters-two-gaps
+  label: error
+  edit: 'Q1 =SUM(B2:B4), Q2 =SUM(B6:B7), Q3 =SUM(B8:B10), Q4 =SUM(B12:B13): May and November (rows 5 and 11) are
+    in no quarter.'
+  why: Months missing from the quarters must be one error naming both rows, at the quarter after the first gap.
+  after: misses/quarters_two_gaps.xlsx
+  require: 'Sales!B16: .*rows 5, 11 are in none of them'
+  source: misses
+- id: misses-h1-starts-late
+  label: error
+  edit: 'H1 =SUM(B5:B7) and H2 =SUM(B8:B13) below the twelve months: January to March are in neither half.'
+  why: 'The first half is the short one, so the rows above it are missing months: an error at H1.'
+  after: misses/h1_late.xlsx
+  require: 'Sales!B15: .*rows 2-4 are in none of them'
+  source: misses
+- id: misses-stats-block-total-late
+  label: error
+  edit: A Total/Average/Max/Min block below the months; the Total changes from =SUM(B2:B13) to =SUM(B3:B13).
+  why: The Total no longer covers January, which it covered in the original, so it must be an error even though
+    the Average, Max and Min below it still cover the whole block.
+  after: misses/stats_block_late.xlsx
+  before: misses/stats_block_b.xlsx
+  require: 'Sales!B14: B3:B13 starts at row 3'
+  source: misses
+- id: misses-spacer-column-sorted
+  label: error
+  edit: One table with an empty spacer column D (Category, Product, Price in A:C, Qty in E) is sorted by price;
+    Summary!B1 'Apple qty' =Data!$E$2 is left alone and now reads Kiwi's quantity.
+  why: 'A spacer column inside one table must not hide the sort: the reference is stale.'
+  after: misses/spacer_sorted.xlsx
+  before: misses/spacer_b.xlsx
+  source: misses
