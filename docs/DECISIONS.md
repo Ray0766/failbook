@@ -162,7 +162,7 @@ project's own repository, package metadata or installed source, as each note say
   and three random families), against the two previous versions, and accepted only if no pair got worse.
   The hand-made probes that do not need large files (204 of the 217, after dropping one duplicate) are
   now in the repository, [tests/audit_corpus/](../tests/audit_corpus/), with 6 that an independent check
-  of the corpus added and 68 that pin the fixes below (278 in all), and run with the tests: each must keep its labelled outcome,
+  of the corpus added and 101 that pin the fixes below (311 in all), and run with the tests: each must keep its labelled outcome,
   and a documented limitation is pinned so that fixing it or making it worse is noticed. The large timing
   pairs and the random families stayed outside. What the script cannot tell is listed in the skill's
   SKILL.md.
@@ -179,34 +179,57 @@ project's own repository, package metadata or installed source, as each note say
   kept their outcomes, none of the 1,587 pairs of the full corpus got worse, and the fix self-check above is
   unchanged.
 - **References meant to read a position.** After a sort, 'Top row' =Data!A2 or 'Highest price'
-  =Data!$B$2 reads what its label says, yet the audit reported an error. It is now a warning when the table
-  holds the same rows in another order and the label names a position that the row it reads now holds,
-  checked against the data: a rank or a Top-N list counted in the data rows (title, header and Total rows
-  left out), the highest or lowest number of the column the label names, the newest or oldest date. The
-  header of the column read ('Last service'), fixed phrases ('First name', '1st quarter') and a label or
-  heading that names the row it read keep the error (SKILL.md has the rule). Independent checks shaped it
-  in rounds:
-  - A first version trusted the label alone. On 41 wrong edits a check built to break it, it turned 31
-    errors into warnings.
-  - The second checked the row's position: first or last row, a rank, the column's highest or lowest
-    number. On those 41 it kept the error on 37; the other 4 are stated limits (a word about history such
-    as 'the first product we bought', an item named in another language). 46 of 47 correct position edits
-    from the same checks got no error (the 47th has its label to the right of the formula, a stated limit).
-    A second check then built 97 more cases. On 49 correct position edits it still gave an error. 32
-    wrong edits, which the audit had flagged before this change, got only a warning; a 33rd, a sorted
-    second table beside the first, was missed before and after.
-  - The third, described above, gives the intended outcome on 81 of those 82 cases (all but the miss from
-    before) and keeps the earlier results. The same check's robustness lens (64 cases) found:
-    - a crash on a pasted number of 5,000 digits;
-    - slowdowns of about 4x on 20,000 merged label cells, a 20,000-row sheet that mirrors a table cell by
-      cell, and a 30-column table;
-    - a claim that a computed column (a margin `=B2-C2`) holds the highest number, which cannot be
-      checked without recalculation;
-    - a "reordered" claim after rows were only deleted;
-    - label addresses inside a merged cell.
-    These were fixed (5 more probes), and a title that is a formula is a stated limit.
+  =Data!$B$2 reads what its label says, yet the audit reported an error. It is now a warning when the rows
+  were reordered and the edited table shows that the row read holds the position the label names: a rank or
+  a Top-N list in a table ordered by a column of numbers or dates, the highest or lowest number, the newest
+  or oldest date. When the original showed the label held for the row read then, it must hold by the same
+  column and direction now. Column names ('Last service'), fixed phrases ('First name', '1st quarter') and
+  a label, heading or sheet name that names the row read keep the error. SKILL.md has the rule. Four
+  versions, each tried by an independent check built to break it:
+  1. The label alone. On 41 wrong edits the check built, 31 errors became warnings.
+  2. The row's position (first or last row, a rank, the column's highest or lowest number):
+     - on those 41 it kept the error on 37; the other 4 are stated limits (a word about history such as
+       'the first product we bought', an item named in another language);
+     - 46 of 47 correct position edits got no error; the 47th has its label to the right of the
+       formula, a stated limit;
+     - a second check built 97 more cases: 49 correct position edits still got an error, and 32 wrong
+       edits that the audit had flagged before the rule got only a warning. A 33rd wrong edit, a sorted
+       second table beside the first, was missed before and after.
+  3. Claims checked against the data, by the column the label names. It gave the intended outcome on
+     81 of those 82 cases (all but the miss from before). The check's robustness lens (64 cases) found:
+     - a crash on a pasted number of 5,000 digits;
+     - slowdowns of about 4x on 20,000 merged label cells, a 20,000-row sheet that mirrors a table cell
+       by cell, and a 30-column table;
+     - a claim that a computed column (a margin `=B2-C2`) holds the highest number, which could not be
+       checked;
+     - a "reordered" claim after rows were only deleted;
+     - label addresses inside a merged cell.
 
-  The rule was shaped on these cases, so they show coverage, not generalisation. 54 probes pin the outcomes.
+     These were fixed, and a title that is a formula is a stated limit. A third check built 106 more
+     cases: 35 wrong edits that the audit had flagged before the rule got only a warning, and 38
+     correct position edits still got an error. The main causes:
+     - a rank, a Top-N or a 'top' passed on the row's place alone, also when the table was re-sorted by
+       name;
+     - names the audit missed: 'Gold plan', part of a Chinese name, a date written in the label, a
+       customer who appears in several rows;
+     - order-form line numbers taken for ranks;
+     - one line of a card carrying a position to the next;
+     - per-row `=SUM(B2:E2)` totals taken for Total rows;
+     - computed columns, years as headers, dates written as text, rank formulas and missing words.
+  4. The rule above, which answers these:
+     - a position must show in a column the table is ordered by, and by the same column and direction
+       as in the original when the original showed it;
+     - rank numbers on lines with typed numbers of their own are line numbers;
+     - a card line carries no position to the next;
+     - simple per-row formulas (`=B2*C2`) are worked out.
+
+     On the 73 confirmed cases of the third check it gives the intended outcome on 71. A caption below
+     a card value and the far cell of a wide leaderboard keep the error, as before the rule. It keeps
+     the outcomes of the earlier checks, except one formula on a card carried by the line above (now a
+     stated limit).
+
+  The rule was shaped on these cases, so they show coverage, not generalisation. 87 probes pin the
+  outcomes.
 - **Limits.** The checks were written with these failures in view, so this is coverage, not generalisation.
   **Whether agents do better with the skill is a hypothesis** until runs with and without it are recorded.
 

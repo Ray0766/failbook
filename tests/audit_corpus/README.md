@@ -13,9 +13,9 @@ them here lets anyone who changes the audit run the same check.
 
 ## What is in it
 
-- [`probes.yaml`](probes.yaml): 278 probes (234 before/after pairs and 44 single files). Each has an `id`, a `label`, what the `edit` did, `why` that
+- [`probes.yaml`](probes.yaml): 311 probes (267 before/after pairs and 44 single files). Each has an `id`, a `label`, what the `edit` did, `why` that
   label is the intended outcome, the `after` workbook and, for most, the `before` (original) workbook.
-- `workbooks/`: the 443 files they use (about 2.5 MB), grouped by the round that built them. Several
+- `workbooks/`: the 509 files they use (about 2.8 MB), grouped by the round that built them. Several
   probes share an original.
 
 All files are synthetic: workbooks written with openpyxl from made-up figures (three re-saved by
