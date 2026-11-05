@@ -107,8 +107,8 @@ behave like a spreadsheet application: most of them never rewrite formulas for y
   the row it reads (a VAT line `=B14*0.2` under the Total) gets none of this leniency.
 - A reference that reads another row's content after the rows were reordered is an `[error]`,
   unless it may be meant to read a position; then it is a `[warning]`. That needs a reordering (the
-  table holds the same rows in another order; rows that all moved by one amount because rows were
-  added or removed do not count), and a label that names a position the row it reads now holds:
+  rows found in both files are in another order; rows only added or removed are none), and a label
+  that names a position the row it reads now holds:
   - its label is the text in the three cells to its left (or the nearest one over formulas), the
     label of the column of formulas it continues ('Top 3' beside the first of three), or one of
     the two nearest texts above it (a header, a title). A rank number beside it in a 'Rank' or '#'
@@ -121,7 +121,9 @@ behave like a spreadsheet application: most of them never rewrite formulas for y
     label names ('most ordered': Orders), else of the column read; 'top', 'best' or 'winner' need
     the first row or the highest number, 'bottom' or 'worst' the last row or the lowest;
     'latest', 'most recent' or 'last' need the newest date of a column of dates or years
-    ('earliest' the oldest). Title and header rows and a Total row are not data rows.
+    ('earliest' the oldest). Title and header rows and a Total row are not data rows. A column of
+    formulas (a margin `=B2-C2`) has no numbers to check without recalculation, so 'Highest margin'
+    over it keeps the `[error]`.
 
   Column names and fixed phrases name no position: the header of the column read ('Last', 'Last
   service', 'Max load', 'Sales rank'), 'First name', '1st quarter', 'last year', 'first-time',
@@ -132,7 +134,8 @@ behave like a spreadsheet application: most of them never rewrite formulas for y
   row has ('Kiwi' for 'Kiwi fruit'). The script cannot tell a word about history from a position
   ('the first product we bought' gets a warning), does not recognise an item named in another
   language or by another name (a ticker for a company), and does not read labels to the right of
-  a formula (the `[error]` stays). If the new order was the task, say so in your report.
+  a formula or labels that are formulas (`="Top "&D1`); the `[error]` stays. If the new order was
+  the task, say so in your report.
 - Parts that together cover exactly the rows above them, from the first part to the last data row,
   with no gap or overlap and at most three blank rows between (H1 and H2, four quarters), get no
   finding, and neither do totals of whole parts (H1 `=SUM(B2:B7)` beside the quarters, a Year over the

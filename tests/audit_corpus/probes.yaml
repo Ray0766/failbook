@@ -2574,3 +2574,57 @@
   before: position/field_last_service_b.xlsx
   require: \[error\] reference-meaning-changed at Dashboard!B2
   source: position
+- id: position-computed-column
+  label: error
+  edit: Data (Product, Price, Cost, Margin) has Margin as formulas (=B2-C2) and was sorted by margin, Plum first. It
+    is re-sorted by price, so Summary 'Highest margin' =Data!D2 and 'Product with highest margin' =Data!A2 now read
+    Pear, whose margin is 0.3.
+  why: The margins are formulas, not known without recalculation, so the audit cannot show that row 2 holds the
+    highest margin and keeps the error, as for the same table with typed margins.
+  after: position/computed_column_a.xlsx
+  before: position/computed_column_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1(?s:.*)\[error\] reference-meaning-changed at Summary!B2
+  source: position
+- id: position-deletes-keep-order
+  label: error
+  edit: Data (Product, Revenue) lists Prod A to Prod G by revenue. Prod B and Prod D are deleted and Prod H is added at
+    the bottom; the order is kept. The 'Top 5 products' block (ranks 1 to 5 in column A) reads =Data!A2:B6.
+  why: 'Nothing was reordered: rows were removed. Rank 3 (B4) read Prod C and now reads Prod E: an error, without
+    the claim that the rows were reordered.'
+  after: position/deletes_keep_order_a.xlsx
+  before: position/deletes_keep_order_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B4
+  forbid: reordered
+  source: position
+- id: position-huge-rank-number
+  label: error
+  edit: Data lists six products and is sorted by price, highest first. Summary!A1 holds '#' followed by 5,000 pasted
+    digits, and B1 =Data!A2 read Apple and now reads Pear.
+  why: 'The pasted number is no rank, and the audit must not fail on it (it once raised ValueError): an error, as
+    without a label.'
+  after: position/huge_rank_number_a.xlsx
+  before: position/huge_rank_number_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-merged-label-cell
+  label: warning|clean
+  edit: Data lists six products and is sorted by price, highest first. Summary has the title 'Top 3 products by
+    price' merged across A1:C1, ranks 1 to 3 in A2:A4, and B2:C4 =Data!A2:B4.
+  why: The title names the first three rows, which the formulas read; a warning quotes the cell that holds the title
+    (A1), not an empty cell inside the merge.
+  after: position/merged_label_cell_a.xlsx
+  before: position/merged_label_cell_b.xlsx
+  require: '\(A1\)'
+  forbid: \[error\]
+  source: position
+- id: position-computed-title
+  label: warning|clean
+  edit: Data lists six products and is sorted by price, highest first. Summary!B1 is the title ="Top "&D1&" products"
+    with D1 = 3, and B2:C4 =Data!A2:B4 below it list the top three.
+  why: The title shows 'Top 3 products', as in position-title-and-header, but it is a formula, and the audit reads only
+    typed labels (SKILL.md).
+  after: position/computed_title_a.xlsx
+  before: position/computed_title_b.xlsx
+  known_limit: true
+  now: error
+  source: position

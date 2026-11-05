@@ -162,7 +162,7 @@ project's own repository, package metadata or installed source, as each note say
   and three random families), against the two previous versions, and accepted only if no pair got worse.
   The hand-made probes that do not need large files (204 of the 217, after dropping one duplicate) are
   now in the repository, [tests/audit_corpus/](../tests/audit_corpus/), with 6 that an independent check
-  of the corpus added and 63 that pin the fixes below (273 in all), and run with the tests: each must keep its labelled outcome,
+  of the corpus added and 68 that pin the fixes below (278 in all), and run with the tests: each must keep its labelled outcome,
   and a documented limitation is pinned so that fixing it or making it worse is noticed. The large timing
   pairs and the random families stayed outside. What the script cannot tell is listed in the skill's
   SKILL.md.
@@ -196,9 +196,17 @@ project's own repository, package metadata or installed source, as each note say
     wrong edits, which the audit had flagged before this change, got only a warning; a 33rd, a sorted
     second table beside the first, was missed before and after.
   - The third, described above, gives the intended outcome on 81 of those 82 cases (all but the miss from
-    before) and keeps the earlier results.
+    before) and keeps the earlier results. The same check's robustness lens (64 cases) found:
+    - a crash on a pasted number of 5,000 digits;
+    - slowdowns of about 4x on 20,000 merged label cells, a 20,000-row sheet that mirrors a table cell by
+      cell, and a 30-column table;
+    - a claim that a computed column (a margin `=B2-C2`) holds the highest number, which cannot be
+      checked without recalculation;
+    - a "reordered" claim after rows were only deleted;
+    - label addresses inside a merged cell.
+    These were fixed (5 more probes), and a title that is a formula is a stated limit.
 
-  The rule was shaped on these cases, so they show coverage, not generalisation. 49 probes pin the outcomes.
+  The rule was shaped on these cases, so they show coverage, not generalisation. 54 probes pin the outcomes.
 - **Limits.** The checks were written with these failures in view, so this is coverage, not generalisation.
   **Whether agents do better with the skill is a hypothesis** until runs with and without it are recorded.
 
