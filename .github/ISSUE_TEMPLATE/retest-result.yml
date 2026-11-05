@@ -1,0 +1,16 @@
+name: Retest result (without a pull request)
+description: Share a run when you cannot open a pull request with the result file
+labels: [result]
+body:
+  - type: input
+    id: case
+    attributes: {label: Case, placeholder: xlsx-011}
+    validations: {required: true}
+  - type: input
+    id: setup
+    attributes: {label: Agent, version and model, placeholder: "codex 0.166.0, model ..."}
+    validations: {required: true}
+  - type: textarea
+    id: result
+    attributes: {label: Result JSON, description: "Paste the file written by `failbook run` or `failbook grade --record`. Include every attempt, not only the best one.", render: json}
+    validations: {required: true}

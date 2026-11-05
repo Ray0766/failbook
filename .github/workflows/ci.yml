@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install LibreOffice (headless)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libreoffice-calc-nogui
+          soffice --version
+      - name: Install Failbook
+        run: pip install -e ".[dev]"
+      - name: Unit tests
+        run: pytest -q
+      - name: Generated docs are up to date
+        run: failbook docs --check
+      - name: Validate every checker on three data variants, and committed artifacts
+        run: failbook verify --seeds 3 --check-committed
+      - name: Result files are well formed
+        # Exits non-zero when any file in results/ is invalid.
+        run: failbook report --out /tmp/RESULTS.md
+
+  oldest-python:
+    # requires-python is >=3.11: run the unit tests on that version too.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install LibreOffice (headless)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libreoffice-calc-nogui
+      - name: Install Failbook
+        run: pip install -e ".[dev]"
+      - name: Unit tests
+        run: pytest -q

@@ -1,0 +1,28 @@
+name: New case
+description: Propose a reproducible "said done, but wrong" failure
+labels: [case-proposal]
+body:
+  - type: markdown
+    attributes:
+      value: Use synthetic or publicly shareable files only. A good case fails silently and can be checked from the final file.
+  - type: textarea
+    id: task
+    attributes: {label: Task given to the agent, description: The exact instruction., placeholder: "Add these three orders above the Total row..."}
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes: {label: Expected result, description: What a correct output looks like.}
+    validations: {required: true}
+  - type: textarea
+    id: observed
+    attributes: {label: Observed result, description: What was wrong, and what the agent claimed.}
+    validations: {required: true}
+  - type: dropdown
+    id: evidence
+    attributes:
+      label: Evidence
+      options: ["I have a real run (agent, version, model, date below)", "Reconstructed / suspected pattern"]
+    validations: {required: true}
+  - type: textarea
+    id: run
+    attributes: {label: Run details and files, description: "Agent and version, model, date, settings. Attach inputs and the wrong output if you can."}

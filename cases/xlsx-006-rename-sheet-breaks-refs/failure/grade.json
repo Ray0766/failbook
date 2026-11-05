@@ -1,0 +1,29 @@
+{
+  "case": "xlsx-006",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "sheet-renamed",
+      "kind": "content",
+      "title": "The sheet is now called 'Sales 2024' (and 'Data' is gone), with the same data",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "dashboard-values",
+      "kind": "value",
+      "title": "Every Dashboard figure has its original value",
+      "status": "fail",
+      "detail": "Dashboard 'East' (Dashboard!B2) evaluates to #NAME? because Dashboard!B2 refers to a sheet that does not exist ('Data'): =SUMIFS(Data!C:C,Data!A:A,A2)"
+    },
+    {
+      "id": "dashboard-live",
+      "kind": "live",
+      "title": "Dashboard figures still update from 'Sales 2024'",
+      "status": "fail",
+      "detail": "Dashboard 'East' (Dashboard!B2) evaluates to #NAME? because Dashboard!B2 refers to a sheet that does not exist ('Data'): =SUMIFS(Data!C:C,Data!A:A,A2)"
+    }
+  ]
+}

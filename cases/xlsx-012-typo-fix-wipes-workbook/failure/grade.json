@@ -1,0 +1,43 @@
+{
+  "case": "xlsx-012",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "typo-fixed",
+      "kind": "content",
+      "title": "Every 'Bejing' in the City column now reads 'Beijing'",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "customer-data-unchanged",
+      "kind": "preserve",
+      "title": "All other Customers cells are unchanged; Region is still a formula and now resolves",
+      "status": "fail",
+      "detail": "Region of C2001 is no longer a formula: 'East'"
+    },
+    {
+      "id": "other-sheets-unchanged",
+      "kind": "preserve",
+      "title": "The Regions and Notes sheets are still there, unchanged",
+      "status": "fail",
+      "detail": "sheets are ['Customers'], expected ['Customers', 'Regions', 'Notes']"
+    },
+    {
+      "id": "formatting-kept",
+      "kind": "structure",
+      "title": "Cell formatting, column widths, the frozen header and the filter settings are kept",
+      "status": "fail",
+      "detail": "bold of A1 changed from on to off"
+    },
+    {
+      "id": "dropdown-kept",
+      "kind": "structure",
+      "title": "The Tier dropdown still covers every customer row",
+      "status": "fail",
+      "detail": "no Tier dropdown (Gold, Silver, Bronze) covers the Tier column any more"
+    }
+  ]
+}

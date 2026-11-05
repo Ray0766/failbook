@@ -1,0 +1,64 @@
+{
+  "case": "xlsx-005",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "columns-in-order",
+      "kind": "content",
+      "title": "Lines columns are Product, Unit Price, Discount, Qty, Line Total",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "discounts-entered",
+      "kind": "content",
+      "title": "Each line has the listed discount as a fraction (0 when not listed)",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "discounts-percent-format",
+      "kind": "structure",
+      "title": "The discount cells are formatted as percentages",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "line-totals-correct",
+      "kind": "value",
+      "title": "Line Total = Unit Price x Qty x (1 - Discount) on every line",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "line-totals-live",
+      "kind": "live",
+      "title": "Every Line Total follows changes of its Unit Price, Discount and Qty",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "summary-correct",
+      "kind": "value",
+      "title": "Summary shows the correct total revenue, total units and average unit price",
+      "status": "fail",
+      "detail": "Total revenue is 333.00, expected 27,468.645 (difference -27,135.645)"
+    },
+    {
+      "id": "summary-live",
+      "kind": "live",
+      "title": "Summary total revenue, total units and average unit price follow changes on Lines",
+      "status": "fail",
+      "detail": "in a copy of the file where every line's Unit Price, Discount and Qty were changed, Total revenue is 399.00, expected 22,310.9448 (difference -21,911.9448); Total units is 3.96, expected 399.00 (difference -395.04)"
+    },
+    {
+      "id": "lines-unchanged",
+      "kind": "preserve",
+      "title": "Products, unit prices and quantities are unchanged",
+      "status": "pass",
+      "detail": ""
+    }
+  ]
+}

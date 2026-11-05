@@ -1,0 +1,43 @@
+{
+  "case": "xlsx-002",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "margin-column-added",
+      "kind": "content",
+      "title": "A 'Margin %' column is added right after Price (column E)",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "margins-correct",
+      "kind": "value",
+      "title": "Every product's margin equals (Price - Cost) / Price",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "margins-are-live",
+      "kind": "live",
+      "title": "Margins update when a Price or a Cost changes",
+      "status": "fail",
+      "detail": "in a copy of the file where every Cost and Price was changed, 17 of 17 margins did not follow: P-62860 (row 2): with Cost 26.91 and Price 167.56 its margin is 0.518127, expected 0.839401 (difference -0.32), the same as before the change; P-31271 (row 3): with Cost 24.75 and Price 86.52 its margin is 0.14199, expected 0.713939 (difference -0.57), the same as before the change; P-82072 (row 4): with Cost 19.82 and Price 85.02 its margin is 0.300635, expected 0.766878 (difference -0.47), the same as before the change"
+    },
+    {
+      "id": "percent-format",
+      "kind": "structure",
+      "title": "The margin cells are formatted as percentages",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "products-unchanged",
+      "kind": "preserve",
+      "title": "SKU, Product, Cost and Price are unchanged",
+      "status": "pass",
+      "detail": ""
+    }
+  ]
+}
