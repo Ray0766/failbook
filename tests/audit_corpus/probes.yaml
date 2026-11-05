@@ -3024,3 +3024,379 @@
   known_limit: true
   now: error
   source: position
+- id: position-third-party-phrase
+  label: error
+  edit: Costs was sorted by Amount, descending. Summary!B4 is 'Third-party fees' =Costs!B4. Before the sort it read Outsourcing
+    (21500). After the sort it reads Office rent (18000). Outsourcing moved to row 3.
+  why: '''Third-party'' is a fixed phrase, not a third place.'
+  after: position/third_party_phrase_a.xlsx
+  before: position/third_party_phrase_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Summary'?!B4
+  source: position
+- id: position-zh-third-party-phrase
+  label: error
+  edit: 费用 was sorted by 金额, descending. 汇总!B4 is '第三方费用' =费用!B4. Before the sort it read 外包服务 (21500). After the sort
+    it reads 房租 (18000).
+  why: 第三方 means a third party, not a third place.
+  after: position/zh_third_party_phrase_a.xlsx
+  before: position/zh_third_party_phrase_b.xlsx
+  require: \[error\] reference-meaning-changed at '?汇总'?!B4
+  source: position
+- id: position-last-minute-phrase
+  label: error
+  edit: Budget was sorted by Cost, ascending. Check!B2 is 'Last-minute buffer' =Budget!B6. Before the sort it read Contingency
+    (900). After the sort it reads Venue hire (4800), the last row.
+  why: '''Last-minute'' is a fixed phrase, not the last row.'
+  after: position/last_minute_phrase_a.xlsx
+  before: position/last_minute_phrase_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Check'?!B2
+  source: position
+- id: position-per-second-unit
+  label: error
+  edit: 'Metrics (Node | Req/s | ...) was sorted by Req/s, descending. Health!B3 is ''Primary node: requests per second''
+    =Metrics!B3. Before the sort it read pg-02 (700). After the sort it reads pg-01 (820).'
+  why: '''Per second'' is a unit, not a second place.'
+  after: position/per_second_unit_a.xlsx
+  before: position/per_second_unit_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Health'?!B3
+  source: position
+- id: position-trailing-months-field
+  label: error
+  edit: Accounts was sorted by 'Revenue (TTM)', descending. Review!B3 is 'Revenue, last 12 months' =Accounts!B4 on a key-account
+    review. Before the sort it read Fabrikam (655000). After the sort it reads Northwind.
+  why: '''Last 12 months'' in the formula''s own label is a time window (a field), not the newest twelve rows.'
+  after: position/trailing_months_field_a.xlsx
+  before: position/trailing_months_field_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Review'?!B3
+  source: position
+- id: position-zh-recent-months-field
+  label: error
+  edit: 供应商 was sorted by 合同到期, ascending. 主供应商!B3 is '最近12个月采购额' =供应商!B4; the column header is '近12个月采购额'. Before the
+    sort it read 北辰电子. After the sort it reads 华东钢材.
+  why: 最近12个月 in the formula's own label is a time window, not a position.
+  after: position/zh_recent_months_field_a.xlsx
+  before: position/zh_recent_months_field_b.xlsx
+  require: \[error\] reference-meaning-changed at '?主供应商'?!B3
+  source: position
+- id: position-zh-field-name-prefix
+  label: error
+  edit: 标准 (城市 | 最低工资标准(元/月) | 生效日期) was sorted by wage, descending. 测算!B3 is '当地最低工资' =标准!B5. Before the sort it read
+    杭州 (2490). After the sort it reads 广州 (2300), the lowest.
+  why: 最低工资 is the start of the column's name 最低工资标准, a field, not the lowest.
+  after: position/zh_field_name_prefix_a.xlsx
+  before: position/zh_field_name_prefix_b.xlsx
+  require: \[error\] reference-meaning-changed at '?测算'?!B3
+  source: position
+- id: position-abbreviated-field-name
+  label: error
+  edit: Cranes was sorted by 'Max load (kg)', descending. The job's lift plan has 'Max. load' =Cranes!B2. Before the sort
+    it read Liebherr LTM 1050 (50000). After the sort it reads Grove GMK 3060 (60000). The 'Crane' line B3 =Cranes!A2
+    keeps its error.
+  why: '''Max. load'' is the column ''Max load (kg)'' written with a full stop: a field, not the maximum.'
+  after: position/abbreviated_field_name_a.xlsx
+  before: position/abbreviated_field_name_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Lift plan'?!B4
+  source: position
+- id: position-zh-highest-degree-term
+  label: error
+  edit: 员工 (工号 | 姓名 | 学历 | 月薪) was sorted by 月薪, descending. The onboarding form has '最高学历' =员工!C2. Before the sort it
+    read 周杰's 本科. After the sort it reads 孙丽's 博士. B3 (姓名) keeps its error.
+  why: 最高学历 (highest degree) is a fixed term for a field, not the highest number.
+  after: position/zh_highest_degree_term_a.xlsx
+  before: position/zh_highest_degree_term_b.xlsx
+  require: \[error\] reference-meaning-changed at '?登记'?!B4
+  source: position
+- id: position-order-by-sku-not-ranking
+  label: error
+  edit: Products (SKU | Product | Units | Price) was re-sorted by SKU, ascending. Homepage!B3 is 'Top seller' =Products!B2,
+    the featured product. Before the sort it read Classic Tee. After the sort it reads Canvas Tote (120 units, the fewest
+    but one).
+  why: An order by SKU is the table's natural order, not a ranking, so 'Top seller' is not shown.
+  after: position/order_by_sku_not_ranking_a.xlsx
+  before: position/order_by_sku_not_ranking_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Homepage'?!B3
+  source: position
+- id: position-shift-leader-role
+  label: error
+  edit: Rates was sorted by Hourly rate, descending. Shift!B3 is 'Shift leader rate' =Rates!B2 in a night-shift cost calculation.
+    Before the sort it read Supervisor (24.0). After the sort it reads Technician (27.0). The 'Operator rate' line keeps
+    its error.
+  why: '''Shift leader'' is a role, not a first place.'
+  after: position/shift_leader_role_a.xlsx
+  before: position/shift_leader_role_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Shift'?!B3
+  source: position
+- id: position-zh-countdown-term
+  label: error
+  edit: 项目 was sorted by 预算, descending. 看板!B3 is '交付倒数天数' =项目!C5-TODAY(). Before the sort it read 展厅装修's deadline. After
+    the sort it reads 园区绿化's, the last row.
+  why: 倒数天数 is a countdown, not the last place.
+  after: position/zh_countdown_term_a.xlsx
+  before: position/zh_countdown_term_b.xlsx
+  require: \[error\] reference-meaning-changed at '?看板'?!B3
+  source: position
+- id: position-first-draft-title
+  label: error
+  edit: Vendors was sorted by Amount, descending. Under the merged title A1:C1 'Vendor budget, first draft', the line
+    'Main contractor' =Vendors!B2 read Brightline Builders. After the sort it reads Hoist & Co.
+  why: '''First draft'' in the title names a version of the sheet, not a position.'
+  after: position/first_draft_title_a.xlsx
+  before: position/first_draft_title_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Budget'?!B3
+  source: position
+- id: position-store-number-named
+  label: error
+  edit: 'The leaderboard has a typed Rank, a typed Store (''Store 12'', ''Store 30'', ''Store 15'') and Sales =Weekly!C2..C4.
+    Weekly (header ''Store #'' | City | Sales) got the new week''s figures pasted and was re-sorted, descending. C2 now
+    shows Store 30''s sales beside ''Store 12''.'
+  why: '''Store 12'' names store 12 under the column header ''Store #''.'
+  after: position/store_number_named_a.xlsx
+  before: position/store_number_named_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Leaders'?!C2
+  source: position
+- id: position-zh-store-number-named
+  label: error
+  edit: The ranking has 名次 1/2, a typed 门店 '12号店'/'30号店', and 销售额 =周报!C2/C3. 周报 (门店编号 | 城市 | 销售额) got this week's figures
+    and was re-sorted. C2 now shows store 30's sales beside '12号店'.
+  why: 12号店 names store 12.
+  after: position/zh_store_number_named_a.xlsx
+  before: position/zh_store_number_named_b.xlsx
+  require: \[error\] reference-meaning-changed at '?排行'?!C2
+  source: position
+- id: position-typed-serial-named
+  label: error
+  edit: The shortlist copies the 序号 of chosen people from 明细 (序号 | 姓名 | 部门 | 绩效分; 序号 1-6 in row order). Line 序号 5 has
+    =明细!B6 and =明细!D6. 明细 was sorted by 绩效分, with 序号 moving along. Row 6 now holds 杨帆 (序号 6) instead of 陈晨 (序号 5).
+  why: The 序号 typed beside the formula is the ID of the person it read.
+  after: position/typed_serial_named_a.xlsx
+  before: position/typed_serial_named_b.xlsx
+  require: \[error\] reference-meaning-changed at '?评优候选'?!B3
+  source: position
+- id: position-irregular-plural-named
+  label: error
+  edit: Sales got the new week's figures and was re-sorted by Revenue. Notes!B3 is 'Knives (best seller)' =Sales!C2. It
+    read Chef's knife; it now reads Frying pan.
+  why: '''Knives'' is the plural of the knife the formula read.'
+  after: position/irregular_plural_named_a.xlsx
+  before: position/irregular_plural_named_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Notes'?!B3
+  source: position
+- id: position-date-log-natural-order
+  label: warning|clean
+  edit: Orders (Date | Customer | Amount ($)) is an order log in date order. The edit sorts it by Amount, largest first.
+    Dashboard A3 'Top customer', B3 =Orders!B2. Before it read 'Northwind Traders' (1840, the first entry); after, 'Adventure
+    Works' (7480, the largest).
+  why: An order log in date order shows nothing about 'Top customer'; after the sort by amount the first row is the top
+    customer.
+  after: position/date_log_natural_order_a.xlsx
+  before: position/date_log_natural_order_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Dashboard'?!B3
+  source: position
+- id: position-id-order-natural-order
+  label: warning|clean
+  edit: Players (Player ID 101-105 | Player | Points) is in ID order, sorted by Points, highest first. Summary A3 'Current
+    leader', B3 =Players!B2. Before it read 'Maya Chen' (2210); after, 'Noah Kim' (2890).
+  why: A table in ID order shows nothing about 'Current leader'; the first row now has the most points.
+  after: position/id_order_natural_order_a.xlsx
+  before: position/id_order_natural_order_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Summary'?!B3
+  source: position
+- id: position-zh-student-id-order
+  label: warning|clean
+  edit: '成绩 (学号 20260101.. | 姓名 | 总分) is in 学号 order, sorted by 总分, highest first. 成绩汇总 A3 冠军, B3 =成绩!B2: 王明 (268) becomes
+    刘洋 (290). A5 季军, B5 =成绩!B4: 张伟 becomes 陈静 (274, third).'
+  why: 学号 order is the natural order; after the sort by 总分 冠军 and 季军 read the first and third.
+  after: position/zh_student_id_order_a.xlsx
+  before: position/zh_student_id_order_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?成绩汇总'?!B3
+  source: position
+- id: position-model-year-not-measure
+  label: warning|clean
+  edit: 'Models (Model | Model year | Units sold) is alphabetical, sorted by Units sold, highest first. Dashboard A3 ''Best-selling
+    model'', B3 =Models!A2: ''Aria Hybrid'' (18,420) becomes ''Corolla Cross'' (26,880).'
+  why: '''Model year'' is not the measure ''Best-selling model'' is about; the first row now has the most units.'
+  after: position/model_year_not_measure_a.xlsx
+  before: position/model_year_not_measure_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Dashboard'?!B3
+  source: position
+- id: position-finish-times-as-times
+  label: warning|clean
+  edit: 'Results (Bib | Runner | Finish time, h:mm:ss, read back as datetime.time) is sorted by time, fastest first. Podium
+    A3 ''1st place'', B3 =Results!B2: ''Ana Silva'' becomes ''Dev Rao'' (0:38:47). A5 ''3rd place'', B5 =Results!B4 now
+    reads ''Elif Kaya'' (0:41:09).'
+  why: Finish times stored as times are an order; the first row is now the fastest.
+  after: position/finish_times_as_times_a.xlsx
+  before: position/finish_times_as_times_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Podium'?!B3
+  source: position
+- id: position-lap-times-as-durations
+  label: warning|clean
+  edit: 'Laps (Car | Best lap, [mm]:ss.000, read back as timedelta) is sorted by lap time, fastest first. Session A3 ''Fastest
+    lap'', B3 =Laps!A2: ''Car 7'' (1:32.418) becomes ''Car 3'' (1:31.905).'
+  why: Lap times stored as durations are an order; the first row is now the fastest lap.
+  after: position/lap_times_as_durations_a.xlsx
+  before: position/lap_times_as_durations_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Session'?!B3
+  source: position
+- id: position-zh-month-day-dates
+  label: warning|clean
+  edit: '日程 (活动 | 日期 ''11月3日'' text | 城市) is sorted by date. 看板 A3 第一场, B3 =日程!A2: 产品发布会 (11月8日) becomes 客户答谢会 (11月3日).
+    A4 第二场, B4 =日程!A3 now reads 渠道大会 (11月6日).'
+  why: Dates written 11月3日 are dates; 第一场 and 第二场 read the first two.
+  after: position/zh_month_day_dates_a.xlsx
+  before: position/zh_month_day_dates_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?看板'?!B3
+  source: position
+- id: position-typed-total-row
+  label: warning|clean
+  edit: 'Stores (Store | Sales) ends with a typed total row ''All stores'' 380650, as in a values-only export. The store
+    rows are sorted by Sales, highest first, and the total stays at the bottom. D1 ''Top store'', E1 =A2: ''Downtown''
+    becomes ''Harbor'' (102,350).'
+  why: A typed row whose numbers are the column's sums is a total row, not data.
+  after: position/typed_total_row_a.xlsx
+  before: position/typed_total_row_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Stores'?!E1
+  source: position
+- id: position-customer-named-total
+  label: warning|clean
+  edit: Customers (Customer | Q3 revenue ($)) is alphabetical, sorted by revenue, highest first, so the customer 'Total
+    Wine & More' (91,400) moves to row 2. Accounts A3 'Top account', B3 =Customers!A2 now reads it. A4 'Second account',
+    B4 =A3 now reads 'Westside Spirits' (55,100).
+  why: '''Total Wine & More'' is a customer, not a Total row.'
+  after: position/customer_named_total_a.xlsx
+  before: position/customer_named_total_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Accounts'?!B3
+  source: position
+- id: position-rank-line-with-prize
+  label: warning|clean
+  edit: 'Podium table: Place 1/2/3 | Team =Scores!A2..A4 | Score =Scores!B2..B4 | Prize ($) typed 500/250/100. Scores
+    is sorted by Score, highest first. B3 (Place 2): ''Team Orca'' becomes ''Team Heron'' (91, second).'
+  why: 'A typed prize on a podium line is no quantity: the place numbers are ranks.'
+  after: position/rank_line_with_prize_a.xlsx
+  before: position/rank_line_with_prize_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Podium'?!B3
+  source: position
+- id: position-date-in-title
+  label: warning|clean
+  edit: 'Orders (Order date | Order # | Customer | Amount) is newest first, sorted by Amount, highest first. Weekly A1
+    ''Week ending 30 October 2026'', A3 ''Largest order'', B3 =Orders!C2, C3 =Orders!D2. Before: ''Bluebird Cafe'' 640,
+    the order dated 2026-10-30. After: ''Maple School'' 3420.'
+  why: A date in the sheet's title does not name the row read; only the formula's own labels can.
+  after: position/date_in_title_a.xlsx
+  before: position/date_in_title_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Weekly'?!B3
+  source: position
+- id: position-channel-word-in-title
+  label: warning|clean
+  edit: 'Products (Product | Channel Online/Retail | Units) is sorted by Units, highest first. Dashboard A1 ''Online and
+    retail sales, Q3'', A3 ''Best seller'', B3 =Products!A2: ''Aroma diffuser'' (Online) becomes ''Linen napkins'' (Retail,
+    610).'
+  why: A channel named in a title above does not name the row read.
+  after: position/channel_word_in_title_a.xlsx
+  before: position/channel_word_in_title_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Dashboard'?!B3
+  source: position
+- id: position-zh-category-word
+  label: warning|clean
+  edit: '数据 (产品 | 类别 电子产品/服装/家居/食品 | 销量) is sorted by 销量, highest first. 看板 A3 ''销量冠军产品'', B3 =数据!A2: 无线鼠标 (电子产品) becomes
+    纯棉T恤 (服装, 1460).'
+  why: 产品 in the label is the column's header word, not the old row's category 电子产品.
+  after: position/zh_category_word_a.xlsx
+  before: position/zh_category_word_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?看板'?!B3
+  source: position
+- id: position-standings-stat-columns
+  label: warning|clean
+  edit: Results (Team | Pts | W | D | L | GD; Pts = 3W + D) was sorted by Pts, descending. The Standings sheet (Pos |
+    Team | Pts | W | D | L | GD) holds typed Pos 1..5 and =Results!A{r}..F{r}, unchanged.
+  why: Each line of a league table mirrored by position reads its place, whatever column of the line.
+  after: position/standings_stat_columns_a.xlsx
+  before: position/standings_stat_columns_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Standings'?!D2
+  source: position
+- id: position-store-strip-by-total
+  label: warning|clean
+  edit: Daily (Store | Nov 1..Nov 30 | Month total) was sorted by Month total, descending. Summary row 1 has A1 'Top store',
+    then B1 =Daily!A2 and a strip C1..AG1 =Daily!B2..AF2, unchanged.
+  why: '''Top store'' reads the first row of a table ordered by its month total, across a strip of 31 formulas.'
+  after: position/store_strip_by_total_a.xlsx
+  before: position/store_strip_by_total_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Summary'?!B1
+  source: position
+- id: position-year-in-report-title
+  label: warning|clean
+  edit: Vehicles (Plate | Model | Year | Mileage (km)) was sorted by mileage, descending. On the Review sheet, A1 is the
+    title 'Fleet review 2026' and A3 'Highest mileage' sits beside B3 =Vehicles!A2 and C3 =Vehicles!D2, unchanged. Row
+    2 was KX-201 (model year 2026, 18,400 km) and is now KX-097 (188,020 km, the highest).
+  why: The year in a report's title does not name the row read.
+  after: position/year_in_report_title_a.xlsx
+  before: position/year_in_report_title_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Review'?!B3
+  source: position
+- id: position-zh-header-word-not-name
+  label: warning|clean
+  edit: '销售 (门店 | 销量: 旗舰门店, 南京路店, 徐家汇店, 五角场店, 陆家嘴店) was sorted by 销量, descending. 看板!A1 ''最高销量门店'' sits beside B1 =销售!A2
+    and C1 =销售!B2, unchanged. Row 2 was 旗舰门店 and is now 陆家嘴店 (the highest 销量).'
+  why: 门店 is the column header, not part of the old row's name.
+  after: position/zh_header_word_not_name_a.xlsx
+  before: position/zh_header_word_not_name_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?看板'?!B1
+  source: position
+- id: position-renamed-sorted-sheet
+  label: error
+  edit: 'The store sheet ''Sheet2'' (Store | Sales) was renamed to ''Feb'' and sorted by Sales, descending. ''Jan'' is
+    unchanged. F1 on that sheet, labelled E1 ''Northgate change vs Jan'', holds the unchanged formula =B2-Jan!B2. Its
+    own-sheet reference has no sheet prefix, so the text matches in both files. Before: B2 is Northgate (41200) minus
+    Jan Northgate. After: B2 is Airport (61040) minus Jan Northgate.'
+  why: The audit once raised KeyError here; the formula now pairs two stores' months, an error.
+  after: position/renamed_sorted_sheet_a.xlsx
+  before: position/renamed_sorted_sheet_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Feb'?!F1
+  source: position
+- id: position-top-loading-phrase
+  label: error
+  edit: 'Stock (Code | On hand) was sorted by On hand, descending. Catalogue (Description | Code | On hand) keeps a fixed
+    description per row: A2 ''Top-loading parts washer, 40 L'' sits beside B2 =Stock!A2 and C2 =Stock!B2, unchanged. Row
+    2 was PW-100 (the washer) and is now TC-310 (a tool chest), so the washer''s description now shows another product''s
+    code and stock.'
+  why: '''Top-loading'' describes a product, not a first place.'
+  after: position/top_loading_phrase_a.xlsx
+  before: position/top_loading_phrase_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Catalogue'?!B2
+  source: position
+- id: position-moq-field-limit
+  label: error
+  edit: Quotes was sorted by MOQ, descending. Calc!B4 is 'Minimum order qty' =Quotes!C5. Before the sort it read Hanoi
+    Metalworks (2000). After the sort it reads Pune Precision (500, the lowest). The unit price line B3 keeps its error.
+  why: '''Minimum order qty'' is the column ''MOQ'' in other words, a field; the audit does not know such names and warns
+    (SKILL.md).'
+  after: position/moq_field_limit_a.xlsx
+  before: position/moq_field_limit_b.xlsx
+  known_limit: true
+  now: require-unmet
+  require: \[error\] reference-meaning-changed at Calc!B4
+  source: position
+- id: position-card-title-far-limit
+  label: error
+  edit: A car card has the title 'Falcon GT' in A1 (not merged), then Price, Range, Seats, Warranty, Colour and, in row
+    7, 'Top speed' =Cars!D2. Cars' column is 'Max speed (km/h)'. Cars was sorted by Price, descending. The card now shows
+    Atlas XL's top speed. The Price line B2 keeps its error.
+  why: The card's title names the car, more than three texts above the line; the audit reads only the nearest three and
+    warns (SKILL.md).
+  after: position/card_title_far_limit_a.xlsx
+  before: position/card_title_far_limit_b.xlsx
+  known_limit: true
+  now: require-unmet
+  require: \[error\] reference-meaning-changed at Card!B7
+  source: position
+- id: position-dmy-ambiguous-limit
+  label: warning|clean
+  edit: 'Events (Event | Date as ''DD/MM/YYYY'' text, 03-12 November | Where) is sorted by date. Agenda A3 ''First event'',
+    B3 =Events!A2: ''Board meeting'' (10/11/2026) becomes ''Client workshop'' (03/11/2026).'
+  why: Dates as 'DD/MM/YYYY' text with no day over 12 could be either order, so the audit cannot check 'First event' and
+    keeps the error (SKILL.md).
+  after: position/dmy_ambiguous_limit_a.xlsx
+  before: position/dmy_ambiguous_limit_b.xlsx
+  known_limit: true
+  now: error
+  source: position

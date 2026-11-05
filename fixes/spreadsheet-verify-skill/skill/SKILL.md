@@ -113,44 +113,56 @@ behave like a spreadsheet application: most of them never rewrite formulas for y
     label of the column of formulas it continues ('Top 3' beside the first of three), or one of
     the three nearest texts above it, or above the first cell of a strip of formulas (a header, a
     title). A rank number beside it in a 'Rank', '#', 'No.' or '序号' column counts too, unless its
-    line has typed numbers of its own (a quantity on an order form, an invoice or a parts list: the
-    number is a line number). With no label of its own to its left, a formula beside it in its row
-    that reads the same row and qualifies counts;
+    line has typed quantities ('Qty', 'Hours', '数量': on an order form or a parts list the number
+    is a line number). With no label of its own to its left, a formula beside it in its row that
+    reads the same row and qualifies counts;
   - a rank ('#2', '2nd', 'Second place', 'Runner-up', 'Gold', '冠军', '第二名', '倒数第一'), 'Top 3',
     'Last 3' or '前三' need the row at that place in the data, with the table in order of a column
-    of numbers or dates (the one the label names, else the one read, else one read beside it);
-    'highest', 'most', 'max' or '最高' need its highest number ('lowest' and the like the lowest;
-    'Second-highest' the second; 'Biggest drop' the lowest; 'most ordered': the Orders column);
-    'top', 'best', 'winner' or '最畅销' need the first row of such an order or the highest number,
-    'bottom' or 'worst' the last or the lowest; 'latest', 'most recent', 'last' or '最新' need the
-    newest date of a column of dates ('YYYY-MM', '2026年10月12日', 'FY2025' and years under 'Year'
-    count), 'Latest 3' one of the newest three ('earliest' the oldest);
-  - if the original showed the label held for the row read then, it must hold by the same column
-    and in the same direction now: 'Top seller' that read the most units must still read the most
-    units, not the first name in a list now sorted by name;
+    of numbers, times or dates (the one the label names, else any but an ID or year column: an
+    order by SKU or serial number is no ranking); 'highest', 'most', 'max' or '最高' need the highest
+    number ('lowest' and the like the lowest; 'Second-highest' the second; 'Biggest drop' the
+    lowest) of the column the label names ('most ordered': the Orders column), else of the column
+    read; 'top', 'best', 'winner' or '最畅销' need the first row of such an order or the highest
+    number, 'bottom' or 'worst' the last or the lowest; 'latest', 'most recent', 'last' or '最新'
+    need the newest date of a column of dates ('YYYY-MM', '2026年10月12日', '11月3日', 'FY2025' and
+    years under 'Year' count), 'Latest 3' one of the newest three ('earliest' the oldest). A time
+    window in a title over a list ('Last 3 months') names the newest three; in the formula's own
+    label ('Revenue, last 12 months') it is a field;
+  - if the original showed the label held for the row read then (by a column the label names, by
+    a column the table was ordered by, or by its dates), it must hold by the same column and in the
+    same direction now: 'Top seller' that read the most units must still read the most units, not
+    the first name in a list now sorted by name. The original's natural order (IDs, or dates
+    running up) and a coincidental highest number show nothing;
   - a formula that pairs rows of two sheets that held the same label in column A (`=Feb!B2-Jan!B2`
     for one store) keeps the `[error]` when they now hold different ones.
 
-  Title, header and note rows and total rows (a 'Total' label or a column total, at the bottom or
-  the top) are not data rows; a per-row `=SUM(B2:E2)` is data. Numbers worked out by simple
-  formulas on the row (`=B2*C2`, `=SUM(B2:E2)`) count; other formulas have no numbers to check
-  without recalculation, so a claim about them keeps the `[error]`.
+  Title, header and note rows and total rows (a 'Total' label, a column total, or typed numbers that
+  are the column's sums, at the bottom or the top) are not data rows; a per-row `=SUM(B2:E2)` is
+  data, and a customer called 'Total Wine' is a customer. Numbers worked out by simple formulas on
+  the row (`=B2*C2`, `=SUM(B2:E2)`) count; other formulas have no numbers to check without
+  recalculation, so a claim about them keeps the `[error]`.
 
-  Column names and fixed phrases name no position: the header of the column read or its first
-  words ('Last', 'Last service', 'Last order' for 'Last order date', 'Max load', 'Sales rank'),
-  'First name', '1st quarter', 'last year', 'first-time', 'top-line', '(min)' for minutes, a name
-  with a number ('Warehouse #1', 'PO #3') and '第一季度'. The labels, the cells left of the formula,
-  the headings above it and its sheet's name keep the `[error]` when they name the row it read and
-  not the row it reads now: a constant of that row (an item name, also in the plural, without
-  spaces, or in part inside Chinese text; a date as written, '3rd March'; a year; a number only as
-  '#3' in an ID column or after its column's header, 'PO 3', 'Team A'), or a word that no other row
-  has ('Kiwi' for 'Kiwi fruit', 'Gold' for 'Gold plan'). An item named with a position word ('Max',
-  'Gold plan') is therefore taken as named. The script cannot tell a word about history from a
-  position ('the first product we bought' gets a warning), does not recognise an item named in
-  another language or by another name (a ticker for a company), does not read labels to the right
-  of or below a formula or labels that are formulas (`="Top "&D1`), and does not carry a position
-  from one line of a card to the next; the `[error]` stays. If the new order was the task, say so
-  in your report.
+  Column names and fixed phrases name no position: the header of the column read, its first words
+  or its abbreviation ('Last', 'Last service', 'Last order' for 'Last order date', 'Max. load' for
+  'Max load', 'Sales rank', 最低工资 for 最低工资标准), 'First name', '1st quarter', 'last year',
+  'first-time', 'first-class', 'third-party', 'last-minute', 'top-line', 'bottom-line', 'per
+  second', 'first draft', 'shift leader', '(min)' for minutes, a name with a number ('Warehouse
+  #1', 'PO #3'), 第一季度, 第三方, 第一负责人, 倒数天数, 最高学历 and 第二稿. An item's name in column A
+  keeps the `[error]` when the labels, the cells left of the formula, the headings above it or its
+  sheet's name name it (also in the plural, without spaces, or in part inside Chinese text) and the
+  row read now holds another. Other values of that row count only in the formula's own labels (the
+  cells left of it, the label of its list, its column's header): another column's text ('Acme'), a
+  word only that row has ('Kiwi' for 'Kiwi fruit', 'Gold' for 'Gold plan'), a date as written ('3rd
+  March'), a year, a number as '#3' in an ID column, '12号店' or after its column's header ('Store
+  12' under 'Store #'), or an ID typed beside the formula. An item named with a position word
+  ('Max', 'Gold plan') is therefore taken as named. The script cannot tell a word about history
+  from a position ('the first product we bought' gets a warning), does not recognise an item or a
+  column named in another language or by another name (a ticker for a company, 'Minimum order qty'
+  for 'MOQ', 'Q2 2025' for '2025 Q2'), does not read labels to the right of or below a formula,
+  labels that are formulas (`="Top "&D1`) or a card's title more than three texts up, cannot order
+  text such as 'P1' or dates as 'DD/MM/YYYY' with no day over 12, and does not carry a position from
+  one line of a card to the next or along a row of label and value pairs; the `[error]` stays. If
+  the new order was the task, say so in your report.
 - Parts that together cover exactly the rows above them, from the first part to the last data row,
   with no gap or overlap and at most three blank rows between (H1 and H2, four quarters), get no
   finding, and neither do totals of whole parts (H1 `=SUM(B2:B7)` beside the quarters, a Year over the

@@ -162,7 +162,7 @@ project's own repository, package metadata or installed source, as each note say
   and three random families), against the two previous versions, and accepted only if no pair got worse.
   The hand-made probes that do not need large files (204 of the 217, after dropping one duplicate) are
   now in the repository, [tests/audit_corpus/](../tests/audit_corpus/), with 6 that an independent check
-  of the corpus added and 112 that pin the fixes below (322 in all), and run with the tests: each must keep its labelled outcome,
+  of the corpus added and 151 that pin the fixes below (361 in all), and run with the tests: each must keep its labelled outcome,
   and a documented limitation is pinned so that fixing it or making it worse is noticed. The large timing
   pairs and the random families stayed outside. What the script cannot tell is listed in the skill's
   SKILL.md.
@@ -184,8 +184,8 @@ project's own repository, package metadata or installed source, as each note say
   a Top-N list in a table ordered by a column of numbers or dates, the highest or lowest number, the newest
   or oldest date. When the original showed the label held for the row read then, it must hold by the same
   column and direction now. Column names ('Last service'), fixed phrases ('First name', '1st quarter') and
-  a label, heading or sheet name that names the row read keep the error. SKILL.md has the rule. Four
-  versions, each tried by an independent check built to break it:
+  a label, heading or sheet name that names the row read keep the error. SKILL.md has the rule. Five
+  versions, the first four each tried by an independent check built to break it:
   1. The label alone. On 41 wrong edits the check built, 31 errors became warnings.
   2. The row's position (first or last row, a rank, the column's highest or lowest number):
      - on those 41 it kept the error on 37; the other 4 are stated limits (a word about history such as
@@ -244,8 +244,40 @@ project's own repository, package metadata or installed source, as each note say
        (now about 2 times: 9.8 s against 5.1 s, and 16.9 s against 7.7 s).
 
      Cards and rows longer than a label's reach are a stated limit.
+  5. A fourth check, counting only what version 4 broke, built 119 cases (plus 800 random pairs for
+     crashes):
+     - 34 wrong edits that the audit had flagged before the rule got only a warning: fixed phrases
+       ('third-party', 第三方, 'last-minute', 'per second', 'shift leader'), time windows ('last 12
+       months'), column names in other words ('Max. load', 最低工资 for 最低工资标准), an order by SKU,
+       and names the audit missed ('Store 12', 12号店, an ID typed beside the formula, 'knives');
+     - 33 correct position edits that version 3 had warned on got an error. The original's natural
+       order (IDs or dates running up) counted as what the label meant, ID and year columns counted
+       as measures, and a title's date, year or category named the row. Leaderboards with a typed
+       prize or target were taken for order forms, a customer called 'Total Wine' for a Total row,
+       and times and durations were not ordered;
+     - a crash on a sheet that was renamed and sorted, and slowdowns: a Chinese 20,000-row leaderboard
+       took 469 s against 4.6 s before the rule.
 
-  The rule was shaped on these cases, so they show coverage, not generalisation. 98 probes pin the
+     The rule now:
+     - takes the original's evidence only from a column the label names, a column the table was
+       ordered by, or its dates;
+     - leaves ID and year columns out of orders and measures;
+     - reads item names in column A anywhere around the formula, and other values only in its own
+       labels;
+     - counts rank numbers except on lines with typed quantities;
+     - finds typed total rows by their sums;
+     - orders times and durations;
+     - matches names in a label only where a part of the row read appears in it, so large sheets stay
+       fast. On eight sheets of 1,000 to 20,000 rows it takes 1.1 to 2.8 times as long as before the
+       rule; the slowest is a 1,000-row by 54-column rank report, at 13.9 s against 4.9 s.
+
+     75 cases were confirmed, 73 of them judged by the outcome at a cell; on those it gives the
+     intended outcome on 64. The other 9 are stated limits in
+     SKILL.md: a field named in other words ('Minimum order qty' for 'MOQ'), a card title more than
+     three texts up, 'Q2 2025' for '2025 Q2', 'P1' priorities, 'DD/MM/YYYY' dates with no day over
+     12, and a row of label and value pairs. The earlier checks' cases keep their outcomes.
+
+  The rule was shaped on these cases, so they show coverage, not generalisation. 137 probes pin the
   outcomes.
 - **Limits.** The checks were written with these failures in view, so this is coverage, not generalisation.
   **Whether agents do better with the skill is a hypothesis** until runs with and without it are recorded.
