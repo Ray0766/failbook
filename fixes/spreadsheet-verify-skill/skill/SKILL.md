@@ -106,24 +106,33 @@ behave like a spreadsheet application: most of them never rewrite formulas for y
   an empty cell, so check that every row of the column has its formula. A one-off formula next to
   the row it reads (a VAT line `=B14*0.2` under the Total) gets none of this leniency.
 - A reference that reads another row's content after the rows were reordered is an `[error]`,
-  unless it may be meant to read a position; then it is a `[warning]`. That needs a true reordering
-  (an insert or delete, which shifts the rows by one amount, is not one), and two things more:
-  - a position named: its label (text in the three cells to its left or, when there is none, the
-    nearest text above it in its column) names one, such as 'Top row', 'Highest price', '#2',
-    'Top 3', 'Runner-up', 'Gold', '最高' or '第二'; or it reads the row's label in column A itself
-    with a rank number beside it or no label at all; or a formula beside it in the same row reads
-    the same row and qualifies;
-  - the row it reads now holds that position: the first or last data row (the N-th for a rank, one
-    of the first N for 'Top N'), the column's highest or lowest number for 'highest' or 'lowest'
-    words, and a column of dates in order for 'latest' or 'earliest'.
+  unless it may be meant to read a position; then it is a `[warning]`. That needs a reordering (the
+  table holds the same rows in another order; rows that all moved by one amount because rows were
+  added or removed do not count), and a label that names a position the row it reads now holds:
+  - its label is the text in the three cells to its left (or the nearest one over formulas), the
+    label of the column of formulas it continues ('Top 3' beside the first of three), or one of
+    the two nearest texts above it (a header, a title). A rank number beside it in a 'Rank' or '#'
+    column counts too, and so does a formula beside it in its row, or next to it in its column,
+    that reads the same row and qualifies;
+  - a rank ('#2', '2nd', 'Second place', 'Runner-up', 'Gold', '冠军', '第二名', '倒数第一') is that
+    row of the data, from the top or the bottom; 'Top 3', 'Last 3' or '前三' are among the first
+    or last three; 'highest', 'most', 'max' or '最高' need the highest number ('lowest' and the
+    like the lowest; 'Second-highest' the second; 'Biggest drop' the lowest) of the column the
+    label names ('most ordered': Orders), else of the column read; 'top', 'best' or 'winner' need
+    the first row or the highest number, 'bottom' or 'worst' the last row or the lowest;
+    'latest', 'most recent' or 'last' need the newest date of a column of dates or years
+    ('earliest' the oldest). Title and header rows and a Total row are not data rows.
 
-  Field names and fixed phrases ('First name', 'last year', 'first quarter', 'Warehouse #1',
-  '第一季度') name no position. A label, or a cell left of the formula, that names the row it read
-  keeps the `[error]`: that row's label, a value only that row has, or a word of them ('Kiwi' for
-  'Kiwi fruit'). The script cannot tell a word about history from a position ('the first product
-  we bought' gets a warning), does not recognise an item named in another language than the
-  table's, and does not read labels to the right of a formula (the `[error]` stays). If the new
-  order was the task, say so in your report.
+  Column names and fixed phrases name no position: the header of the column read ('Last', 'Last
+  service', 'Max load', 'Sales rank'), 'First name', '1st quarter', 'last year', 'first-time',
+  '(min)' for minutes, a name with a number ('Warehouse #1', 'PO #3') and '第一季度'. A label, a
+  cell left of the formula or a heading above it that names the row it read keeps the `[error]`:
+  that row's label or a value only it has (also in the plural, without spaces, or inside Chinese
+  text), a number only as '#3' or after its column's header ('PO 3', 'Team A'), or a word only that
+  row has ('Kiwi' for 'Kiwi fruit'). The script cannot tell a word about history from a position
+  ('the first product we bought' gets a warning), does not recognise an item named in another
+  language or by another name (a ticker for a company), and does not read labels to the right of
+  a formula (the `[error]` stays). If the new order was the task, say so in your report.
 - Parts that together cover exactly the rows above them, from the first part to the last data row,
   with no gap or overlap and at most three blank rows between (H1 and H2, four quarters), get no
   finding, and neither do totals of whole parts (H1 `=SUM(B2:B7)` beside the quarters, a Year over the

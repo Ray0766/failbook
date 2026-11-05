@@ -38,6 +38,7 @@ from __future__ import annotations
 import argparse
 import bisect
 import datetime as dt
+import functools
 import json
 import os
 import re
@@ -46,6 +47,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import zipfile
 from collections import Counter
 from dataclasses import asdict, dataclass
@@ -61,31 +63,154 @@ AGGREGATES = {"SUM", "AVERAGE", "COUNT", "COUNTA", "MIN", "MAX", "SUBTOTAL", "PR
 SUMMARY_WORDS = re.compile(r"summary|total|dashboard|report|汇总|合计", re.I)
 NUMBER_TEXT = re.compile(r"^\s*[-+(]?\s*[$€£¥]?\s*\d{1,3}(,\d{3})+(\.\d+)?\s*\)?\s*$|^\s*[-+]?[$€£¥]?\d+\.\d+\s*%?\s*$|^\s*[-+]?\d+\s*%\s*$")
 DATE_TEXT = re.compile(r"^\s*\d{4}-\d{2}-\d{2}\s*$")
-#: Words in a formula's label that name a position in a table rather than one of its rows ('Top row',
-#: 'Highest price', '#2', '最高'): after a sort, such a formula may be meant to read whatever is there.
-POSITION_WORDS = re.compile(
-    r"(?<![A-Za-z])(?:top|first|second|third|\d+(?:st|nd|rd|th)|highest|lowest|best|worst|largest|smallest|"
-    r"biggest|cheapest|dearest|priciest|most|least|leader|leading|bestsell\w*|runner[- ]?up|gold|silver|bronze|rank(?:ed|ing)?|"
-    r"bottom|last|latest|earliest|newest|oldest|recent|max(?:imum)?|min(?:imum)?|number ?(?:one|\d+)|no\.? ?\d+)"
-    r"(?![A-Za-z])|#\s?\d+(?!\d)|最[一-鿿]|第[一二三四五六七八九十\d]+|前[一二三四五六七八九十\d]+|[冠亚季]军|"
-    r"榜首|首位|首行|末位|排名|[金银铜]牌", re.I)
-#: Position words that are part of a name or a fixed phrase, not a position in a table.
+#: What a formula's label says about the position of the row it reads ('Top row', 'Highest price', '#2',
+#: '最高'). After a sort such a formula may be meant to read whatever row now holds that position, so
+#: compare() turns a moved reference into a warning when the edited table shows the row holds it
+#: (_position_claims gives the claims, compare's positional() checks them).
+_NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+            "ten": 10, "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6, "seventh": 7,
+            "eighth": 8, "ninth": 9, "tenth": 10, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6,
+            "七": 7, "八": 8, "九": 9, "十": 10}
+_NUM = r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|[一二两三四五六七八九十]+)"
+_ORDINAL = r"first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth"
+
+
+def _words(alternatives: str) -> str:
+    """English words on ASCII edges: Chinese text next to an English word is no word boundary."""
+    return r"(?<![a-z])(?:" + alternatives + r")(?![a-z])"
+
+
+TOP_LIST = re.compile(_words(r"top|first|leading|best") + r"[\s-]*" + _NUM + r"(?![a-z\d])|前\s*" + _NUM)
+BOTTOM_LIST = re.compile(_words(r"bottom|last|worst") + r"[\s-]*" + _NUM + r"(?![a-z\d])|后\s*" + _NUM + r"\s*名")
+#: A rank: (pattern, counted from the bottom).
+RANKS = [(re.compile(r"倒数第\s*" + _NUM), True),
+         (re.compile(r"第\s*" + _NUM), False),
+         (re.compile(r"#\s*(\d+)(?!\d)"), False),
+         (re.compile(_words(r"no\.?|number|rank(?:ed)?|place|position|pos\.?") + r"\s*#?\s*" + _NUM + r"(?![a-z\d])"), False),
+         (re.compile(r"(?<![a-z\d])(\d+)(?:st|nd|rd|th)(?![a-z])"), False),
+         (re.compile(_words("(" + _ORDINAL + ")")), False)]
+MEDALS = re.compile(_words(r"runner[- ]?up|gold|silver|bronze") + r"|冠军|亚军|季军|[金银铜]牌|🥇|🥈|🥉")
+MEDAL_RANK = {"gold": 1, "silver": 2, "bronze": 3, "冠军": 1, "亚军": 2, "季军": 3, "金牌": 1, "银牌": 2, "铜牌": 3,
+              "🥇": 1, "🥈": 2, "🥉": 3}
+TOP_WORDS = re.compile(_words(r"top|best|leader|leading|winner|winning|champion|bestsell\w*") + r"|榜首|首位|首行|头名")
+BOTTOM_WORDS = re.compile(_words(r"bottom|worst") + r"|末位|垫底|倒数")
+EITHER_WORDS = re.compile(_words(r"fastest|quickest|slowest") + r"|最快|最慢")
+HIGH_WORDS = re.compile(_words(r"highest|largest|biggest|greatest|longest|max|maximum|most|dearest|priciest|peak")
+                        + r"|最高|最大|最多|最贵|最长")
+LOW_WORDS = re.compile(_words(r"lowest|smallest|shortest|min|minimum|least|cheapest|fewest") + r"|最低|最小|最少|最便宜|最短")
+#: Words that turn 'biggest' into the lowest number ('Biggest drop').
+INVERT_WORDS = re.compile(_words(r"drops?|falls?|fallers?|declines?|decreases?|loss(?:es)?|losers?") + r"|跌|降")
+NEW_WORDS = re.compile(_words(r"latest|newest|most\s+recent|recent|last") + r"|最新|最近|最后")
+OLD_WORDS = re.compile(_words(r"earliest|oldest|least\s+recent") + r"|最早|最老|最先")
+#: Fixed phrases and units that hold a position word but name none ('First name', 'Q1' as 'first quarter',
+#: '(min)' for minutes, 'last 12 months').
 NOT_POSITION = re.compile(
-    r"(?<![A-Za-z])(?:(?:first|last|middle)\s*name|(?:first|second|third|fourth|last)\s+(?:quarter|half)|"
-    r"best\s+before|first\s+aid|last\s+(?:year|month|week|quarter|updated|modified|login))(?![A-Za-z])"
-    r"|第[一二三四五六七八九十\d]+(?:季度|车间|分店|分公司|期|周|月|年)|[^\W\d_]{3,}\s*(?:#\s?\d+|no\.?\s?\d+)", re.I)
-CHRONO_WORDS = re.compile(r"(?<![A-Za-z])(?:latest|newest|recent|earliest|oldest)(?![A-Za-z])|最新|最早|最近", re.I)
-HIGH_WORDS = re.compile(r"(?<![A-Za-z])(?:highest|largest|biggest|max(?:imum)?|most|dearest|priciest)(?![A-Za-z])"
-                        r"|最高|最大|最多|最贵", re.I)
-LOW_WORDS = re.compile(r"(?<![A-Za-z])(?:lowest|smallest|min(?:imum)?|least|cheapest)(?![A-Za-z])|最低|最小|最少|最便宜", re.I)
-#: A rank in a label: 'Top 3' and '前三' name a list of the first N rows, '#2', 'No. 2', '第二', '2nd' one row.
-TOP_N = re.compile(r"(?<![A-Za-z])top\s*(\d+)|前\s*([一二三四五六七八九十\d]+)", re.I)
-RANK_N = re.compile(r"#\s?(\d+)|(?<![A-Za-z])(?:no\.?|number|rank)\s*(\d+)|第\s*([一二三四五六七八九十\d]+)"
-                    r"|(?<![A-Za-z\d])(\d+)(?:st|nd|rd|th)(?![A-Za-z])"
-                    r"|(?<![A-Za-z])(first|second|third|runner[- ]?up|gold|silver|bronze)(?![A-Za-z])|([金银铜])牌", re.I)
-CJK_NUMBERS = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
-               "first": 1, "second": 2, "third": 3, "gold": 1, "silver": 2, "bronze": 3,
-               "金": 1, "银": 2, "铜": 3}
+    _words(r"(?:first|last|middle|given|family)\s*names?|(?:first|second|third|fourth|last|1st|2nd|3rd|4th)\s+"
+           r"(?:quarter|half|qtr)|best\s+before|first\s+aid|first[- ]time(?:rs?)?|top[- ]?ups?"
+           r"|last\s+(?:year|month|week|quarter|updated|modified|login|seen)"
+           r"|(?:last|past|next|first)\s+\d+\s+(?:days?|weeks?|months?|years?|quarters?)")
+    + r"|\(\s*(?:min|mins|minutes)\s*\)|(?<=\d)\s*mins?(?![a-z])|per\s+min(?![a-z])"
+    + r"|第[一二两三四五六七八九十\d]+(?:季度|车间|分店|分公司|期|周|月|年|季|批|版)")
+#: A name with a number ('Warehouse #1', 'PO #3', 'Acct. No. 2'), unless the word is a position word.
+NUMBERED_NAME = re.compile(r"(?<![^\W\d_])([^\W\d_]{2,})\.?\s*(?:#|no\.?)\s*\d+")
+RANK_HEADER = re.compile(r"^\s*(?:rank(?:ing)?|#|no\.?|pos(?:ition)?|place|standing|名次|排名|排行|位次)\s*$", re.I)
+TOTAL_LABEL = re.compile(r"^\s*(?:grand\s+)?(?:total|sum|subtotal|average|avg|mean)(?![a-z])|^\s*(?:合计|总计|小计|总和|平均)",
+                         re.I)
+DATE_LIKE = re.compile(r"^\s*(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})")
+YEAR_HEADER = re.compile(r"(?<![a-z])(?:year|yr|fy)(?![a-z])|年", re.I)
+
+
+def _number(text: str) -> int | None:
+    """3 for '3', 'three', 'third' or '三'; 12 for '十二'; None when it is not a number."""
+    t = text.strip().lower()
+    if t.isascii() and t.isdigit():
+        return int(t)
+    if t in _NUMBERS:
+        return _NUMBERS[t]
+    if len(t) == 2 and t[0] == "十" and t[1] in _NUMBERS:
+        return 10 + _NUMBERS[t[1]]
+    if len(t) in (2, 3) and t[0] in _NUMBERS and t[1] == "十":
+        return _NUMBERS[t[0]] * 10 + (_NUMBERS.get(t[2], 0) if len(t) == 3 else 0)
+    return None
+
+
+def _fold(text) -> str:
+    """Text compared case-insensitively, with full-width digits and letters as ASCII."""
+    return unicodedata.normalize("NFKC", str(text)).casefold()
+
+
+def _is_position_word(word: str) -> bool:
+    w = _fold(word)
+    return w in {"rank", "ranked", "place", "position", "pos", "pick", "seed", "spot", "number", "no", "top", "bottom"} \
+        or any(p.fullmatch(w) for p in (TOP_WORDS, BOTTOM_WORDS, HIGH_WORDS, LOW_WORDS, EITHER_WORDS, MEDALS)) \
+        or re.fullmatch(_ORDINAL, w) is not None
+
+
+@functools.lru_cache(maxsize=4096)
+def _position_claims(text: str, field: str = "") -> tuple:
+    """What the label ``text`` says about the position of the row its formula reads, as claims to check
+    against the table: ('pos', k, from_bottom) for the k-th row, ('within', n, from_bottom) for one of the
+    first or last n, ('value', 'max' | 'min', k) for the k-th highest or lowest number, ('date', 'max' |
+    'min') for the newest or oldest date, ('edge', 'top' | 'bottom') for the first or last row or the
+    highest or lowest number, and ('either',) for any of these. ``field`` is the header of the column the
+    formula reads: in a label it is a field name ('Last service', 'Max load'), not a position."""
+    t = _fold(text)
+    f = re.sub(r"\(.*?\)", " ", _fold(field)).strip(" :-–—")
+    if len(f) >= 2 and _position_claims(f) and f in t:
+        t = t.replace(f, " ")
+    t = NOT_POSITION.sub(" ", t)
+    t = NUMBERED_NAME.sub(lambda m: m.group(0) if _is_position_word(m.group(1)) else " ", t)
+    claims: list[tuple] = []
+    used: list[tuple[int, int]] = []
+
+    def free(m):
+        return not any(a < m.end() and m.start() < b for a, b in used)
+
+    def take(span, *found):
+        used.append(span)
+        claims.extend(found)
+
+    for pattern, bottom in ((TOP_LIST, False), (BOTTOM_LIST, True)):
+        for m in pattern.finditer(t):
+            n = _number(next(g for g in m.groups() if g))
+            if n and n < 1000:
+                take(m.span(), ("within", n, bottom))
+    for pattern, bottom in RANKS:
+        for m in pattern.finditer(t):
+            n = _number(next(g for g in m.groups() if g))
+            if not (n and free(m) and n < 1000):
+                continue
+            after = t[m.end():m.end() + 24]
+            value = re.match(r"[\s-]*(?:(" + HIGH_WORDS.pattern + r")|(" + LOW_WORDS.pattern + r")|([高大多])|([低小少]))", after)
+            if value:
+                high = bool(value.group(1) or value.group(3))
+                take((m.start(), m.end() + value.end()), ("value", "max" if high else "min", n))
+                continue
+            if re.match(r"[\s-]*(?:to|from)[\s-]+(?:the\s+)?(?:last|bottom|end)", after):
+                bottom = True
+            take(m.span(), ("pos", n, bottom), *((("date", "min"),) if n == 1 and m.group(0).strip() == "first" else ()))
+    for m in MEDALS.finditer(t):
+        if free(m):
+            w = re.sub(r"\s|-", "", m.group(0))
+            take(m.span(), ("pos", MEDAL_RANK.get(w, 2), False))
+    invert = INVERT_WORDS.search(t) is not None
+    for m in NEW_WORDS.finditer(t):
+        if free(m):
+            take(m.span(), ("date", "max"), *((("pos", 1, True),) if m.group(0) in ("last", "最后") else ()))
+    for m in OLD_WORDS.finditer(t):
+        if free(m):
+            take(m.span(), ("date", "min"))
+    for pattern, high in ((HIGH_WORDS, True), (LOW_WORDS, False)):
+        for m in pattern.finditer(t):
+            if free(m):
+                take(m.span(), ("value", "max" if high != invert else "min", 1))
+    for pattern, claim in ((TOP_WORDS, ("edge", "top")), (BOTTOM_WORDS, ("edge", "bottom")), (EITHER_WORDS, ("either",))):
+        for m in pattern.finditer(t):
+            if free(m):
+                take(m.span(), claim)
+    return tuple(claims)
+
+
 REF = re.compile(
     r"^(?:(?:'(?P<qs>(?:[^']|'')+)'|(?P<s>[^'!:]+))!)?"
     r"(?:\$?(?P<c1>[A-Za-z]{1,3})\$?(?P<r1>\d+)(?::\$?(?P<c2>[A-Za-z]{1,3})\$?(?P<r2>\d+))?"
@@ -1609,196 +1734,368 @@ def compare(before, after, findings):
                     break
         return None if v is None or _formula(v) or _blank(v) else v
 
+    def texts_above(ws, row, col, n=2):
+        """[(cell, text)]: the nearest ``n`` texts above (row, col) in its column, over formulas and
+        numbers, the second at most two blank rows above the first (a header and a title)."""
+        out, blanks = [], 0
+        for r in range(row - 1, max(0, row - 40), -1):
+            v = cell_text(ws, r, col)
+            if isinstance(v, str):
+                out.append((f"{get_column_letter(col)}{r}", v))
+                if len(out) == n:
+                    break
+                blanks = 0
+            elif v is None and not _formula(_value(ws, r, col)):
+                blanks += 1
+                if out and blanks > 2:
+                    break
+        return out
+
     def label_of(ws, row, col):
-        """[(cell, text)] labelling the formula at (row, col): text in the three cells to its left or,
-        when there is none, the nearest text above it in its column (its header)."""
+        """[(cell, text)] labelling the formula at (row, col): the texts in the three cells to its left
+        (or, over formulas, the nearest text to its left in the row), else the label of the column of
+        formulas it continues ('Top 3' beside the first of three), and the two nearest texts above it in
+        its column (its header, a title)."""
         out = [(f"{get_column_letter(k)}{row}", v) for k in range(max(1, col - 3), col)
                if isinstance(v := cell_text(ws, row, k), str)]
         if not out:
-            for r in range(row - 1, max(0, row - 30), -1):
-                v = cell_text(ws, r, col)
-                if isinstance(v, str):
-                    out.append((f"{get_column_letter(col)}{r}", v))
+            for k in range(col - 4, max(0, col - 16), -1):
+                if isinstance(t := cell_text(ws, row, k), str):
+                    out.append((f"{get_column_letter(k)}{row}", t))
                     break
-                if v is not None:
-                    continue
-        return out
+                if not _formula(_value(ws, row, k)) and not _blank(_value(ws, row, k)):
+                    break
+        if not out:
+            for r in range(row - 1, max(0, row - 16), -1):
+                if not _formula(_value(ws, r, col)):
+                    break
+                found = [(f"{get_column_letter(k)}{r}", v) for k in range(max(1, col - 3), col)
+                         if isinstance(v := cell_text(ws, r, k), str)]
+                if found:
+                    out += found
+                    break
+        return out + texts_above(ws, row, col)
 
-    def rank_of(text):
-        """('top', N) for a top-N list, ('rank', N) for one rank, or None."""
-        def number(n):
-            n = n.lower()
-            if n.isascii() and n.isdigit():
-                return int(n)
-            if n.startswith("runner"):
-                return 2
-            if n in CJK_NUMBERS:
-                return CJK_NUMBERS[n]
-            if len(n) == 2 and n[0] == "十" and n[1] in CJK_NUMBERS:  # 十二
-                return 10 + CJK_NUMBERS[n[1]]
-            if len(n) in (2, 3) and n[0] in CJK_NUMBERS and n[1] == "十":  # 二十, 二十三
-                return CJK_NUMBERS[n[0]] * 10 + (CJK_NUMBERS.get(n[2], 0) if len(n) == 3 else 0)
-            return None
+    def span(cols):
+        return range(cols[0], min(cols[1], cols[0] + 49) + 1)
 
-        for kind, pattern in (("top", TOP_N), ("rank", RANK_N)):
-            m = pattern.search(text)
-            if m and (n := number(next(g for g in m.groups() if g))) is not None:
-                return kind, n
-        return None
-
-    def table_rows(ws, cols):
-        """({row: position}, number of rows) of the table in columns ``cols``: its data rows from row 2
-        down to the first blank row."""
-        key = ("table-rows", id(ws), cols)
+    def row_runs(ws, cols):
+        """([tops], [(top, bottom)]): the runs of rows holding a value in columns ``cols``."""
+        key = ("row-runs", id(ws), cols)
         if key not in cache:
-            out, r = {}, 2
-            while r < 100002 and any(not _blank(_value(ws, r, k))
-                                     for k in range(cols[0], min(cols[1], cols[0] + 49) + 1)):
-                out[r] = len(out) + 1
-                r += 1
-            cache[key] = out, len(out)
+            filled = sorted({c.row for c in _filled(ws) if c.column in span(cols) and not _blank(c.value)})
+            runs: list = []
+            for r in filled:
+                if runs and r == runs[-1][1] + 1:
+                    runs[-1][1] = r
+                else:
+                    runs.append([r, r])
+            cache[key] = [r[0] for r in runs], runs
         return cache[key]
 
-    def identifying(b_ws, idx, cols):
-        """The texts that tell row ``idx`` of the original apart: its label in column A and the constants
-        of the table's columns that no other row of the column holds."""
-        out = [_value(b_ws, idx, 1)]
-        for k in range(cols[0], min(cols[1], cols[0] + 49) + 1):
-            v = _value(b_ws, idx, k)
-            if not _blank(v) and not _formula(v) and column_count(b_ws, k, v) == 1:
-                out.append(v)
-        return [v for v in out if not _blank(v) and not isinstance(v, bool)]
+    def total_row(ws, r, cols):
+        first = next((v for k in span(cols) if not _blank(v := _value(ws, r, k))), None)
+        if isinstance(first, str) and not _formula(first) and TOTAL_LABEL.match(first):
+            return True
+        for k in span(cols):
+            f = _formula(_value(ws, r, k))
+            m = re.match(r"=\s*([A-Za-z.]+)\s*\(", f or "")
+            if m and m.group(1).upper() in AGGREGATES and ":" in f:
+                return True
+        return False
 
-    def row_words(b_ws, cols):
-        """({row: (identifying texts, their words)}, Counter of rows each word appears in)."""
-        key = ("row-words", id(b_ws), cols)
+    def data_rows(ws, idx, cols):
+        """({row: position}, number of rows, header rows) of the table in columns ``cols`` that holds row
+        ``idx``: its run of rows holding a value, without the header and title rows at its top (rows of
+        text above numbers or dates, narrower than the table, or in row 1) and the total rows at its
+        bottom (a 'Total' label or an aggregate formula)."""
+        tops, runs = row_runs(ws, cols)
+        i = bisect.bisect_right(tops, idx) - 1
+        if i < 0 or not runs[i][0] <= idx <= runs[i][1]:
+            return {}, 0, []
+        top, bottom = runs[i]
+        key = ("data-rows", id(ws), cols, top)
+        if key not in cache:
+            def values(r):
+                return [v for k in span(cols) if not _blank(v := _value(ws, r, k))]
+            width = max(len(values(r)) for r in range(top, min(bottom, top + 50) + 1))
+            t = top
+            while t < bottom and t - top < 3:
+                vs = values(t)
+                if not vs or not all(isinstance(v, str) and not _formula(v) for v in vs):
+                    break
+                typed = any(not isinstance(w := _value(ws, r, k), str) and not _blank(w)
+                            for k in span(cols) if isinstance(_value(ws, t, k), str)
+                            for r in range(t + 1, min(bottom, t + 20) + 1))
+                if not (len(vs) < width or typed or t == 1):
+                    break
+                t += 1
+            b = bottom
+            while b > t and bottom - b < 3 and total_row(ws, b, cols):
+                b -= 1
+            rows = {r: n + 1 for n, r in enumerate(range(t, b + 1))}
+            cache[key] = rows, len(rows), list(range(top, t))
+        return cache[key]
+
+    def header_of(ws, idx, cols, k):
+        """The header text of column ``k`` of the table holding row ``idx`` ('' if none)."""
+        heads = data_rows(ws, idx, cols)[2]
+        return " ".join(str(v) for r in heads if isinstance(v := cell_text(ws, r, k), str))
+
+    def same_row_refs(ws, r, k, sheet, idx):
+        """The columns that the formula at (r, k) reads in row ``idx`` of ``sheet`` as single cells."""
+        g = _formula(_value(ws, r, k))
+        if not g or str(idx) not in g:
+            return []
+        return [kc1 for _t, (sh, kc1, kr1, kc2, kr2) in _refs(g, ws.title)
+                if sh == sheet and kc1 == kc2 and kr1 == kr2 == idx]
+
+    def numbers(ws, rows, k):
+        """{row: number} of column ``k`` when it is a column of numbers (four in five filled cells), else {}."""
+        key = ("numbers", id(ws), k, id(rows))
+        if key not in cache:
+            vals = {r: _value(ws, r, k) for r in rows}
+            filled = {r: v for r, v in vals.items() if not _blank(v)}
+            nums = {r: v for r, v in filled.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+            cache[key] = nums if len(nums) >= 2 and len(nums) * 5 >= len(filled) * 4 else {}
+        return cache[key]
+
+    def dates(ws, rows, k, header):
+        """{row: sortable date} of column ``k`` when it is a column of dates (dates, 'YYYY-MM-DD' or
+        'YYYY/MM/DD' text, or years under a 'Year' header), else {}."""
+        key = ("dates", id(ws), k, id(rows))
+        if key not in cache:
+            out, filled = {}, 0
+            for r in rows:
+                v = _value(ws, r, k)
+                if _blank(v):
+                    continue
+                filled += 1
+                if isinstance(v, (dt.date, dt.datetime)):
+                    out[r] = (v.year, v.month, v.day, *((v.hour, v.minute, v.second) if isinstance(v, dt.datetime)
+                                                        else (0, 0, 0)))
+                elif isinstance(v, str) and (m := DATE_LIKE.match(v)):
+                    out[r] = (int(m.group(1)), int(m.group(2)), int(m.group(3)), 0, 0, 0)
+                elif isinstance(v, int) and not isinstance(v, bool) and 1900 <= v <= 2100 and YEAR_HEADER.search(header):
+                    out[r] = (v, 0, 0, 0, 0, 0)
+            cache[key] = out if len(out) >= 2 and len(out) * 5 >= filled * 4 else {}
+        return cache[key]
+
+    def stem(w):
+        for end in ("ing", "ed", "es", "s"):
+            if w.endswith(end) and len(w) - len(end) >= 3:
+                return w[: -len(end)]
+        return w
+
+    def named(label_text, header):
+        """True when the label names the column header ``header``: a word of four or more letters of it
+        ('Orders' for 'most ordered'), or, in Chinese, the header itself ('销量')."""
+        h = re.sub(r"\(.*?\)", " ", _fold(header))
+        t = _fold(label_text)
+        if re.search(r"[\u4e00-\u9fff]", h):
+            core = "".join(re.findall(r"[\u4e00-\u9fff]+", h))
+            return len(core) >= 2 and core in t
+        words = {stem(w) for w in re.findall(r"[a-z]+", t)}
+        return any(len(w) >= 4 and not _is_position_word(w)
+                   and any(s == stem(w) or (len(s) >= 4 and (s.startswith(stem(w)) or stem(w).startswith(s)))
+                           for s in words)
+                   for w in re.findall(r"[a-z]+", h))
+
+    def value_columns(ws, row, col, a_ws, idx, ref_col, cols, text, sheet):
+        """The columns of numbers a word such as 'highest' in the label may be about: the columns whose
+        header the label names, else the column the formula reads, else those that formulas beside it
+        read in the same row, else (when it reads text) every column of numbers of the table."""
+        rows = data_rows(a_ws, idx, cols)[0]
+        nums = [k for k in span(cols) if numbers(a_ws, rows, k)]
+        hit = [k for k in nums if named(text, header_of(a_ws, idx, cols, k))]
+        if hit:
+            return hit
+        if ref_col in nums:
+            return [ref_col]
+        side = sorted({kc for k in range(max(1, col - 6), col + 7) if k != col
+                       for kc in same_row_refs(ws, row, k, sheet, idx) if kc in nums})
+        return side or nums
+
+    def holds(claim, ws, row, col, a_ws, idx, ref_col, cols, text, sheet):
+        rows, n, _heads = data_rows(a_ws, idx, cols)
+        pos = rows.get(idx)
+        if pos is None:
+            return False
+        kind = claim[0]
+        if kind in ("pos", "within"):
+            at = n - pos + 1 if claim[2] else pos
+            return at == claim[1] if kind == "pos" else at <= claim[1]
+        if kind == "date":
+            for k in span(cols):
+                d = dates(a_ws, rows, k, header_of(a_ws, idx, cols, k))
+                if idx in d and d[idx] == (max if claim[1] == "max" else min)(d.values()):
+                    return True
+            return False
+        if kind == "edge":
+            if pos == (1 if claim[1] == "top" else n):
+                return True
+            ends: tuple = ("max",) if claim[1] == "top" else ("min",)
+        elif kind == "either":
+            if pos in (1, n):
+                return True
+            ends = ("max", "min")
+        else:
+            ends = (claim[1],)
+        k_th = claim[2] if kind == "value" else 1
+        for k in value_columns(ws, row, col, a_ws, idx, ref_col, cols, text, sheet):
+            nums = numbers(a_ws, rows, k)
+            if idx not in nums:
+                continue
+            for end in ends:
+                ranked = sorted(set(nums.values()), reverse=end == "max")
+                if len(ranked) >= k_th and nums[idx] == ranked[k_th - 1]:
+                    return True
+        return False
+
+    def rank_value(ws, row, k):
+        """The rank a cell shows: a whole number, a number as text, or =ROW()-n; else None."""
+        v = _value(ws, row, k)
+        f = _formula(v)
+        m = re.fullmatch(r"=\s*ROW\(\s*\)\s*-\s*(\d+)\s*", f or "", re.I)
+        if isinstance(v, int) and not isinstance(v, bool):
+            return v
+        if isinstance(v, str) and not f and v.strip().isdigit():
+            return int(v)
+        return row - int(m.group(1)) if m else None
+
+    def rank_cells(ws, row, col):
+        """[(cell, rank)]: rank numbers left of the formula in its row, in a column of them headed 'Rank',
+        '#', 'No.', '名次' or a position ('Top 5')."""
+        out = []
+        for k in range(max(1, col - 3), col):
+            n = rank_value(ws, row, k)
+            if n is None:
+                continue
+            r = row - 1
+            while r > 0 and rank_value(ws, r, k) is not None:
+                r -= 1
+            head = cell_text(ws, r, k) if r > 0 else None
+            if isinstance(head, str) and (RANK_HEADER.match(head) or _position_claims(str(head))):
+                out.append((f"{get_column_letter(k)}{row}", n))
+        return out
+
+    def identifying(b_ws, idx, cols):
+        """The constants that tell row ``idx`` of the original apart: its label in column A and the
+        constants of the table's columns that no other row of the column holds, with their columns."""
+        out = [(1, _value(b_ws, idx, 1))]
+        for k in span(cols):
+            v = _value(b_ws, idx, k)
+            if k != 1 and not _blank(v) and not _formula(v) and column_count(b_ws, k, v) == 1:
+                out.append((k, v))
+        return [(k, v) for k, v in out if not _blank(v) and not isinstance(v, bool) and not _formula(v)]
+
+    def row_words(b_ws, idx, cols):
+        """({row: words of its identifying texts}, Counter of the rows each word appears in), for the
+        table holding row ``idx``."""
+        rows = data_rows(b_ws, idx, cols)[0]
+        key = ("row-words", id(b_ws), cols, id(rows))
         if key not in cache:
             per, total = {}, Counter()
-            for r in table_rows(b_ws, cols)[0]:
-                texts = identifying(b_ws, r, cols)
-                words = {x for v in texts for x in re.findall(r"[^\W_]+", str(v).casefold())}
-                per[r] = texts, words
+            for r in rows:
+                words = {stem(x) for _k, v in identifying(b_ws, r, cols) for x in re.findall(r"[^\W\d_]+", _fold(v))}
+                per[r] = words
                 total.update(words)
             cache[key] = per, total
         return cache[key]
 
-    def names_row(ws, row, col, b_ws, idx, cols):
-        """True when the formula's row, left of it, or its label names the row it read before: one of
-        that row's identifying texts as a whole word, or a word of them no other row has ('Kiwi' for
-        'Kiwi fruit')."""
+    def names_row(ws, row, col, b_ws, idx, cols, labels_):
+        """True when the formula's labels, the cells left of it or the headings above it name the row it
+        read before: one of that row's identifying constants (an item name, also in the plural or
+        without spaces, a Chinese name inside the label, a number only as '#3' or after its column's
+        header, 'Team A'), or a word of them that no other row has ('Kiwi' for 'Kiwi fruit')."""
         own = ws.title == b_ws.title
         context = [str(v) for k in range(1, col) if not (own and cols[0] <= k <= cols[1])
                    and (v := cell_text(ws, row, k)) is not None]
-        context += [str(t) for _a, t in label_of(ws, row, col)]
-        ctx = " ".join(context).casefold()
-        words = set(re.findall(r"[^\W_]+", ctx))
-        per, total = row_words(b_ws, cols)
-        texts, own_words = per.get(idx) or (identifying(b_ws, idx, cols), set())
-
-        def others(x):
-            return total[x] - (x in own_words)
-
-        for v in texts:
-            t = str(v).strip().casefold()
-            if len(t) >= 2 and re.search(r"(?<!\w)" + re.escape(t) + r"(?!\w)", ctx):
+        context += [str(t) for _a, t in labels_]
+        if col != 1 and not (own and cols[0] == 1):  # headings in column A (a section 'North' above)
+            context += [str(t) for _a, t in texts_above(ws, row, 1)]
+        ctx = _fold(" ".join(context))
+        compact = re.sub(r"[\W_]+", "", ctx)
+        words = {stem(w) for w in re.findall(r"[^\W\d_]+", ctx)}
+        per, total = row_words(b_ws, idx, cols)
+        own_words = per.get(idx, set())
+        for k, v in identifying(b_ws, idx, cols):
+            t = _fold(v).strip()
+            if isinstance(v, (int, float)) or len(t) < 2:
+                head = re.escape(_fold(header_of(b_ws, idx, cols, k)).strip())
+                form = r"(?:#|no\.?|n°)\s*" + (rf"|{head}\s*[#:]?\s*" if head else "")
+                if re.search(rf"(?<!\w)(?:{form}){re.escape(t)}(?!\w)", ctx):
+                    return True
+                continue
+            if re.search(r"[\u4e00-\u9fff]", t):
+                if t in ctx:
+                    return True
+                continue
+            plural = r"(?:s|es)?" if not t.endswith("y") else r"(?:s|es)?|" + re.escape(t[:-1]) + "ies"
+            if re.search(r"(?<!\w)(?:" + re.escape(t) + plural + r")(?!\w)", ctx):
                 return True
-            toks = re.findall(r"[^\W_]+", t)
-            letters = any(not x.isdigit() for x in toks)
-            if any(x in words and not others(x) and ((len(x) >= 3 and not x.isdigit()) or (x.isdigit() and letters))
-                   for x in toks):
+            squeezed = re.sub(r"[\W_]+", "", t)
+            if len(squeezed) >= 5 and squeezed in compact:
                 return True
+            for x in re.findall(r"[^\W\d_]+", t):
+                s = stem(x)
+                if len(s) >= 3 and s in words and total[s] - (s in own_words) == 0 and not _is_position_word(x):
+                    return True
+                if len(x) >= 5 and x in compact and total[s] - (s in own_words) == 0 and not _is_position_word(x):
+                    return True
         return False
 
-    def dated(ws, rows, cols):
-        """True when a column of the table holds a date in every data row, in order either way."""
-        key = ("dated", id(ws), cols)
+    def permuted(b_ws, a_ws, idx, cols, a_cols):
+        """True when the table holding row ``idx`` holds the same rows before and after, in another order:
+        a sort, not an insert or delete (which shifts rows as a sort can)."""
+        b_rows, a_rows = data_rows(b_ws, idx, cols)[0], data_rows(a_ws, idx, a_cols)[0]
+        key = ("permuted", id(b_rows), id(a_rows))
         if key not in cache:
-            cache[key] = False
-            for k in range(cols[0], min(cols[1], cols[0] + 49) + 1):
-                vals = [_value(ws, r, k) for r in rows]
-                if vals and all(isinstance(v, (dt.date, dt.datetime)) or (isinstance(v, str) and DATE_TEXT.match(v))
-                                for v in vals):
-                    keys = [str(v) for v in vals]
-                    if keys in (sorted(keys), sorted(keys, reverse=True)):
-                        cache[key] = True
-                        break
+            bv, av = row_values(b_ws, cols)[0], row_values(a_ws, a_cols)[0]
+            cache[key] = (len(b_rows) == len(a_rows) and
+                          Counter(bv.get(r) for r in b_rows) == Counter(av.get(r) for r in a_rows))
         return cache[key]
-
-    def extremes(ws, rows, ref_col):
-        """(highest, lowest) number in column ``ref_col`` of the table's rows, or None."""
-        key = ("extremes", id(ws), ref_col, min(rows, default=0), len(rows))
-        if key not in cache:
-            nums = [x for r in rows if isinstance(x := _value(ws, r, ref_col), (int, float)) and not isinstance(x, bool)]
-            cache[key] = (max(nums), min(nums)) if nums else None
-        return cache[key]
-
-    def at_position(text, a_ws, idx, ref_col, table, rank_cells):
-        """True when row ``idx`` is where the label ``text`` points: the first or last data row, the
-        N-th one for a rank ('#2', a rank number beside it), one of the first N for a top-N list, and,
-        for 'highest' or 'lowest' words, the row that holds the column's highest or lowest number;
-        'latest' and 'earliest' need a column of dates in order."""
-        rows, n = table
-        if idx not in rows:
-            return False
-        pos = rows[idx]
-        rank = rank_of(text)
-        if rank and rank[0] == "top":
-            ok = pos <= rank[1]
-        elif rank:
-            ok = pos == rank[1]
-        else:
-            ok = pos in (1, n) or pos in rank_cells
-        if not ok:
-            return False
-        v = _value(a_ws, idx, ref_col)
-        if isinstance(v, (int, float)) and not isinstance(v, bool) and (ends := extremes(a_ws, rows, ref_col)):
-            if HIGH_WORDS.search(text) and v != ends[0]:
-                return False
-            if LOW_WORDS.search(text) and v != ends[1]:
-                return False
-        if CHRONO_WORDS.search(text) and not dated(a_ws, list(rows), blocks(a_ws).get(ref_col) or (1, 1)):
-            return False
-        return True
 
     def positional(ws, row, col, b_ws, a_ws, ref_sheet, idx, ref_col, went_to, came_from, sibling=True):
         """Why the formula at (row, col), which reads row ``idx`` of ``ref_sheet`` (column ``ref_col``),
         may be meant to read a position in the table rather than one row's content, or None.
 
-        Only after a true reordering: row idx's old content is now in row ``went_to`` and its new content
-        was in row ``came_from``, and not both by the same shift (an insert or delete). Not when the
-        label or the cells left of the formula name the row it read. Then: its label names a position
-        that row ``idx`` holds in the edited table (at_position), or it reads the row's label in column A
-        itself at such a position, or a formula beside it in the same row does."""
-        if went_to is None or came_from is None or idx in (went_to, came_from) or came_from - idx == idx - went_to:
-            return None
-        labels_ = label_of(ws, row, col)
-        rank_cells = {v for k in range(max(1, col - 3), col) if isinstance(v := cell_text(ws, row, k), int)
-                      and not isinstance(v, bool)}
-        worded = [(addr, text, words) for addr, text in labels_
-                  if POSITION_WORDS.search(words := NOT_POSITION.sub(" ", text))]
-        joined = NOT_POSITION.sub(" ", " ".join(t for _a, t in labels_))
-        by_label = ref_col == 1 and (rank_cells or worded or not labels_)
-        beside = [k for k in range(max(1, col - 3), col + 4) if k != col and _formula(_value(ws, row, k))] \
-            if sibling else []
-        if not (worded or by_label or beside):
+        Only after a reordering: row idx's old content is now in row ``went_to``, its new content was
+        in row ``came_from``, and the table holds the same rows in another order (or they did not all
+        move by one amount, as rows do after an insert). Not when its labels, the cells left of it or
+        the headings above it name the row it read. Then: a label names a position (_position_claims)
+        that row ``idx`` holds in the edited table, a rank number beside it is that row's position, or
+        a formula beside it in its row, or next to it in its column, reads the same row and qualifies."""
+        if went_to is None or came_from is None or idx in (went_to, came_from):
             return None
         cols = blocks(b_ws).get(ref_col) or (ref_col, ref_col)
-        if names_row(ws, row, col, b_ws, idx, cols):
+        a_cols = blocks(a_ws).get(ref_col) or cols
+        if idx not in data_rows(a_ws, idx, a_cols)[0]:
             return None
-        table = table_rows(a_ws, blocks(a_ws).get(ref_col) or cols)
-        for addr, text, words in worded:
-            if at_position(words, a_ws, idx, ref_col, table, rank_cells):
+        if came_from - idx == idx - went_to and not permuted(b_ws, a_ws, idx, cols, a_cols):
+            return None
+        labels_ = label_of(ws, row, col)
+        field = header_of(a_ws, idx, a_cols, ref_col)
+        worded = [(addr, text, found) for addr, text in labels_ if (found := _position_claims(str(text), str(field)))]
+        ranks = rank_cells(ws, row, col)
+        near = [(row, k) for k in range(max(1, col - 3), col + 4) if k != col]
+        near += [(r, col) for r in range(max(1, row - 3), row + 4) if r != row]
+        beside = [(r, k, kc) for r, k in near for kc in same_row_refs(ws, r, k, ref_sheet, idx)] if sibling else []
+        if not (worded or ranks or beside):
+            return None
+        if names_row(ws, row, col, b_ws, idx, cols, labels_):
+            return None
+        for addr, text, found in worded:
+            if any(holds(c, ws, row, col, a_ws, idx, ref_col, a_cols, text, ref_sheet) for c in found):
                 return f"its label {text!r} ({addr}) names a position that row holds now"
-        if by_label and at_position(joined, a_ws, idx, ref_col, table, rank_cells):
-            return "it reads that row's label in column A itself"
-        if beside:
-            for k in beside:
-                g = _formula(_value(ws, row, k))
-                for _t, (sh, kc1, kr1, kc2, kr2) in (_refs(g, ws.title) if g else []):
-                    if sh == ref_sheet and kc1 == kc2 and kr1 == idx and kr2 == idx and positional(
-                            ws, row, k, b_ws, a_ws, ref_sheet, idx, kc1, went_to, came_from, sibling=False):
-                        return (f"the formula beside it, {get_column_letter(k)}{row} ={g[1:]}, reads the same row "
-                                f"by its position")
+        for addr, n in ranks:
+            if data_rows(a_ws, idx, a_cols)[0].get(idx) == n:
+                return f"the rank {n} beside it ({addr}) is that row's position now"
+        for r, k, kc in beside:
+            if positional(ws, r, k, b_ws, a_ws, ref_sheet, idx, kc, went_to, came_from, sibling=False):
+                where = "beside it" if r == row else "next to it in its column"
+                g = _formula(_value(ws, r, k))
+                return f"the formula {where}, {get_column_letter(k)}{r} ={g[1:]}, reads the same row by its position"
         return None
 
     def moved_to(b_ws, a_ws, axis, idx, old, new):

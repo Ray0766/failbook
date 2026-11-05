@@ -162,7 +162,7 @@ project's own repository, package metadata or installed source, as each note say
   and three random families), against the two previous versions, and accepted only if no pair got worse.
   The hand-made probes that do not need large files (204 of the 217, after dropping one duplicate) are
   now in the repository, [tests/audit_corpus/](../tests/audit_corpus/), with 6 that an independent check
-  of the corpus added and 37 that pin the fixes below (247 in all), and run with the tests: each must keep its labelled outcome,
+  of the corpus added and 63 that pin the fixes below (273 in all), and run with the tests: each must keep its labelled outcome,
   and a documented limitation is pinned so that fixing it or making it worse is noticed. The large timing
   pairs and the random families stayed outside. What the script cannot tell is listed in the skill's
   SKILL.md.
@@ -179,17 +179,26 @@ project's own repository, package metadata or installed source, as each note say
   kept their outcomes, none of the 1,587 pairs of the full corpus got worse, and the fix self-check above is
   unchanged.
 - **References meant to read a position.** After a sort, 'Top row' =Data!A2 or 'Highest price'
-  =Data!$B$2 reads what its label says, yet the audit reported an error. It is now a warning when the rows
-  were truly reordered (not shifted by an insert or delete), its label names a position, and the edited
-  table shows that the row it reads holds that position (first or last row, a rank, the column's highest or
-  lowest number, a column of dates in order); a label or cell beside it that names the row it read keeps
-  the error (SKILL.md has the rule). A first version trusted the label alone: on 41 wrong edits an
-  independent check built to break it, it turned 31 errors into warnings. The rule was then made to check
-  the data. On those 41 it keeps the error on 37; the other 4 are stated limits (a word about history such
-  as 'the first product we bought', an item named in another language). Of 47 correct position edits from
-  the same checks, 46 get no error; the 47th has its label to the right of the formula, also a stated
-  limit. The rule was shaped on these cases, so this shows coverage, not generalisation. 23 probes pin
-  the outcomes.
+  =Data!$B$2 reads what its label says, yet the audit reported an error. It is now a warning when the table
+  holds the same rows in another order and the label names a position that the row it reads now holds,
+  checked against the data: a rank or a Top-N list counted in the data rows (title, header and Total rows
+  left out), the highest or lowest number of the column the label names, the newest or oldest date. The
+  header of the column read ('Last service'), fixed phrases ('First name', '1st quarter') and a label or
+  heading that names the row it read keep the error (SKILL.md has the rule). Independent checks shaped it
+  in rounds:
+  - A first version trusted the label alone. On 41 wrong edits a check built to break it, it turned 31
+    errors into warnings.
+  - The second checked the row's position: first or last row, a rank, the column's highest or lowest
+    number. On those 41 it kept the error on 37; the other 4 are stated limits (a word about history such
+    as 'the first product we bought', an item named in another language). 46 of 47 correct position edits
+    from the same checks got no error (the 47th has its label to the right of the formula, a stated limit).
+    A second check then built 97 more cases. On 49 correct position edits it still gave an error. 32
+    wrong edits, which the audit had flagged before this change, got only a warning; a 33rd, a sorted
+    second table beside the first, was missed before and after.
+  - The third, described above, gives the intended outcome on 81 of those 82 cases (all but the miss from
+    before) and keeps the earlier results.
+
+  The rule was shaped on these cases, so they show coverage, not generalisation. 49 probes pin the outcomes.
 - **Limits.** The checks were written with these failures in view, so this is coverage, not generalisation.
   **Whether agents do better with the skill is a hypothesis** until runs with and without it are recorded.
 

@@ -2220,8 +2220,8 @@
   source: position
 - id: position-number-in-a-name
   label: error
-  edit: Data (Site, Stock) lists 'Warehouse 1' to 'Warehouse 4' and is sorted by stock, highest first. Summary!B1
-    'Warehouse #1 stock' =Data!$B$2 read Warehouse 1's 500 and now reads Warehouse 2's 820.
+  edit: "Data (Site, Stock) lists 'Warehouse 1' to 'Warehouse 4' and is sorted by stock, highest first. Summary!B1
+    'Warehouse #1 stock' =Data!$B$2 read Warehouse 1's 500 and now reads Warehouse 2's 820."
   why: '''Warehouse #1'' names a site, not a rank, so the formula must follow it: an error.'
   after: position/warehouse_hash_a.xlsx
   before: position/warehouse_hash_b.xlsx
@@ -2333,4 +2333,244 @@
   before: position/spanish_label_b.xlsx
   known_limit: true
   now: warning
+  source: position
+- id: position-crosstab-header
+  label: warning|clean
+  edit: Data (Product, Units, Revenue) is sorted by revenue, highest first. Summary is a cross-tab with the column
+    headers 'Highest' and 'Lowest' and the row labels 'Product' and 'Revenue (USD)'; B2 =Data!A2 and B3 =Data!C2 now
+    read Date and 1000, C2 =Data!A7 and C3 =Data!C7 Fig and 300.
+  why: The column headers name the positions, and after the sort each cell reads the highest or lowest revenue.
+  after: position/crosstab_header_a.xlsx
+  before: position/crosstab_header_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-list-label-above
+  label: warning|clean
+  edit: Data (Product, Units, Revenue) is sorted by revenue, highest first. Summary!A3 'Top 3 products' labels B3:B5
+    =Data!A2, A3, A4, with A4 and A5 empty; they now read Date, Cherry and Elderberry.
+  why: The label in A3 covers the three formulas below it, which now read the top three.
+  after: position/list_label_above_a.xlsx
+  before: position/list_label_above_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-title-and-header
+  label: warning|clean
+  edit: Data (Product, Units, Revenue) is sorted by revenue, highest first. Summary has the title 'Top 5 products by
+    revenue' in A1, the headers 'Product' and 'Revenue' in row 2, and A3:B7 =Data!A2:A6 and =Data!C2:C6 below.
+  why: The title over the header names the first five rows, which the formulas now read.
+  after: position/title_and_header_a.xlsx
+  before: position/title_and_header_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-data-title-row
+  label: warning|clean
+  edit: Data has the title 'Product sales FY2026' in row 1, its header in row 2 and six products in rows 3 to 8,
+    sorted by revenue, highest first. Summary 'Top product' =Data!A3, 'Top revenue (USD)' =Data!C3 and 'Worst
+    product' =Data!A8 now read Date, 1000 and Fig.
+  why: Row 3 is the table's first data row and row 8 its last, under the title and header rows.
+  after: position/data_title_row_a.xlsx
+  before: position/data_title_row_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-zh-medal-words
+  label: warning|clean
+  edit: 数据 (产品, 销量, 销售额) is sorted by 销售额, highest first. 汇总 lists 冠军, 亚军 and 季军 with B2:B4 =数据!A2, A3,
+    A4, which now read the first three.
+  why: 冠军, 亚军 and 季军 name the first, second and third place, which the formulas read now.
+  after: position/zh_medal_words_a.xlsx
+  before: position/zh_medal_words_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-second-highest
+  label: warning|clean
+  edit: Bids (Bidder, Bid) is sorted by bid, highest first. Result 'Highest bid' =Bids!B2, 'Second-highest bid'
+    =Bids!B3 and '2nd highest bidder' =Bids!A3 now read 6100, 5900 and Delta.
+  why: 'Row 3 now holds the second-highest bid, which both labels name.'
+  after: position/second_highest_a.xlsx
+  before: position/second_highest_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-biggest-drop
+  label: warning|clean
+  edit: Stocks (Ticker, Close, Change %) is sorted by change, lowest first. Movers 'Biggest drop' =Stocks!A2 and
+    'Biggest drop (%)' =Stocks!C2 now read NVDA and -5.2; 'Biggest gain (%)' =Stocks!C6 reads 1.9.
+  why: The biggest drop is the lowest change, which row 2 now holds; the biggest gain is the highest, in row 6.
+  after: position/biggest_drop_a.xlsx
+  before: position/biggest_drop_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-rotation-sort
+  label: warning|clean
+  edit: Scores (Player, Score) lists Alice 90, Bob 80, Cara 70, Dan 60 and Eve 95 and is sorted by score, highest
+    first, so Eve moves from the last row to the top and the others move down by one. Top3 rows '#1' to '#3' read
+    =Scores!A and B of rows 2 to 4.
+  why: 'The same rows in another order is a sort, although most rows moved down by one as after an insert; each line
+    reads its rank now.'
+  after: position/rotation_sort_a.xlsx
+  before: position/rotation_sort_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-total-row-below
+  label: warning|clean
+  edit: Data rows 2 to 7 are sorted by revenue, highest first, with a Total row (=SUM) in row 8. Summary 'Best
+    seller' =Data!A2, 'Worst seller' =Data!A7 and 'Lowest revenue' =Data!C7 now read Date, Banana and 450.
+  why: Row 7 is the last data row, above the Total row, and holds the lowest revenue.
+  after: position/total_row_below_a.xlsx
+  before: position/total_row_below_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-latest-year
+  label: warning|clean
+  edit: History (Year 2021 to 2025, Revenue, Profit) is sorted newest year first. KPIs 'Latest year' =History!A2 and
+    'Latest year revenue' =History!B2 now read 2025 and 1,900,000.
+  why: The years in a 'Year' column are dates for 'latest'; row 2 now holds the latest year.
+  after: position/latest_year_a.xlsx
+  before: position/latest_year_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-named-value-column
+  label: warning|clean
+  edit: Menu (Dish, Orders, Price) is sorted by orders, most first. Report 'Most ordered dish' =Menu!A2 and 'Price
+    of most ordered dish' =Menu!C2 now read Ramen and its 15.5, although Pho's 16 is the highest price.
+  why: '''Most ordered'' is about the Orders column, not the price the formula reads; row 2 holds the most orders.'
+  after: position/named_value_column_a.xlsx
+  before: position/named_value_column_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-vertical-sibling
+  label: warning|clean
+  edit: Calls (Agent, Calls, Longest call) is sorted by longest call, longest first. Report 'Agent with longest call'
+    =Calls!A2 and, below it, 'Longest call (min)' =Calls!C2 now read Blake and 42.
+  why: 'B3''s label is the column''s own name, but B2 above it reads the same row by its position: one card read by
+    position.'
+  after: position/vertical_sibling_a.xlsx
+  before: position/vertical_sibling_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-rank-as-text
+  label: warning|clean
+  edit: Data (Product, Units, Revenue) is sorted by revenue, highest first. Top3 has a 'Rank' column holding the text
+    '1', '2', '3' (as from a CSV) and B2:B4 =Data!A2, A3, A4.
+  why: Ranks stored as text are still ranks, and each line now reads its rank.
+  after: position/rank_as_text_a.xlsx
+  before: position/rank_as_text_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-most-expensive-resorted
+  label: error
+  edit: Products (Product, Category, Price) was sorted by price, lowest first; Dashboard 'Most expensive' =Products!A6
+    and =Products!C6 read Desk and 240. Products is re-sorted by name, so the line now reads Stapler and 8.5.
+  why: Row 6 is still the last row but no longer holds the highest price, which the label names.
+  after: position/most_expensive_resorted_a.xlsx
+  before: position/most_expensive_resorted_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-top-reads-minimum
+  label: error
+  edit: Sales (Rep, Units) was sorted by units, lowest first; Dashboard 'Top seller' =Sales!A6 and 'Top seller units'
+    =Sales!B6 read Hal and 90. Sales is sorted highest first, so they now read Dana and 40, the fewest.
+  why: Row 6 is the bottom row and holds the fewest units; 'Top seller' names the first row or the most units.
+  after: position/top_reads_minimum_a.xlsx
+  before: position/top_reads_minimum_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-latest-reversed
+  label: error
+  edit: Orders (Order, Date, Customer, Amount) was in date order; Dashboard 'Latest order — customer' =Orders!C6 and
+    '— amount' =Orders!D6 read the newest order. Orders is sorted newest first, so they now read the oldest.
+  why: Row 6 now holds the earliest date, not the latest.
+  after: position/latest_reversed_a.xlsx
+  before: position/latest_reversed_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-po-number
+  label: error
+  edit: "POs (PO 1 to 6, Vendor, Amount) is sorted by amount, highest first. Dashboard 'PO #3 amount' =POs!C4 and
+    'PO #3 vendor' =POs!B4 read PO 3 and now read PO 5."
+  why: '''PO #3'' names a purchase order by its number, not a rank: an error.'
+  after: position/po_number_a.xlsx
+  before: position/po_number_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-quantity-not-rank
+  label: error
+  edit: Catalog (Item, SKU, Unit price) is sorted by price, highest first. A quote has typed quantities 200 and 12 in
+    column A under 'Qty', with =Catalog!A2 and C2 (Bolt M6) and =Catalog!A6 and C6 beside them; the first line now
+    prices 200 hinges.
+  why: A number beside a line is a rank only under a rank header ('Rank', '#', '名次'); a quantity is not.
+  after: position/quantity_not_rank_a.xlsx
+  before: position/quantity_not_rank_b.xlsx
+  require: \[error\] reference-meaning-changed at Quote!B2
+  source: position
+- id: position-no-label
+  label: error
+  edit: Clients (Client, Street, City, Postcode) is sorted by city. A shipping label reads =Clients!A2:D2 in row 1
+    with no labels, so it is now addressed to Dunmore Ltd instead of Arden Books.
+  why: Nothing names a position, so the label must follow its client.
+  after: position/no_label_a.xlsx
+  before: position/no_label_b.xlsx
+  require: \[error\] reference-meaning-changed at Label!A1
+  source: position
+- id: position-zh-item-in-label
+  label: error
+  edit: 价格表 (品名, 本周最低价, 本周最高价) is sorted by 本周最低价, lowest first. 看板 '苹果本周最低价' =价格表!B2 read 苹果's
+    price and now reads 香蕉's.
+  why: The label names 苹果 inside the Chinese text, and 本周最低价 is the column's name, so the formula must follow 苹果.
+  after: position/zh_item_in_label_a.xlsx
+  before: position/zh_item_in_label_b.xlsx
+  require: \[error\] reference-meaning-changed at '?看板'?!B2
+  source: position
+- id: position-plural-item
+  label: error
+  edit: Prices (Fruit, Lowest price, Highest price) is sorted by lowest price. Dashboard 'Lowest price paid for apples'
+    =Prices!B2 read Apple's and now reads Banana's.
+  why: '''apples'' names Apple, and ''Lowest price'' is the column''s name: an error.'
+  after: position/plural_item_a.xlsx
+  before: position/plural_item_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-field-header-last
+  label: error
+  edit: Quotes (Ticker, Last, Chg %) is sorted by change, highest first. Focus has the headers Ticker, Last and Chg %
+    over A2:C2 =Quotes!A2:C2, which read AAPL and now read NVDA.
+  why: '''Last'' is the name of the price column the formula reads (the last trade), not a position.'
+  after: position/field_header_last_a.xlsx
+  before: position/field_header_last_b.xlsx
+  require: \[error\] reference-meaning-changed at Focus!B2
+  source: position
+- id: position-minutes-unit
+  label: error
+  edit: Queues (Queue, Tickets, 'AHT (min)') is sorted by handle time. Dashboard 'Billing handle time (min)'
+    =Queues!C2 read Q-BILL's 7.9 and now reads Q-RET's 5.2, the lowest.
+  why: '''(min)'' is minutes, not the minimum: the formula must follow the billing queue.'
+  after: position/minutes_unit_a.xlsx
+  before: position/minutes_unit_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-section-heading
+  label: error
+  edit: Regions (Region, Revenue, Top rep, Best month) is sorted by revenue. A Dashboard section headed 'North' in A1
+    has 'Top rep' =Regions!C2 and 'Best month' =Regions!D2 in row 2, which read North's row and now read South's.
+  why: The heading above names North, and 'Top rep' and 'Best month' are the names of the columns read.
+  after: position/section_heading_a.xlsx
+  before: position/section_heading_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-column-header-item
+  label: error
+  edit: Prices (Fruit, Lowest price, Highest price) is sorted by lowest price. Card has the column header 'Apple' in
+    B1 and 'Cheapest this week' =Prices!B2 below it, which read Apple's price and now reads Banana's.
+  why: The column header names Apple, so the formula must follow it.
+  after: position/column_header_item_a.xlsx
+  before: position/column_header_item_b.xlsx
+  require: \[error\] reference-meaning-changed at Card!B2
+  source: position
+- id: position-field-last-service
+  label: error
+  edit: Fleet (Reg, Model, Last service) is sorted by last service date. Dashboard 'Big delivery van — last service'
+    =Fleet!C5 read the Sprinter's date and now reads the Vivaro's, the latest.
+  why: '''Last service'' is the name of the column read, not a position; the formula must follow the van.'
+  after: position/field_last_service_a.xlsx
+  before: position/field_last_service_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
   source: position
