@@ -104,9 +104,26 @@ behave like a spreadsheet application: most of them never rewrite formulas for y
   an insert and not refilled are reported as an `[error]` `formula-moved-as-text`.) A row
   inserted without its own balance formula gets no finding, although the next balance then reads
   an empty cell, so check that every row of the column has its formula. A one-off formula next to
-  the row it reads (a VAT line `=B14*0.2` under the Total) gets none of this leniency, and a
-  formula meant to read a fixed position after a sort (for example the top row, `=Data!A2`) is
-  still reported as an `[error]`. If the new order was the task, say so in your report.
+  the row it reads (a VAT line `=B14*0.2` under the Total) gets none of this leniency.
+- A reference that reads another row's content after the rows were reordered is an `[error]`,
+  unless it may be meant to read a position; then it is a `[warning]`. That needs a true reordering
+  (an insert or delete, which shifts the rows by one amount, is not one), and two things more:
+  - a position named: its label (text in the three cells to its left or, when there is none, the
+    nearest text above it in its column) names one, such as 'Top row', 'Highest price', '#2',
+    'Top 3', 'Runner-up', 'Gold', '最高' or '第二'; or it reads the row's label in column A itself
+    with a rank number beside it or no label at all; or a formula beside it in the same row reads
+    the same row and qualifies;
+  - the row it reads now holds that position: the first or last data row (the N-th for a rank, one
+    of the first N for 'Top N'), the column's highest or lowest number for 'highest' or 'lowest'
+    words, and a column of dates in order for 'latest' or 'earliest'.
+
+  Field names and fixed phrases ('First name', 'last year', 'first quarter', 'Warehouse #1',
+  '第一季度') name no position. A label, or a cell left of the formula, that names the row it read
+  keeps the `[error]`: that row's label, a value only that row has, or a word of them ('Kiwi' for
+  'Kiwi fruit'). The script cannot tell a word about history from a position ('the first product
+  we bought' gets a warning), does not recognise an item named in another language than the
+  table's, and does not read labels to the right of a formula (the `[error]` stays). If the new
+  order was the task, say so in your report.
 - Parts that together cover exactly the rows above them, from the first part to the last data row,
   with no gap or overlap and at most three blank rows between (H1 and H2, four quarters), get no
   finding, and neither do totals of whole parts (H1 `=SUM(B2:B7)` beside the quarters, a Year over the

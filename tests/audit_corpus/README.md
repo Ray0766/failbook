@@ -13,9 +13,9 @@ them here lets anyone who changes the audit run the same check.
 
 ## What is in it
 
-- [`probes.yaml`](probes.yaml): 224 probes (180 before/after pairs and 44 single files). Each has an `id`, a `label`, what the `edit` did, `why` that
+- [`probes.yaml`](probes.yaml): 247 probes (203 before/after pairs and 44 single files). Each has an `id`, a `label`, what the `edit` did, `why` that
   label is the intended outcome, the `after` workbook and, for most, the `before` (original) workbook.
-- `workbooks/`: the 335 files they use (about 1.9 MB), grouped by the round that built them. Several
+- `workbooks/`: the 381 files they use (about 2.1 MB), grouped by the round that built them. Several
   probes share an original.
 
 All files are synthetic: workbooks written with openpyxl from made-up figures (three re-saved by
@@ -55,7 +55,8 @@ Other fields:
   independent review), then `fix-1`, `recheck-1`, `fix-2`, `recheck-2`, `fix-3`, `recheck-3` and `fix-4`
   (each fix round and the skeptical re-check that followed it), `check` for the probes that the
   independent check of this corpus added, and `misses` for those that pin the fix of the misses the
-  corpus first recorded as limitations, and the false findings its checks found. The id prefix names the same round.
+  corpus first recorded as limitations, and the false findings its checks found; `position` for
+  references meant to read a position (the top row) after a sort. The id prefix names the same round.
 
 ## Running it
 

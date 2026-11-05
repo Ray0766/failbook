@@ -162,7 +162,7 @@ project's own repository, package metadata or installed source, as each note say
   and three random families), against the two previous versions, and accepted only if no pair got worse.
   The hand-made probes that do not need large files (204 of the 217, after dropping one duplicate) are
   now in the repository, [tests/audit_corpus/](../tests/audit_corpus/), with 6 that an independent check
-  of the corpus added and 14 that pin the fixes below (224 in all), and run with the tests: each must keep its labelled outcome,
+  of the corpus added and 37 that pin the fixes below (247 in all), and run with the tests: each must keep its labelled outcome,
   and a documented limitation is pinned so that fixing it or making it worse is noticed. The large timing
   pairs and the random families stayed outside. What the script cannot tell is listed in the skill's
   SKILL.md.
@@ -178,6 +178,18 @@ project's own repository, package metadata or installed source, as each note say
   which were fixed and pinned by 14 more probes; overlapping parts are now named as such. The other probes
   kept their outcomes, none of the 1,587 pairs of the full corpus got worse, and the fix self-check above is
   unchanged.
+- **References meant to read a position.** After a sort, 'Top row' =Data!A2 or 'Highest price'
+  =Data!$B$2 reads what its label says, yet the audit reported an error. It is now a warning when the rows
+  were truly reordered (not shifted by an insert or delete), its label names a position, and the edited
+  table shows that the row it reads holds that position (first or last row, a rank, the column's highest or
+  lowest number, a column of dates in order); a label or cell beside it that names the row it read keeps
+  the error (SKILL.md has the rule). A first version trusted the label alone: on 41 wrong edits an
+  independent check built to break it, it turned 31 errors into warnings. The rule was then made to check
+  the data. On those 41 it keeps the error on 37; the other 4 are stated limits (a word about history such
+  as 'the first product we bought', an item named in another language). Of 47 correct position edits from
+  the same checks, 46 get no error; the 47th has its label to the right of the formula, also a stated
+  limit. The rule was shaped on these cases, so this shows coverage, not generalisation. 23 probes pin
+  the outcomes.
 - **Limits.** The checks were written with these failures in view, so this is coverage, not generalisation.
   **Whether agents do better with the skill is a hypothesis** until runs with and without it are recorded.
 

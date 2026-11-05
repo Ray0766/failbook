@@ -20,7 +20,7 @@ LABELS = {"error", "warning", "clean", "error|warning", "warning|clean", "unread
 #: The round that built a probe (docs/DECISIONS.md D9) and the id prefix that names it.
 SOURCES = {"review-2": "review2-", "fix-1": "fix1-", "recheck-1": "recheck1-", "fix-2": "fix2-", "recheck-2": "recheck2-",
            "fix-3": "fix3-", "recheck-3": "recheck3-", "fix-4": "fix4-", "check": "check-",
-           "misses": "misses-"}
+           "misses": "misses-", "position": "position-"}
 KEYS = {"id", "label", "edit", "why", "after", "before", "source", "require", "forbid", "known_limit", "now",
         "libreoffice_sample", "with_libreoffice"}
 

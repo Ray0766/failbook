@@ -61,6 +61,31 @@ AGGREGATES = {"SUM", "AVERAGE", "COUNT", "COUNTA", "MIN", "MAX", "SUBTOTAL", "PR
 SUMMARY_WORDS = re.compile(r"summary|total|dashboard|report|汇总|合计", re.I)
 NUMBER_TEXT = re.compile(r"^\s*[-+(]?\s*[$€£¥]?\s*\d{1,3}(,\d{3})+(\.\d+)?\s*\)?\s*$|^\s*[-+]?[$€£¥]?\d+\.\d+\s*%?\s*$|^\s*[-+]?\d+\s*%\s*$")
 DATE_TEXT = re.compile(r"^\s*\d{4}-\d{2}-\d{2}\s*$")
+#: Words in a formula's label that name a position in a table rather than one of its rows ('Top row',
+#: 'Highest price', '#2', '最高'): after a sort, such a formula may be meant to read whatever is there.
+POSITION_WORDS = re.compile(
+    r"(?<![A-Za-z])(?:top|first|second|third|\d+(?:st|nd|rd|th)|highest|lowest|best|worst|largest|smallest|"
+    r"biggest|cheapest|dearest|priciest|most|least|leader|leading|bestsell\w*|runner[- ]?up|gold|silver|bronze|rank(?:ed|ing)?|"
+    r"bottom|last|latest|earliest|newest|oldest|recent|max(?:imum)?|min(?:imum)?|number ?(?:one|\d+)|no\.? ?\d+)"
+    r"(?![A-Za-z])|#\s?\d+(?!\d)|最[一-鿿]|第[一二三四五六七八九十\d]+|前[一二三四五六七八九十\d]+|[冠亚季]军|"
+    r"榜首|首位|首行|末位|排名|[金银铜]牌", re.I)
+#: Position words that are part of a name or a fixed phrase, not a position in a table.
+NOT_POSITION = re.compile(
+    r"(?<![A-Za-z])(?:(?:first|last|middle)\s*name|(?:first|second|third|fourth|last)\s+(?:quarter|half)|"
+    r"best\s+before|first\s+aid|last\s+(?:year|month|week|quarter|updated|modified|login))(?![A-Za-z])"
+    r"|第[一二三四五六七八九十\d]+(?:季度|车间|分店|分公司|期|周|月|年)|[^\W\d_]{3,}\s*(?:#\s?\d+|no\.?\s?\d+)", re.I)
+CHRONO_WORDS = re.compile(r"(?<![A-Za-z])(?:latest|newest|recent|earliest|oldest)(?![A-Za-z])|最新|最早|最近", re.I)
+HIGH_WORDS = re.compile(r"(?<![A-Za-z])(?:highest|largest|biggest|max(?:imum)?|most|dearest|priciest)(?![A-Za-z])"
+                        r"|最高|最大|最多|最贵", re.I)
+LOW_WORDS = re.compile(r"(?<![A-Za-z])(?:lowest|smallest|min(?:imum)?|least|cheapest)(?![A-Za-z])|最低|最小|最少|最便宜", re.I)
+#: A rank in a label: 'Top 3' and '前三' name a list of the first N rows, '#2', 'No. 2', '第二', '2nd' one row.
+TOP_N = re.compile(r"(?<![A-Za-z])top\s*(\d+)|前\s*([一二三四五六七八九十\d]+)", re.I)
+RANK_N = re.compile(r"#\s?(\d+)|(?<![A-Za-z])(?:no\.?|number|rank)\s*(\d+)|第\s*([一二三四五六七八九十\d]+)"
+                    r"|(?<![A-Za-z\d])(\d+)(?:st|nd|rd|th)(?![A-Za-z])"
+                    r"|(?<![A-Za-z])(first|second|third|runner[- ]?up|gold|silver|bronze)(?![A-Za-z])|([金银铜])牌", re.I)
+CJK_NUMBERS = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
+               "first": 1, "second": 2, "third": 3, "gold": 1, "silver": 2, "bronze": 3,
+               "金": 1, "银": 2, "铜": 3}
 REF = re.compile(
     r"^(?:(?:'(?P<qs>(?:[^']|'')+)'|(?P<s>[^'!:]+))!)?"
     r"(?:\$?(?P<c1>[A-Za-z]{1,3})\$?(?P<r1>\d+)(?::\$?(?P<c2>[A-Za-z]{1,3})\$?(?P<r2>\d+))?"
@@ -1555,6 +1580,227 @@ def compare(before, after, findings):
         shown = ", ".join(repr(v) for v in values[:4])
         return f"({shown}{', ...' if len(values) > 4 else ''})"
 
+    def moves(b_ws, a_ws, idx, old, new):
+        """(went_to, came_from): the row the content of row ``idx`` moved to, and the row its new content
+        came from, by labels in column A when each is unique in both files, else by the row's constants
+        in the table's columns; None where it cannot be told."""
+        was_at, now_at = labels(b_ws, "row"), labels(a_ws, "row")
+        if was_at.get(old) == [idx] and len(now_at.get(old, [])) == 1 and now_at.get(new) == [idx] \
+                and len(was_at.get(new, [])) == 1:
+            return now_at[old][0], was_at[new][0]
+        cols = blocks(b_ws).get(1)
+        if cols is None:
+            return None, None
+        went = content_moved(b_ws, a_ws, idx, cols)
+        now = row_values(a_ws, cols)[0].get(idx)
+        return went, unique_row(b_ws, now, cols) if now else None
+
+    def cell_text(ws, row, col):
+        """The constant shown at (row, col), the top-left value of a merged range included; None for a
+        formula or a blank."""
+        v = _value(ws, row, col)
+        if v is None:
+            key = ("merged", id(ws))
+            if key not in cache:
+                cache[key] = [(m.min_row, m.max_row, m.min_col, m.max_col) for m in ws.merged_cells.ranges]
+            for r1, r2, c1_, c2_ in cache[key]:
+                if r1 <= row <= r2 and c1_ <= col <= c2_:
+                    v = _value(ws, r1, c1_)
+                    break
+        return None if v is None or _formula(v) or _blank(v) else v
+
+    def label_of(ws, row, col):
+        """[(cell, text)] labelling the formula at (row, col): text in the three cells to its left or,
+        when there is none, the nearest text above it in its column (its header)."""
+        out = [(f"{get_column_letter(k)}{row}", v) for k in range(max(1, col - 3), col)
+               if isinstance(v := cell_text(ws, row, k), str)]
+        if not out:
+            for r in range(row - 1, max(0, row - 30), -1):
+                v = cell_text(ws, r, col)
+                if isinstance(v, str):
+                    out.append((f"{get_column_letter(col)}{r}", v))
+                    break
+                if v is not None:
+                    continue
+        return out
+
+    def rank_of(text):
+        """('top', N) for a top-N list, ('rank', N) for one rank, or None."""
+        def number(n):
+            n = n.lower()
+            if n.isascii() and n.isdigit():
+                return int(n)
+            if n.startswith("runner"):
+                return 2
+            if n in CJK_NUMBERS:
+                return CJK_NUMBERS[n]
+            if len(n) == 2 and n[0] == "十" and n[1] in CJK_NUMBERS:  # 十二
+                return 10 + CJK_NUMBERS[n[1]]
+            if len(n) in (2, 3) and n[0] in CJK_NUMBERS and n[1] == "十":  # 二十, 二十三
+                return CJK_NUMBERS[n[0]] * 10 + (CJK_NUMBERS.get(n[2], 0) if len(n) == 3 else 0)
+            return None
+
+        for kind, pattern in (("top", TOP_N), ("rank", RANK_N)):
+            m = pattern.search(text)
+            if m and (n := number(next(g for g in m.groups() if g))) is not None:
+                return kind, n
+        return None
+
+    def table_rows(ws, cols):
+        """({row: position}, number of rows) of the table in columns ``cols``: its data rows from row 2
+        down to the first blank row."""
+        key = ("table-rows", id(ws), cols)
+        if key not in cache:
+            out, r = {}, 2
+            while r < 100002 and any(not _blank(_value(ws, r, k))
+                                     for k in range(cols[0], min(cols[1], cols[0] + 49) + 1)):
+                out[r] = len(out) + 1
+                r += 1
+            cache[key] = out, len(out)
+        return cache[key]
+
+    def identifying(b_ws, idx, cols):
+        """The texts that tell row ``idx`` of the original apart: its label in column A and the constants
+        of the table's columns that no other row of the column holds."""
+        out = [_value(b_ws, idx, 1)]
+        for k in range(cols[0], min(cols[1], cols[0] + 49) + 1):
+            v = _value(b_ws, idx, k)
+            if not _blank(v) and not _formula(v) and column_count(b_ws, k, v) == 1:
+                out.append(v)
+        return [v for v in out if not _blank(v) and not isinstance(v, bool)]
+
+    def row_words(b_ws, cols):
+        """({row: (identifying texts, their words)}, Counter of rows each word appears in)."""
+        key = ("row-words", id(b_ws), cols)
+        if key not in cache:
+            per, total = {}, Counter()
+            for r in table_rows(b_ws, cols)[0]:
+                texts = identifying(b_ws, r, cols)
+                words = {x for v in texts for x in re.findall(r"[^\W_]+", str(v).casefold())}
+                per[r] = texts, words
+                total.update(words)
+            cache[key] = per, total
+        return cache[key]
+
+    def names_row(ws, row, col, b_ws, idx, cols):
+        """True when the formula's row, left of it, or its label names the row it read before: one of
+        that row's identifying texts as a whole word, or a word of them no other row has ('Kiwi' for
+        'Kiwi fruit')."""
+        own = ws.title == b_ws.title
+        context = [str(v) for k in range(1, col) if not (own and cols[0] <= k <= cols[1])
+                   and (v := cell_text(ws, row, k)) is not None]
+        context += [str(t) for _a, t in label_of(ws, row, col)]
+        ctx = " ".join(context).casefold()
+        words = set(re.findall(r"[^\W_]+", ctx))
+        per, total = row_words(b_ws, cols)
+        texts, own_words = per.get(idx) or (identifying(b_ws, idx, cols), set())
+
+        def others(x):
+            return total[x] - (x in own_words)
+
+        for v in texts:
+            t = str(v).strip().casefold()
+            if len(t) >= 2 and re.search(r"(?<!\w)" + re.escape(t) + r"(?!\w)", ctx):
+                return True
+            toks = re.findall(r"[^\W_]+", t)
+            letters = any(not x.isdigit() for x in toks)
+            if any(x in words and not others(x) and ((len(x) >= 3 and not x.isdigit()) or (x.isdigit() and letters))
+                   for x in toks):
+                return True
+        return False
+
+    def dated(ws, rows, cols):
+        """True when a column of the table holds a date in every data row, in order either way."""
+        key = ("dated", id(ws), cols)
+        if key not in cache:
+            cache[key] = False
+            for k in range(cols[0], min(cols[1], cols[0] + 49) + 1):
+                vals = [_value(ws, r, k) for r in rows]
+                if vals and all(isinstance(v, (dt.date, dt.datetime)) or (isinstance(v, str) and DATE_TEXT.match(v))
+                                for v in vals):
+                    keys = [str(v) for v in vals]
+                    if keys in (sorted(keys), sorted(keys, reverse=True)):
+                        cache[key] = True
+                        break
+        return cache[key]
+
+    def extremes(ws, rows, ref_col):
+        """(highest, lowest) number in column ``ref_col`` of the table's rows, or None."""
+        key = ("extremes", id(ws), ref_col, min(rows, default=0), len(rows))
+        if key not in cache:
+            nums = [x for r in rows if isinstance(x := _value(ws, r, ref_col), (int, float)) and not isinstance(x, bool)]
+            cache[key] = (max(nums), min(nums)) if nums else None
+        return cache[key]
+
+    def at_position(text, a_ws, idx, ref_col, table, rank_cells):
+        """True when row ``idx`` is where the label ``text`` points: the first or last data row, the
+        N-th one for a rank ('#2', a rank number beside it), one of the first N for a top-N list, and,
+        for 'highest' or 'lowest' words, the row that holds the column's highest or lowest number;
+        'latest' and 'earliest' need a column of dates in order."""
+        rows, n = table
+        if idx not in rows:
+            return False
+        pos = rows[idx]
+        rank = rank_of(text)
+        if rank and rank[0] == "top":
+            ok = pos <= rank[1]
+        elif rank:
+            ok = pos == rank[1]
+        else:
+            ok = pos in (1, n) or pos in rank_cells
+        if not ok:
+            return False
+        v = _value(a_ws, idx, ref_col)
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and (ends := extremes(a_ws, rows, ref_col)):
+            if HIGH_WORDS.search(text) and v != ends[0]:
+                return False
+            if LOW_WORDS.search(text) and v != ends[1]:
+                return False
+        if CHRONO_WORDS.search(text) and not dated(a_ws, list(rows), blocks(a_ws).get(ref_col) or (1, 1)):
+            return False
+        return True
+
+    def positional(ws, row, col, b_ws, a_ws, ref_sheet, idx, ref_col, went_to, came_from, sibling=True):
+        """Why the formula at (row, col), which reads row ``idx`` of ``ref_sheet`` (column ``ref_col``),
+        may be meant to read a position in the table rather than one row's content, or None.
+
+        Only after a true reordering: row idx's old content is now in row ``went_to`` and its new content
+        was in row ``came_from``, and not both by the same shift (an insert or delete). Not when the
+        label or the cells left of the formula name the row it read. Then: its label names a position
+        that row ``idx`` holds in the edited table (at_position), or it reads the row's label in column A
+        itself at such a position, or a formula beside it in the same row does."""
+        if went_to is None or came_from is None or idx in (went_to, came_from) or came_from - idx == idx - went_to:
+            return None
+        labels_ = label_of(ws, row, col)
+        rank_cells = {v for k in range(max(1, col - 3), col) if isinstance(v := cell_text(ws, row, k), int)
+                      and not isinstance(v, bool)}
+        worded = [(addr, text, words) for addr, text in labels_
+                  if POSITION_WORDS.search(words := NOT_POSITION.sub(" ", text))]
+        joined = NOT_POSITION.sub(" ", " ".join(t for _a, t in labels_))
+        by_label = ref_col == 1 and (rank_cells or worded or not labels_)
+        beside = [k for k in range(max(1, col - 3), col + 4) if k != col and _formula(_value(ws, row, k))] \
+            if sibling else []
+        if not (worded or by_label or beside):
+            return None
+        cols = blocks(b_ws).get(ref_col) or (ref_col, ref_col)
+        if names_row(ws, row, col, b_ws, idx, cols):
+            return None
+        table = table_rows(a_ws, blocks(a_ws).get(ref_col) or cols)
+        for addr, text, words in worded:
+            if at_position(words, a_ws, idx, ref_col, table, rank_cells):
+                return f"its label {text!r} ({addr}) names a position that row holds now"
+        if by_label and at_position(joined, a_ws, idx, ref_col, table, rank_cells):
+            return "it reads that row's label in column A itself"
+        if beside:
+            for k in beside:
+                g = _formula(_value(ws, row, k))
+                for _t, (sh, kc1, kr1, kc2, kr2) in (_refs(g, ws.title) if g else []):
+                    if sh == ref_sheet and kc1 == kc2 and kr1 == idx and kr2 == idx and positional(
+                            ws, row, k, b_ws, a_ws, ref_sheet, idx, kc1, went_to, came_from, sibling=False):
+                        return (f"the formula beside it, {get_column_letter(k)}{row} ={g[1:]}, reads the same row "
+                                f"by its position")
+        return None
+
     def moved_to(b_ws, a_ws, axis, idx, old, new):
         """Where ``old`` now is, or where ``new`` was before, other than ``idx``; None if neither."""
         name = get_column_letter if axis == "column" else str
@@ -1622,12 +1868,20 @@ def compare(before, after, findings):
                         # ones; a relative one on its own sheet is most likely a filled-down pattern.
                         j = content_moved(b_ws, a_ws, idx, table) if axis == "row" and not neighbour else None
                         if j is not None:
-                            now = row_values(a_ws, table)[0].get(idx)
-                            findings.append(Finding(
-                                "error", "reference-meaning-changed", where,
-                                f"{f} refers to row {idx} of '{sheet}', whose values "
-                                f"{preview(row_values(b_ws, table)[0][idx])} are now in row {j}; row {idx} now holds "
-                                + (preview(now) if now else "no constants")))
+                            was, now = row_values(b_ws, table)[0][idx], row_values(a_ws, table)[0].get(idx)
+                            text_ = (f"{f} refers to row {idx} of '{sheet}', whose values {preview(was)} are now in "
+                                     f"row {j}; row {idx} now holds " + (preview(now) if now else "no constants"))
+                            # Rows reordered (what row idx holds now was in another row before) and a
+                            # formula meant to read a position: a question, not a verdict.
+                            k = unique_row(b_ws, now, table) if now else None
+                            why = positional(after[name], c.row, c.column, b_ws, a_ws, sheet, idx, c1, j, k)
+                            if why:
+                                findings.append(Finding("warning", "reference-meaning-changed", where,
+                                                        f"{text_}: the rows were reordered, and {why}, so it may be "
+                                                        "meant to read whatever is in that row now; check that it "
+                                                        "should not follow the row it read before"))
+                            else:
+                                findings.append(Finding("error", "reference-meaning-changed", where, text_))
                             broken = True
                             break
                         continue
@@ -1666,9 +1920,21 @@ def compare(before, after, findings):
                         continue
                     if _blank(new) or shift:
                         what = f"column {get_column_letter(idx)}" if axis == "column" else f"row {idx}"
-                        findings.append(Finding("error", "reference-meaning-changed", where,
-                                                f"{f} refers to {what} of '{sheet}', whose {part} was {old!r} and is now "
-                                                f"{new!r}" + (f" ({shift})" if shift else "")))
+                        text_ = (f"{f} refers to {what} of '{sheet}', whose {part} was {old!r} and is now "
+                                 f"{new!r}" + (f" ({shift})" if shift else ""))
+                        # A sort: the old label is now in another row and the new one was in another row
+                        # before. A formula meant to read a position (the top row) then reads as intended.
+                        why = None
+                        if axis == "row" and not _blank(new):
+                            went, came = moves(b_ws, a_ws, idx, old, new)
+                            why = positional(after[name], c.row, c.column, b_ws, a_ws, sheet, idx, c1, went, came)
+                        if why:
+                            findings.append(Finding("warning", "reference-meaning-changed", where,
+                                                    f"{text_}: the rows were reordered, and {why}, so it may be meant "
+                                                    f"to read whatever is in that row now; check that it should not "
+                                                    f"follow {old!r}"))
+                        else:
+                            findings.append(Finding("error", "reference-meaning-changed", where, text_))
                         broken = True
                         break
                     relabelled.setdefault((axis, sheet, idx, old, new, line_stats(b_ws, a_ws, sheet, axis, idx)), []).append(where)

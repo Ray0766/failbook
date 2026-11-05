@@ -1987,12 +1987,11 @@
   label: warning|clean
   edit: Data lists five products with prices; Summary!B1 'Top row' =Data!A2. The table is sorted by price, highest
     first, and B1 is left alone, so it now shows Kiwi instead of Apple.
-  why: 'If the sort was the task, B1 now shows the most expensive product as intended, so an error is not established.
-    Known limit: SKILL.md says a formula meant to read a fixed position after a sort is still reported as an error.'
+  why: 'If the sort was the task, B1 now shows the most expensive product as intended, so an error is not established:
+    its label ''Top row'' names a position and it reads the label in column A itself. The rows were reordered, so
+    the audit asks for a check (a warning) instead of reporting an error.'
   after: check/top_row_sorted.xlsx
   before: check/top_row_b.xlsx
-  known_limit: true
-  now: error
   source: check
 - id: check-charts-two-new
   label: error
@@ -2110,3 +2109,228 @@
   after: misses/spacer_sorted.xlsx
   before: misses/spacer_b.xlsx
   source: misses
+- id: position-highest-price
+  label: warning|clean
+  edit: Data lists five products with prices (Apple 2.1, Banana 1.2, Kiwi 3.4, Mango 2.9, Pear 1.8) and is sorted
+    by price, highest first; the Summary formulas are left alone. Summary!B1 'Highest price' =Data!$B$2 now reads
+    Kiwi's 3.4.
+  why: 'After a sort by price the top row holds the highest price, so the formula reads what its label says: not
+    an error, at most a question.'
+  after: position/highest_price_sorted.xlsx
+  before: position/highest_price_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-top-three-names
+  label: warning|clean
+  edit: Data lists five products with prices (Apple 2.1, Banana 1.2, Kiwi 3.4, Mango 2.9, Pear 1.8) and is sorted
+    by price, highest first; the Summary formulas are left alone. Summary!B1:B3 'Top 1' to 'Top 3' =Data!A2, A3,
+    A4 now read Kiwi, Mango and Apple.
+  why: Top-N names read the first rows on purpose; after the sort they are right.
+  after: position/top3_names_sorted.xlsx
+  before: position/top3_names_b.xlsx
+  source: position
+- id: position-chinese-highest
+  label: warning|clean
+  edit: Data lists five products with prices (Apple 2.1, Banana 1.2, Kiwi 3.4, Mango 2.9, Pear 1.8) and is sorted
+    by price, highest first; the Summary formulas are left alone. Summary!B1 '最高价格' =Data!B2 now reads Kiwi's 3.4.
+  why: A Chinese label that names a position ('highest') is read the same way as an English one.
+  after: position/zh_highest_sorted.xlsx
+  before: position/zh_highest_b.xlsx
+  source: position
+- id: position-item-named
+  label: error
+  edit: Data lists five products with prices (Apple 2.1, Banana 1.2, Kiwi 3.4, Mango 2.9, Pear 1.8) and is sorted
+    by price, highest first; the Summary formulas are left alone. Summary!B1 'Apple price (first in the list)' =Data!$B$2
+    now reads Kiwi's 3.4.
+  why: 'The label names Apple, the row the formula read, so it must follow Apple: an error, even though the label
+    also mentions a position.'
+  after: position/item_named_sorted.xlsx
+  before: position/item_named_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-plain-label
+  label: error
+  edit: Data lists five products with prices (Apple 2.1, Banana 1.2, Kiwi 3.4, Mango 2.9, Pear 1.8) and is sorted
+    by price, highest first; the Summary formulas are left alone. Summary!B1 'Price' =Data!$B$2 now reads Kiwi's
+    3.4.
+  why: Nothing says the formula is meant to read a position, so a reference that now reads another product after
+    a sort stays an error.
+  after: position/plain_price_sorted.xlsx
+  before: position/plain_price_b.xlsx
+  source: position
+- id: position-item-word-in-label
+  label: error
+  edit: Data lists products with price and discount (Apple, Banana, 'Kiwi fruit', Mango, Pear) and is sorted by
+    price, highest first. Summary!B1 'Max discount for Kiwi' =Data!$C$4 read Kiwi fruit's discount and now reads
+    Apple's.
+  why: 'The label names the item by a word of its name (''Kiwi''), so the formula must follow that row: an error,
+    although ''Max'' is a position word.'
+  after: position/kiwi_fruit_a.xlsx
+  before: position/kiwi_fruit_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-name-card-top-row
+  label: error
+  edit: Staff (ID, First name, Last name) is sorted by last name. A contact card on Summary, 'First name'
+    =Staff!$B$2 and 'Last name' =Staff!$C$2, read Mia Young and now reads Leo Adams, the new top row.
+  why: '''First name'' and ''Last name'' are field names, not positions, so the card must follow its person: an
+    error at both cells, although the rows read are now the top row.'
+  after: position/name_card_a.xlsx
+  before: position/name_card_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1(?s:.*)\[error\] reference-meaning-changed at Summary!B2
+  source: position
+- id: position-insert-is-not-a-sort
+  label: error
+  edit: Orders (Date, Customer, Amount) gets a late order inserted at row 3, in date order. Summary!B1 'Latest
+    order amount' =Orders!$C$7 read the last order (Stark, 95) and now reads Acme's 210; the last order moved to row 8.
+  why: 'An insert shifts every row below by one; nothing was reordered, so the label''s position word does not make
+    the moved reference a question: an error.'
+  after: position/insert_latest_a.xlsx
+  before: position/insert_latest_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-insert-repeated-labels
+  label: error
+  edit: Data (Category, Product, Price) repeats 'Fruit' and 'Veg' in column A. A row (Veg, Okra, 5) is inserted at
+    the top. Summary!B1 'Top price' =Data!C2 read Kiwi's 3.4 and now reads Okra's 5.
+  why: 'With repeated labels the audit tells the rows apart by content: Kiwi''s row moved down by one with every row
+    below it, an insert, not a sort, so a formula that read it now reads another row: an error.'
+  after: position/insert_repeated_a.xlsx
+  before: position/insert_repeated_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-max-middle-row
+  label: error
+  edit: Data lists five products with prices and is sorted by price, highest first. Summary!B1 'Max price'
+    =Data!$B$4 read Kiwi's 3.4 and now reads Apple's 2.1, in the middle of the table.
+  why: 'Row 4 is neither the top nor the bottom row and does not hold the highest price, so the label''s position
+    word does not explain what the formula reads now: an error.'
+  after: position/max_middle_a.xlsx
+  before: position/max_middle_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-highest-reads-lowest
+  label: error
+  edit: Data lists five products sorted by price, highest first, and is re-sorted lowest first. Summary!B1 'Highest
+    price' =Data!$B$2 read Kiwi's 3.4 and now reads Banana's 1.2.
+  why: The top row now holds the lowest price, not the highest, so the label contradicts what the formula reads.
+  after: position/highest_ascending_a.xlsx
+  before: position/highest_ascending_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-number-in-a-name
+  label: error
+  edit: Data (Site, Stock) lists 'Warehouse 1' to 'Warehouse 4' and is sorted by stock, highest first. Summary!B1
+    'Warehouse #1 stock' =Data!$B$2 read Warehouse 1's 500 and now reads Warehouse 2's 820.
+  why: '''Warehouse #1'' names a site, not a rank, so the formula must follow it: an error.'
+  after: position/warehouse_hash_a.xlsx
+  before: position/warehouse_hash_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-top3-name-and-price
+  label: warning|clean
+  edit: Data lists five products with prices and is sorted by price, highest first. Summary rows 'Top 1' to 'Top 3'
+    each read a name and a price (=Data!A2 and =Data!B2, then rows 3 and 4) and now read Kiwi, Mango and Apple.
+  why: A Top-N list reads the first rows on purpose; after the sort each line reads the right product and price.
+  after: position/top3_name_price_a.xlsx
+  before: position/top3_name_price_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-lowest-last-row
+  label: warning|clean
+  edit: Data (Product, Price, Qty) is sorted by price, highest first. Summary!B1 'Lowest price' =Data!$B$6 read
+    Pear's 1.8 and now reads Banana's 1.2, the lowest.
+  why: The bottom row now holds the lowest price, so the formula reads what its label says.
+  after: position/lowest_last_a.xlsx
+  before: position/lowest_last_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-latest-by-date
+  label: warning|clean
+  edit: Orders (Date, Customer, Amount) is sorted by date, newest first. Summary!B1 'Latest order' =Orders!$C$2
+    read the oldest order's 120 and now reads the newest order's 210.
+  why: The table is in date order and the top row is now the latest order, so the formula reads what its label says.
+  after: position/latest_dated_a.xlsx
+  before: position/latest_dated_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-rank-numbers
+  label: warning|clean
+  edit: Data lists five products with prices and is sorted by price, highest first. Summary has a 'Rank', 'Product',
+    'Price' table with ranks 1 to 3 in column A, each row reading =Data!A and =Data!B of rows 2 to 4.
+  why: The rank number beside each line names its position; after the sort each line reads the right product.
+  after: position/rank_numbers_a.xlsx
+  before: position/rank_numbers_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-header-and-sibling
+  label: warning|clean
+  edit: Data lists five products with prices and is sorted by price, highest first. Summary has the title 'Price
+    report', the headers 'Product' and 'Top price' in row 3, and A4 =Data!A2, B4 =Data!B2 below them.
+  why: 'The ''Top price'' header names the top row, and A4 reads the name of the same row beside it, so both are
+    meant to read the top row.'
+  after: position/header_row3_a.xlsx
+  before: position/header_row3_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-same-sheet-beside-table
+  label: warning|clean
+  edit: Data (Product, Price) in A:B is sorted by price, highest first. Beside it, E1 'Top product' F1 =A2 and E4
+    'Top price' F4 =B2 now read Kiwi and 3.4.
+  why: 'Both labels name the top row. F4 sits in a table row whose cells (Apple, 2.1 before the sort) are table data,
+    not a label that names the row F4 reads.'
+  after: position/same_sheet_a.xlsx
+  before: position/same_sheet_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-runner-up
+  label: warning|clean
+  edit: Table (Team, Points) is sorted by points, highest first. Summary!B1 'Runner-up points' and B2 'Second place
+    points', both =Table!B3, read Celtic's 38 and now read Benfica's 55, the second highest.
+  why: '''Runner-up'' and ''second place'' name the second row, which is what both formulas read now.'
+  after: position/runner_up_a.xlsx
+  before: position/runner_up_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-medals
+  label: warning|clean
+  edit: Table (Team, Points) is sorted by points, highest first. Summary row 'Gold' =Table!A2 and =Table!B2 read
+    Ajax and 41 and now read Dynamo and 60; the 'Silver' row reads row 3, which holds Benfica before and after.
+  why: '''Gold'' names the first place, which the line reads now.'
+  after: position/medals_a.xlsx
+  before: position/medals_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-label-right-of-formula
+  label: warning|clean
+  edit: Data lists five products with prices and is sorted by price, highest first. Summary!A1 =Data!B2 with the label
+    'highest price' to its right in B1 now reads Kiwi's 3.4.
+  why: The label names the top row, as in position-highest-price, but it is to the right of the formula, where the
+    audit does not look for labels (SKILL.md).
+  after: position/label_right_a.xlsx
+  before: position/label_right_b.xlsx
+  known_limit: true
+  now: error
+  source: position
+- id: position-first-in-history
+  label: error
+  edit: Data lists five products with prices and is sorted by price, highest first. Summary!B1 'Price of the first
+    product we bought' =Data!$B$2 read Apple's 2.1 and now reads Kiwi's 3.4.
+  why: '''First'' here names a product by its history, not a position in the table, so the formula must follow
+    Apple. The audit cannot tell the two meanings apart and only warns (SKILL.md).'
+  after: position/first_bought_a.xlsx
+  before: position/first_bought_b.xlsx
+  known_limit: true
+  now: warning
+  source: position
+- id: position-item-in-another-language
+  label: error
+  edit: Data lists five products with prices (in English) and is sorted by price, highest first. Summary!B1 'Precio
+    manzana (top ventas)' =Data!$B$2 read Apple's 2.1 and now reads Kiwi's 3.4.
+  why: '''Manzana'' is Spanish for apple, so the label names the item; the audit matches item names only as written
+    in the table and only warns because of ''top'' (SKILL.md).'
+  after: position/spanish_label_a.xlsx
+  before: position/spanish_label_b.xlsx
+  known_limit: true
+  now: warning
+  source: position
