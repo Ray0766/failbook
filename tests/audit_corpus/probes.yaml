@@ -2925,3 +2925,102 @@
   known_limit: true
   now: error
   source: position
+- id: position-total-row-sorted-in
+  label: error
+  edit: Data lists seven products and a typed Total row (values) at the bottom. The whole range, Total included, is
+    sorted by revenue, so the Total row is now row 2. Summary 'Top product' =Data!A2 now reads 'Total'.
+  why: The top row now holds the totals, not a product.
+  after: position/total_row_sorted_in_a.xlsx
+  before: position/total_row_sorted_in_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-zh-total-row-sorted-in
+  label: error
+  edit: 销售 lists four regions and a 合计 row (a value), and everything is sorted by 销量, so 合计 is now row 2. 汇总
+    '销量冠军' =销售!A2 now reads 合计.
+  why: The 'champion' is now the total row.
+  after: position/zh_total_row_sorted_in_a.xlsx
+  before: position/zh_total_row_sorted_in_b.xlsx
+  require: \[error\] reference-meaning-changed at '?汇总'?!B1
+  source: position
+- id: position-unpaired-months
+  label: error
+  edit: Jan and Feb (Store, Sales) list the same stores in the same order. Only Feb is sorted by sales. Summary 'Top
+    store (Feb)' row has =Feb!A2, =Feb!B2, =Jan!B2 and E2 =Feb!B2-Jan!B2.
+  why: E2 paired one store's two months; it now subtracts Bath's January from Hull's February.
+  after: position/unpaired_months_a.xlsx
+  before: position/unpaired_months_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!E2
+  source: position
+- id: position-unpaired-quota
+  label: error
+  edit: Sales (Rep, Sales) and Quota (Rep, Quota) list the same reps in the same order. Sales is sorted by sales and
+    Quota by quota. KPI 'Top rep attainment' =Sales!B2/Quota!B2 now divides Dee's sales by Cy's quota.
+  why: The two references read one rep before and two reps now.
+  after: position/unpaired_quota_a.xlsx
+  before: position/unpaired_quota_b.xlsx
+  require: \[error\] reference-meaning-changed at KPI!B1
+  source: position
+- id: position-zh-annual-units-not-years
+  label: error
+  edit: 门店 (门店, 年销量, 盘点日期) was in stocktake order, latest first, and is sorted by 年销量. 汇总 '最近一次盘点' =门店!B2
+    now reads a store whose stocktake is not the latest.
+  why: 年销量 counts units, so its numbers near 2000 are not years; the stocktake dates show row 2 is not the latest.
+  after: position/zh_annual_units_not_years_a.xlsx
+  before: position/zh_annual_units_not_years_b.xlsx
+  require: \[error\] reference-meaning-changed at '?汇总'?!B1
+  source: position
+- id: position-two-sheets-one-cell
+  label: error
+  edit: Jan and Feb (Store, Sales) are both re-sorted. Summary row 2 'Highest Feb sales' has typed numbers, D2
+    =Feb!B2-Jan!B2 and F2 =Jan!B2, which read Hull in January and now read Bath.
+  why: Nothing names a position for F2's January row; the audit once reused D2's result for Feb as F2's.
+  after: position/two_sheets_one_cell_a.xlsx
+  before: position/two_sheets_one_cell_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!F2
+  source: position
+- id: position-title-of-other-block
+  label: error
+  edit: Data is sorted by price. Summary has 'Top 3 products' over A2:A4, a blank row, then a second block headed
+    'Reorder check | Stock' with =Data!A3, C3, A4 and C4.
+  why: The second block's header names no position; the title of the block above does not cover it.
+  after: position/title_of_other_block_a.xlsx
+  before: position/title_of_other_block_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!A7
+  source: position
+- id: position-zh-hundredth-place
+  label: warning|clean
+  edit: 成绩 (120 rows) is sorted by score. 汇总 '第一百名' =成绩!A101 and =成绩!B101 now read the 100th place.
+  why: 第一百名 is the 100th place, which row 101 now holds.
+  after: position/zh_hundredth_place_a.xlsx
+  before: position/zh_hundredth_place_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-fullwidth-ranks
+  label: warning|clean
+  edit: Data is sorted by price. 排行 has 名次 as full-width text '１' to '６' beside =Data!A2:B7.
+  why: Full-width digits are ranks too, and each line reads its rank.
+  after: position/fullwidth_ranks_a.xlsx
+  before: position/fullwidth_ranks_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-top-thousand
+  label: warning|clean
+  edit: Customers (1,200 rows) is sorted by spend. 'Top 1000 customers' is merged over A2:A1001 beside
+    =Customers!A2:A1001.
+  why: Each line is among the first 1,000.
+  after: position/top_thousand_a.xlsx
+  before: position/top_thousand_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-card-fields-below
+  label: warning|clean
+  edit: Data is sorted by price. A card has 'Most expensive product' =Data!A2 and below it 'Price', 'Stock',
+    'Supplier' and more, each reading row 2.
+  why: The card shows the most expensive product's fields, but the audit does not carry the position from the card's
+    first line to the next (SKILL.md), so the field lines stay errors.
+  after: position/card_fields_below_a.xlsx
+  before: position/card_fields_below_b.xlsx
+  known_limit: true
+  now: error
+  source: position

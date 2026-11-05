@@ -72,7 +72,7 @@ _NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "sev
             "ten": 10, "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6, "seventh": 7,
             "eighth": 8, "ninth": 9, "tenth": 10, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6,
             "七": 7, "八": 8, "九": 9, "十": 10}
-_NUM = r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|[一二两三四五六七八九十]+)"
+_NUM = r"(\d+|one|two|three|four|five|six|seven|eight|nine|ten|[一二两三四五六七八九十百千零〇]+)"
 _ORDINAL = r"first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth"
 
 
@@ -127,7 +127,8 @@ ROW_AGGREGATES = AGGREGATES | {"MEDIAN", "MODE", "STDEV", "STDEVP", "VAR", "AVER
 DATE_LIKE = re.compile(r"^\s*(\d{4})[-/.](\d{1,2})(?:[-/.](\d{1,2}))?\s*$|^\s*(\d{4})\s*年\s*(\d{1,2})\s*月(?:\s*(\d{1,2})\s*日)?\s*$")
 DATE_DMY = re.compile(r"^\s*(\d{1,2})[/.](\d{1,2})[/.](\d{4})\s*$")
 FISCAL_YEAR = re.compile(r"^\s*fy\s*'?(\d{2}|\d{4})\s*$", re.I)
-YEAR_HEADER = re.compile(r"(?<![a-z])(?:year|yr|fy|season)(?![a-z])|年|赛季", re.I)
+YEAR_HEADER = re.compile(r"^\s*(?:(?:fiscal|calendar|financial|school|model)\s+)?(?:years?|yr|fy|seasons?)\s*$"
+                         r"|^\s*(?:年|年份|年度|赛季|财年)\s*$", re.I)
 
 
 def _arithmetic(node):
@@ -152,10 +153,17 @@ def _number(text: str) -> int | None:
         return int(t) if len(t) <= 6 else None
     if t in _NUMBERS:
         return _NUMBERS[t]
-    if len(t) == 2 and t[0] == "十" and t[1] in _NUMBERS:
-        return 10 + _NUMBERS[t[1]]
-    if len(t) in (2, 3) and t[0] in _NUMBERS and t[1] == "十":
-        return _NUMBERS[t[0]] * 10 + (_NUMBERS.get(t[2], 0) if len(t) == 3 else 0)
+    if t and all(ch in "一二两三四五六七八九十百千零〇" for ch in t):  # 十二, 二十三, 一百, 一百二十
+        total, digit = 0, 0
+        for ch in t:
+            if ch in "零〇":
+                digit = 0
+            elif ch in "十百千":
+                total += (digit or 1) * {"十": 10, "百": 100, "千": 1000}[ch]
+                digit = 0
+            else:
+                digit = _NUMBERS[ch]
+        return total + digit
     return None
 
 
@@ -204,7 +212,7 @@ def _position_claims(text: str, field: str = "") -> tuple:
     for pattern, bottom in ((TOP_LIST, False), (BOTTOM_LIST, True)):
         for m in pattern.finditer(t):
             n = _number(next(g for g in m.groups() if g))
-            if n and n < 1000:
+            if n and n < 100000:
                 word = m.group(0).split()[0] if m.group(0).split() else ""
                 dated = (("date-within", "min", n),) if word.startswith("first") else \
                     (("date-within", "max", n),) if word.startswith("last") else ()
@@ -212,12 +220,12 @@ def _position_claims(text: str, field: str = "") -> tuple:
     for pattern, end in DATE_LISTS:
         for m in pattern.finditer(t):
             n = _number(next(g for g in m.groups() if g))
-            if n and n < 1000 and free(m):
+            if n and n < 100000 and free(m):
                 take(m.span(), ("date-within", end, n))
     for pattern, bottom in RANKS:
         for m in pattern.finditer(t):
             n = _number(next(g for g in m.groups() if g))
-            if not (n and free(m) and n < 1000):
+            if not (n and free(m) and n < 100000):
                 continue
             after = t[m.end():m.end() + 24]
             value = re.match(r"[\s-]*(?:(" + HIGH_WORDS.pattern + r")|(" + LOW_WORDS.pattern + r")|([高大多])|([低小少]))", after)
@@ -2082,6 +2090,12 @@ def compare(before, after, findings):
     def named(label_text, header):
         """True when the label names the column header ``header``: a word of four or more letters of it
         ('Orders' for 'most ordered'), or, in Chinese, the header itself ('销量')."""
+        key = ("named", label_text, header)
+        if key not in cache:
+            cache[key] = names_header(label_text, header)
+        return cache[key]
+
+    def names_header(label_text, header):
         h = re.sub(r"\(.*?\)", " ", _fold(header))
         t = _fold(label_text)
         if re.search(r"[\u4e00-\u9fff]", h):
@@ -2134,7 +2148,10 @@ def compare(before, after, findings):
         """True when row ``r`` holds the k-th highest ('max') or lowest ('min') of ``values``."""
         if r not in values:
             return False
-        order = sorted(set(values.values()), reverse=end == "max")
+        key = ("ranked", id(values), end)
+        if key not in cache:
+            cache[key] = sorted(set(values.values()), reverse=end == "max")
+        order = cache[key]
         return len(order) >= k and values[r] == order[k - 1]
 
     def about(ws, row, col, x_ws, x_idx, ref_col, x_cols, text, sheet, kind):
@@ -2143,7 +2160,10 @@ def compare(before, after, findings):
         or either ('order'), whose header the label names; else the column the formula reads; else
         those that formulas beside it read in the same row; else all of them."""
         rows = data_rows(x_ws, x_idx, x_cols)[0]
-        heads = {k: header_of(x_ws, x_idx, x_cols, k) for k in span(x_cols)}
+        hkey = ("heads", id(x_ws), x_cols, id(rows))
+        if hkey not in cache:
+            cache[hkey] = {k: header_of(x_ws, x_idx, x_cols, k) for k in span(x_cols)}
+        heads = cache[hkey]
         if ref_col in heads and unknown_column(x_ws, rows, ref_col) or any(
                 named(text, heads[k]) and unknown_column(x_ws, rows, k) for k in heads):
             return None
@@ -2215,8 +2235,9 @@ def compare(before, after, findings):
         f = _formula(v)
         if isinstance(v, int) and not isinstance(v, bool):
             return v
-        if isinstance(v, str) and not f and v.strip().isascii() and v.strip().isdigit() and len(v.strip()) <= 6:
-            return int(v)
+        text = unicodedata.normalize("NFKC", v).strip() if isinstance(v, str) and not f else ""
+        if text.isascii() and text.isdigit() and len(text) <= 6:
+            return int(text)
         if not f:
             return None
         if (m := re.fullmatch(r"=\s*ROW\(\s*\)\s*-\s*(\d{1,6})\s*", f, re.I)):
@@ -2301,6 +2322,13 @@ def compare(before, after, findings):
                 context += [str(t) for _a, t in texts_above(ws, row, k)]
         context.append(ws.title)
         ctx = _fold(" ".join(context))
+        spaced = " " + re.sub(r"[^\w#]+", " ", ctx).replace("#", " # ") + " "  # words between single spaces
+
+        def said(phrase):
+            """True when ``phrase`` stands in the context as whole words."""
+            words_ = re.sub(r"[^\w#]+", " ", phrase).replace("#", " # ").split()
+            return bool(words_) and " " + " ".join(words_) + " " in spaced
+
         compact = re.sub(r"[\W_]+", "", ctx)
         words = set(re.findall(r"[^\W\d_]+", ctx))
         stems = {stem(w) for w in words}
@@ -2314,18 +2342,18 @@ def compare(before, after, findings):
             if v in new:
                 continue
             if isinstance(v, (dt.date, dt.datetime)):
-                if any(re.search(r"(?<!\w)" + re.escape(form) + r"(?!\w)", ctx) for form in date_forms(v)):
+                if any(said(form) for form in date_forms(v)):
                     return True
                 continue
             t = _fold(v).strip()
-            if isinstance(v, int) and 1900 <= v <= 2100 and re.search(rf"(?<!\d){v}(?!\d)", ctx):
+            if isinstance(v, int) and 1900 <= v <= 2100 and said(str(v)):
                 return True
             if isinstance(v, (int, float)) or len(t) < 2:
                 head = _fold(header_of(b_ws, idx, cols, k)).strip()
-                forms = [re.escape(head) + r"\s*[#:]?\s*"] if head else []
+                prefixes = [head, head + " #"] if head else []
                 if k == 1 or re.search(r"(?<![a-z])(?:id|no|nr|number|code|po|ref|acct|account|#)(?![a-z])", head):
-                    forms.append(r"(?:#|no\.?|n°)\s*")
-                if forms and re.search(r"(?<!\w)(?:" + "|".join(forms) + ")" + re.escape(t) + r"(?!\w)", ctx):
+                    prefixes += ["#", "no", "n°", "nr"]
+                if any(said(f"{x} {t}") for x in prefixes):
                     return True
                 continue
             if re.search(r"[\u4e00-\u9fff]", t):
@@ -2341,8 +2369,7 @@ def compare(before, after, findings):
                                 and part not in now_text and not _position_claims(part)):
                             return True
                 continue
-            plural = r"(?:s|es)?" if not t.endswith("y") else r"(?:s|es)?|" + re.escape(t[:-1]) + "ies"
-            if re.search(r"(?<!\w)(?:" + re.escape(t) + plural + r")(?!\w)", ctx):
+            if any(said(x) for x in (t, t + "s", t + "es", *((t[:-1] + "ies",) if t.endswith("y") else ()))):
                 return True
             squeezed = re.sub(r"[\W_]+", "", t)
             if len(squeezed) >= 5 and squeezed in compact:
@@ -2412,6 +2439,8 @@ def compare(before, after, findings):
             return None
         if not reordered(b_ws, a_ws, idx, cols, a_cols, went_to, came_from):
             return None
+        if unpaired(ws, row, col, ref_sheet, idx):
+            return None
         own = own_position(ws, row, col, b_ws, a_ws, ref_sheet, idx, ref_col)
         if own is not None or left_texts(ws, row, col):
             return own or None
@@ -2425,6 +2454,25 @@ def compare(before, after, findings):
                     return f"the formula beside it, {get_column_letter(k)}{row} ={quoted(g[1:])}, reads the same row by its position"
         return None
 
+    def unpaired(ws, row, col, ref_sheet, idx):
+        """True when the formula also reads a row of another sheet that held the same label in column A
+        as row ``idx`` of ``ref_sheet`` before and holds another now: =Feb!B2-Jan!B2 paired one store's
+        two months, and after a sort of one sheet it pairs two stores."""
+        g = _formula(_value(ws, row, col))
+        if not g:
+            return False
+        key = ("cell-refs", id(ws), row, col)
+        if key not in cache:
+            cache[key] = [rng for _t, rng in _refs(g, ws.title)]
+        for sh, _k1, r1, _k2, r2 in cache[key]:
+            if sh == ref_sheet or r1 != r2 or sh not in before or sh not in after:
+                continue
+            was = (_value(before[ref_sheet], idx, 1), _value(before[sh], r1, 1))
+            now = (_value(after[ref_sheet], idx, 1), _value(after[sh], r1, 1))
+            if not _blank(was[0]) and was[0] == was[1] and now[0] != now[1]:
+                return True
+        return False
+
     def quoted(text):
         text = str(text)
         return text if len(text) <= 60 else text[:57] + "..."
@@ -2433,7 +2481,7 @@ def compare(before, after, findings):
         """Why the formula at (row, col) may be meant to read row ``idx`` by its position, from its own
         labels and rank numbers ('' when they do not show it, None when it has none to go by); computed
         once per cell and row read."""
-        key = ("own-position", id(ws), row, col, idx, ref_col)
+        key = ("own-position", id(ws), row, col, ref_sheet, idx, ref_col)
         if key in cache:
             return cache[key]
         cols = blocks(b_ws).get(ref_col) or (ref_col, ref_col)

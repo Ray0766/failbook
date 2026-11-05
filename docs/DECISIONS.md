@@ -162,7 +162,7 @@ project's own repository, package metadata or installed source, as each note say
   and three random families), against the two previous versions, and accepted only if no pair got worse.
   The hand-made probes that do not need large files (204 of the 217, after dropping one duplicate) are
   now in the repository, [tests/audit_corpus/](../tests/audit_corpus/), with 6 that an independent check
-  of the corpus added and 101 that pin the fixes below (311 in all), and run with the tests: each must keep its labelled outcome,
+  of the corpus added and 112 that pin the fixes below (322 in all), and run with the tests: each must keep its labelled outcome,
   and a documented limitation is pinned so that fixing it or making it worse is noticed. The large timing
   pairs and the random families stayed outside. What the script cannot tell is listed in the skill's
   SKILL.md.
@@ -226,9 +226,26 @@ project's own repository, package metadata or installed source, as each note say
      On the 73 confirmed cases of the third check it gives the intended outcome on 71. A caption below
      a card value and the far cell of a wide leaderboard keep the error, as before the rule. It keeps
      the outcomes of the earlier checks, except one formula on a card carried by the line above (now a
-     stated limit).
+     stated limit). The third check's robustness lens (55 cases, run on version 3) confirmed 20 problems.
+     Four had been fixed in version 3 before the check ended. Five more were fixed by version 4:
+     - a Total row sorted into the data, in two cases;
+     - order-form line numbers;
+     - a title of another block;
+     - counts under 'Year-end stock'.
 
-  The rule was shaped on these cases, so they show coverage, not generalisation. 87 probes pin the
+     Nine were open and are now fixed:
+     - a formula pairing two sheets' rows (`=Feb!B2-Jan!B2`) that a sort of one sheet unpaired;
+     - a cache that mixed up two sheets read by one cell;
+     - counts under 年销量 (annual units) taken for years;
+     - 第一百 read as 第一;
+     - full-width rank digits;
+     - Top-N lists over 999;
+     - 20,000-row lists that inherit one label, which were up to 26 times slower than before the rule
+       (now about 2 times: 9.8 s against 5.1 s, and 16.9 s against 7.7 s).
+
+     Cards and rows longer than a label's reach are a stated limit.
+
+  The rule was shaped on these cases, so they show coverage, not generalisation. 98 probes pin the
   outcomes.
 - **Limits.** The checks were written with these failures in view, so this is coverage, not generalisation.
   **Whether agents do better with the skill is a hypothesis** until runs with and without it are recorded.

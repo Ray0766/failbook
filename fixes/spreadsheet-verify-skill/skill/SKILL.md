@@ -127,7 +127,9 @@ behave like a spreadsheet application: most of them never rewrite formulas for y
     count), 'Latest 3' one of the newest three ('earliest' the oldest);
   - if the original showed the label held for the row read then, it must hold by the same column
     and in the same direction now: 'Top seller' that read the most units must still read the most
-    units, not the first name in a list now sorted by name.
+    units, not the first name in a list now sorted by name;
+  - a formula that pairs rows of two sheets that held the same label in column A (`=Feb!B2-Jan!B2`
+    for one store) keeps the `[error]` when they now hold different ones.
 
   Title, header and note rows and total rows (a 'Total' label or a column total, at the bottom or
   the top) are not data rows; a per-row `=SUM(B2:E2)` is data. Numbers worked out by simple
