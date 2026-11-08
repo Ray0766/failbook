@@ -1,0 +1,43 @@
+{
+  "case": "xlsx-008",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "growth-values",
+      "kind": "content",
+      "title": "Each growth target holds the new percentage as a fraction (12% = 0.12)",
+      "status": "fail",
+      "detail": "North: stored as 8.5, which is 850%, not 8.5%; South: stored as 15, which is 1500%, not 15%; East: stored as 8.5, which is 850%, not 8.5% (and 2 more)"
+    },
+    {
+      "id": "percent-format-kept",
+      "kind": "structure",
+      "title": "The Growth Target cells are still formatted as percentages",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "targets-correct",
+      "kind": "value",
+      "title": "2025 Target, the Total row and the overall growth reflect the new targets",
+      "status": "fail",
+      "detail": "2025 Target of North is 15,238,000, expected 1,740,340"
+    },
+    {
+      "id": "targets-still-calculated",
+      "kind": "preserve",
+      "title": "2025 Target, the Total row and the overall growth still follow the revenue and growth targets",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "revenue-unchanged",
+      "kind": "preserve",
+      "title": "Regions and 2024 revenue are unchanged",
+      "status": "pass",
+      "detail": ""
+    }
+  ]
+}

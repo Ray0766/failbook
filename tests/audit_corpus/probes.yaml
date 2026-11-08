@@ -1,0 +1,3402 @@
+# Audit regression corpus: see README.md in this directory for what the fields mean.
+# Each probe is audited without recalculation by tests/test_audit_corpus.py; its outcome must stay within
+# its label (a documented limitation's outcome is pinned by 'now').
+- id: review2-s01-chartsheet-edit
+  label: clean
+  edit: Data holds six months in B2:B7 with Total =SUM(B2:B7) in B8, and a chart sheet 'Chart' shows a bar chart
+    'Revenue' over Data!B2:B7. The edit corrects one value, Data!B3 from 200 to 250. Nothing else changes.
+  why: Correcting one value is a correct edit, so the audit must report nothing. The second review found that, when
+    given the original, the audit crashed with a traceback (exit code 1) on any workbook with a chart sheet. This
+    pair checks that such a workbook is now compared and gets no finding.
+  after: review2/s01-after.xlsx
+  before: review2/s01-before.xlsx
+  source: review-2
+- id: review2-s02-rename-append
+  label: clean
+  edit: Sheet Data (Region, Rep, Revenue for 12 reps in rows 2-13) is renamed 'Sales 2024', and 15 new rep rows
+    are appended in rows 14-28. Summary!B2:B4 (SUM, COUNTA and SUMIF over Data rows 2-13) are rewritten to read
+    'Sales 2024' rows 2-28.
+  why: The rename and the new rows are both correct and every Summary reference follows them, so no finding is right;
+    the second review found the audit reported this as sheet-removed and said the new sheet held only 46% of the
+    old cells, although it keeps all of them.
+  after: review2/s02-append-after.xlsx
+  before: review2/s02-append-before.xlsx
+  source: review-2
+- id: review2-s02-rename-sort
+  label: clean
+  edit: Sheet Data is renamed 'Sales 2024' and its 12 rows are sorted by Revenue, highest first. Summary!B2:B4 (=SUM(Data!C2:C13),
+    =COUNTA(Data!B2:B13) and =SUMIF(Data!A2:A13,"North",Data!C2:C13)) are rewritten to read the same rows of 'Sales
+    2024'. Each one covers all 12 rows, so the new order does not change their results.
+  why: A rename plus a sort, with every reference rewritten, is a correct edit, so no finding is right; the second
+    review found it reported as sheet-removed (8% similar), because the match compared cells by position.
+  after: review2/s02-sort-after.xlsx
+  before: review2/s02-sort-before.xlsx
+  source: review-2
+- id: review2-s02-rename-title
+  label: clean
+  edit: Sheet Data is renamed 'Sales 2024' and a title row 'Sales by rep, 2024' is inserted at A1, so the headers
+    move to row 2 and the data to rows 3-14. Summary!B2:B4 are rewritten to read 'Sales 2024' rows 3-14.
+  why: Every Summary formula follows both the rename and the inserted title row, so the edit is correct and no finding
+    is right; the second review found it reported as sheet-removed with no hint, because every cell had moved down
+    one row.
+  after: review2/s02-title-after.xlsx
+  before: review2/s02-title-before.xlsx
+  source: review-2
+- id: review2-s03-lost-sheet
+  label: any
+  edit: The original has one sheet 'Jan' with Budget and Actual for six categories in B2:C7, Variance =C2-B2 ...
+    in D2:D7 and a Total row 8. The edit renames it 'Feb' and replaces the Budget and Actual figures in B2:C7 except
+    B4, which stays 1400. The labels and formulas are kept. The pair was built for the task of adding a 'Feb' sheet
+    and keeping 'Jan', so January's figures are lost.
+  why: 'Informational only. Without the task, the result cannot be told apart from a correct rename-and-update:
+    15 of Jan''s 23 constants, counted with repeats wherever they are, are found in ''Feb'', more than the half
+    that counts as a rename. If the numbers had been overwritten without the rename, the audit would also say nothing,
+    because it never reports changed values in a sheet that keeps its name. So the second review accepted that no
+    finding here is a trade-off, not a defect.'
+  after: review2/s03-after.xlsx
+  before: review2/s03-before.xlsx
+  known_limit: true
+  now: clean
+  source: review-2
+- id: review2-s04-inscol
+  label: clean
+  edit: Orders has Item, Qty, Price, Total, with =B2*C2 ... =B5*C5 in D2:D5 and =SUM(D2:D5) in D6. An empty 'Notes'
+    column is inserted at D, so the Total column moves to E with its formulas unchanged (=B2*C2 in E2), and the
+    column total becomes =SUM(E2:E5) in E6.
+  why: 'This is what Excel produces: the formulas read columns B and C, which are left of the insert and did not
+    move, so their unchanged text is right; the second review found the audit reported it as an error formula-moved-as-text.'
+  after: review2/s04-inscol-after.xlsx
+  before: review2/s04-inscol-before.xlsx
+  source: review-2
+- id: review2-s04-gaprow
+  label: clean
+  edit: Sales has nine months in B2:B10 and Total =SUM(B2:B10) in row 11. A blank row is inserted at row 11, so
+    the Total moves to row 12 with its formula unchanged.
+  why: Excel keeps =SUM(B2:B10) when a row is inserted below the range, and the cells it reads did not move, so
+    no finding is right; the second review found this reported as an error formula-moved-as-text.
+  after: review2/s04-gaprow-after.xlsx
+  before: review2/s04-gaprow-before.xlsx
+  source: review-2
+- id: review2-s04-ledger
+  label: clean
+  edit: A cash ledger (Date, Description, Amount, Balance in rows 2-9) has the opening balance =C2 in D2 and =D{r-1}+C{r}
+    in D3:D9. A 'Refund' of 25, dated 2024-03-05 like the 'Fuel' row above it, is inserted at row 6, and the balance
+    is filled down again, so D3:D10 each read the row above (D6 =D5+C6 ... D10 =D9+C10).
+  why: Inserting the row and filling the balance down again is what a user does in Excel, so the ledger is correct
+    and must not get an error. SKILL.md gives a refilled balance no finding when its own row or the row it reads
+    is new (D6 and D7, next to the new Refund row), or when the row it reads holds the content that was next to
+    it before (D8:D10). The date 2024-03-05 now appears in both A5 and A6, so these rows have to be told apart by
+    their other cells. The second review found reference-meaning-changed errors at D7, D8 and D9. SKILL.md now promises
+    no finding.
+  after: review2/s04-ledger-after.xlsx
+  before: review2/s04-ledger-before.xlsx
+  source: review-2
+- id: review2-s04-halves
+  label: clean
+  edit: Sales has monthly revenue for 2024-01 to 2024-12 (labels in A2:A13, values in B2:B13) and Total =SUM(B2:B13)
+    in row 14. The edit adds 'H1' =SUM(B2:B7) in row 15 and 'H2' =SUM(B8:B13) in row 16.
+  why: H1 and H2 split the twelve months exactly and sit below a total that covers them, so they are deliberate
+    half-year sums and no finding is right (as for the quarters in fix1-quarters-below-total); the second review
+    found both reported as range-omits-adjacent-cells errors.
+  after: review2/s04-halves-after.xlsx
+  before: review2/s04-halves-before.xlsx
+  source: review-2
+- id: review2-s05-cached-errors
+  label: warning|clean
+  edit: 'A single file with no original. Sheet Calc has C2 =10/B2 with B2 = 0, and C3 =#REF!*2. The file was saved
+    by LibreOffice 24.2 after recalculation, so the values cached in it are #DIV/0! and #REF!.'
+  why: Without recalculation the audit does not check error values, not even the ones cached in the file (its --no-recalc
+    help says so), so it must not report an error from them; the second review accepted either a true help text
+    or a warning. With LibreOffice it must report the errors.
+  after: review2/s05-saved.xlsx
+  libreoffice_sample: true
+  with_libreoffice: error
+  source: review-2
+- id: review2-s07-truncated
+  label: unreadable
+  edit: 'A single file: the first 3,000 bytes of a valid 7,253-byte .xlsx, as an interrupted save can leave it.
+    It starts with a zip header, but the rest of the archive, including its directory, is missing.'
+  why: Nothing in it can be read, so the audit must refuse it with exit code 3 and a short reason; the second review
+    found it crashed with a zip traceback and exit code 1, which is the code for 'errors found'.
+  after: review2/s07-truncated.xlsx
+  source: review-2
+- id: review2-s07-encrypted
+  label: unreadable
+  edit: A single file named .xlsx that starts with the OLE compound-file signature (D0 CF 11 E0 A1 B1 1A E1), followed
+    by 4,000 bytes that hold no workbook. This is the container format of a password-protected workbook or a legacy
+    .xls, not a zip.
+  why: The file is not a zip-based workbook, so the audit must refuse it (exit code 3) and say it may be password-protected
+    or a legacy .xls; the second review found a raw traceback with exit code 1 instead.
+  after: review2/s07-encrypted.xlsx
+  source: review-2
+- id: review2-s08-xlsm
+  label: clean
+  edit: The original s08-plain.xlsx has sheet Calc with two items (Pen, Pad), =B2*C2 and =B3*C3 in D2:D3, and =SUM(D2:D3)
+    in D4. The edited file is the same workbook repackaged as a macro-enabled .xlsm. The workbook part's content
+    type becomes the macro-enabled one, and an xl/vbaProject.bin part is added with its relationship and content
+    type. That part is a 516-byte placeholder (the bytes D0 CF 11 E0 followed by zeros), not a working macro project.
+    Every cell is the same.
+  why: No sheet, cell or formula changed, so the audit must read the .xlsm as it reads an .xlsx and report nothing.
+  after: review2/s08-macro.xlsm
+  before: review2/s08-plain.xlsx
+  source: review-2
+- id: review2-s09a-bloat
+  label: warning|clean
+  edit: Data has 20 items in rows 2-21, Total =B2*C2 ... in column D and =SUM(D2:D21) in row 22. Both files also
+    have one bold-formatted empty cell at H200000, which stretches the used range to A1:H200000. The edit changes
+    Data!B3 from 3 to 7.
+  why: Changing one value is a correct edit, so no error, and a warning (for example about the far-off cell) is
+    tolerated; the pair exists because the second review found that this stray formatted cell made the audit walk
+    the whole used range (about 30 s and 800 MB), and the label checks only the outcome, so a return of that slowness
+    would show only as a slow test run.
+  after: review2/s09a-after.xlsx
+  before: review2/s09a-before.xlsx
+  source: review-2
+- id: review2-s09b-bloat
+  label: warning|clean
+  edit: The same 20-item Data table with Total =SUM(D2:D21) in row 22, but the bold-formatted empty cell sits at
+    H1048576, the last row of a sheet, so the used range is A1:H1048576. The edit changes Data!B3 from 3 to 7.
+  why: Changing one value is a correct edit, so no error, and a warning is tolerated; the second review measured
+    about 3 minutes and 3.6 GB for this file when the audit walked the full used range, and the label checks only
+    the outcome, so a return of that cost would show only as a slow test run.
+  after: review2/s09b-after.xlsx
+  before: review2/s09b-before.xlsx
+  source: review-2
+- id: review2-s10-addchart
+  label: clean
+  edit: Revenue has Jan-Jun in B2:B7 and Total =SUM(B2:B7) in B8. The edit adds a bar chart 'Monthly revenue' at
+    D2 over B2:B7, with the months in A2:A7 as categories.
+  why: A chart of the months should leave out the Total row, so the chart is correct and no finding is right (the
+    same file is recheck1-chart-sum). The second review found the false message 'data continues to row 8', which
+    calls the total data; the forbid pattern keeps it out.
+  after: review2/s10-addchart-after.xlsx
+  before: review2/s10-addchart-before.xlsx
+  forbid: data continues to row 8
+  source: review-2
+- id: review2-s10-mom
+  label: clean
+  edit: Monthly has Jan, Feb, Mar, May, Jun and Jul in rows 2-7, with Change =B3-B2 ... in C3:C7. The missing Apr
+    (130) is inserted at row 5 and the Change formula is filled down again, so C3:C8 each subtract the row above
+    (C5 =B5-B4, C8 =B8-B7).
+  why: This is what inserting the month and refilling the column gives in Excel, so the edit is correct and must
+    not get an error; SKILL.md gives a refilled formula next to a new row no finding.
+  after: review2/s10-mom-after.xlsx
+  before: review2/s10-mom-before.xlsx
+  forbid: stayed the same
+  source: review-2
+- id: review2-s10-table
+  label: warning|clean
+  edit: Sales has an Excel table SalesTbl over A1:B5 (Rep, Amount) and E1 =SUM(SalesTbl[Amount]). The edit appends
+    Eve, 175 in row 6 and grows the table to A1:B6. E1 is unchanged and now covers the new row.
+  why: Growing the table is the correct way to add a row, and the structured reference follows it, so no error;
+    a warning is tolerated.
+  after: review2/s10-table-after.xlsx
+  before: review2/s10-table-before.xlsx
+  source: review-2
+- id: review2-s10-names
+  label: warning|clean
+  edit: Calc has Rate 0.2 in B1 (defined name Rate = Calc!$B$1), items I3-I7 in rows 3-7 with Tax =B3*Rate ...,
+    and totals =SUM(B3:B7) and =SUM(C3:C7) in row 8. The edit inserts item I8 (80, Tax =B8*Rate) at row 8, moves
+    the totals to row 9 and extends them to B3:B8 and C3:C8, and adds a sheet 'Notes' with one text cell.
+  why: The totals now include the new item, and the name Rate still points at B1, which did not move. A new notes
+    sheet changes nothing else. So the edit is correct and gets no error; a warning is tolerated.
+  after: review2/s10-names-after.xlsx
+  before: review2/s10-names-before.xlsx
+  source: review-2
+- id: review2-s10-merged
+  label: warning|clean
+  edit: Report has a title merged over A1:D1, headers in row 2, four departments in rows 3-6 and totals =SUM(B3:B6)
+    ... in row 7. The edit changes the title from 'Quarterly costs 2023' to 'Quarterly costs 2024' and C4 (IT, Q2)
+    from 114 to 999. The merge and the totals are kept.
+  why: Two values changed in place with the layout kept is an ordinary correct edit, so no error; a warning is tolerated.
+  after: review2/s10-merged-after.xlsx
+  before: review2/s10-merged-before.xlsx
+  source: review-2
+- id: review2-s10-pivot
+  label: warning|clean
+  edit: Data lists six amounts by region, including West (7) in row 6. Summary had North, South and East (SUMIF
+    over Data!$A$2:$A$7), Share =B2/$B$5 ..., and Total =SUM(B2:B4) in row 5. The edit inserts 'West' with its SUMIF
+    at row 5, moves the totals to row 6 as =SUM(B2:B5) and =SUM(C2:C5), and rewrites every Share to divide by $B$6.
+  why: The Share formulas follow the moved total from $B$5 to $B$6, as Excel's insert would. The totals are also
+    extended to B2:B5 and C2:C5, so they include the new West row, and the summary now covers West (7 in Data!B6),
+    which it had left out. So the edit is correct and gets no error; a warning is tolerated.
+  after: review2/s10-pivot-after.xlsx
+  before: review2/s10-pivot-before.xlsx
+  source: review-2
+- id: review2-s11-sort-breaks-summary
+  label: error
+  edit: Prices lists five fruit (Product, Category, Price, Unit, Supplier); Category, Unit and Supplier are the
+    same in every row. Summary!B2 ('Apple price') is =Prices!C2 and B3 ('Kiwi price') is =Prices!C4. The rows are
+    sorted by price, highest first, and written back as values, but Summary is left alone, so =Prices!C2 now reads
+    Kiwi's 3.4 and =Prices!C4 reads Apple's 2.1.
+  why: Both Summary figures now show another product's price, so this must be an error. The second review found
+    that the audit had downgraded it to a warning that the label in column A had changed while the other cells stayed
+    the same ('fine if it was renamed on purpose'). This happened because the repeated Category, Unit and Supplier
+    columns made the rows look unchanged.
+  after: review2/s11-after.xlsx
+  before: review2/s11-before.xlsx
+  libreoffice_sample: true
+  source: review-2
+- id: review2-s12-insert-in-sum
+  label: clean
+  edit: Data has items I2-I10 in rows 2-10 with Gross =B2*1.2 ... and Prev diff =B3-B2 ..., and totals =SUM(B2:B10)
+    and =SUM(C2:C10) in row 11, which Summary!B1:B2 read. A row 'I6b' (55) is inserted at row 6 with its own Gross
+    (=B6*1.2) and Prev diff (=B6-B5). I6's Prev diff in D7 is =B7-B6, so it now subtracts the new row. The totals
+    move to row 12 as =SUM(B2:B11) and =SUM(C2:C11), and Summary now reads =Data!B12 and =Data!C12.
+  why: 'The totals and the Summary references follow the inserted row as Excel''s Insert Row does. The new row''s
+    Gross and Prev diff are filled like their neighbours, and D7 =B7-B6 subtracts the new row, as refilling the
+    column gives. So the edit is correct and gets no error: SKILL.md gives a refilled formula that reads a new row
+    no finding. The second review found warnings here that falsely said the other cells stayed the same; the forbid
+    pattern keeps that message out.'
+  after: review2/s12-after.xlsx
+  before: review2/s12-before.xlsx
+  forbid: stayed the same
+  source: review-2
+- id: fix1-ledger-not-refilled
+  label: error
+  edit: A cash ledger (rows 2-9, Balance =D{r-1}+C{r}) gets a Refund of 25 inserted at row 6, and the balance is
+    not refilled. D6 is empty and D7:D10 keep the formulas of the rows they came from (D7 =D5+C6 ... D10 =D8+C9).
+  why: 'The balances are now wrong: D7 adds the refund instead of Invoice 18''s 300, D8 reads the empty D6, and
+    no balance adds Invoice 19''s 820 in C10. So this must be an error; SKILL.md says balances moved by an insert
+    and not refilled are reported as formula-moved-as-text.'
+  after: fix1/l_wrong.xlsx
+  before: fix1/l_before.xlsx
+  source: fix-1
+- id: fix1-anchor-kept
+  label: error
+  edit: Calc has items I2-I9 in rows 2-9 and Rel =B$5*C2 ... in column D, which multiplies each Amt by the Base
+    of row 5 (I5, 50). A row 'new' is inserted at row 3 and D2:D10 are refilled as =B$5*C{r}. The anchor still reads
+    row 5, which now holds I4's Base of 40; I5 is now in row 6.
+  why: 'Excel''s insert would have moved the anchor to B$6, and keeping B$5 makes every Rel use the wrong base,
+    so this must be an error (reference-meaning-changed: row 5''s label was I5 and is now I4).'
+  after: fix1/a_wrong.xlsx
+  before: fix1/a_before.xlsx
+  source: fix-1
+- id: fix1-grand-total-ref
+  label: error
+  edit: Sheet S has items I2-I11 in B2:B11, Total =SUM(B2:B11) in row 12, and 'Grand total' =B12 in E1. A row 'I7b'
+    (5) is inserted at row 8 and the Total, now in row 13, is extended to =SUM(B2:B12). E1 still reads =B12, which
+    now holds I11's 110.
+  why: The grand total now shows one item instead of the total, so this must be an error; the 'Total' label in column
+    A is unique, so the audit can see that row 12 changed and that 'Total' is now in row 13.
+  after: fix1/g_wrong.xlsx
+  before: fix1/g_before.xlsx
+  source: fix-1
+- id: fix1-quarters-below-total
+  label: clean
+  edit: The original Sales has monthly revenue for 2024-01 to 2024-12 (labels in A2:A13, values in B2:B13) and Total
+    =SUM(B2:B13) in row 14. The edit adds Q1 =SUM(B2:B4), Q2 =SUM(B5:B7), Q3 =SUM(B8:B10) and Q4 =SUM(B11:B13) in
+    rows 15-18.
+  why: The four quarters split the year exactly below a total that covers it, so they are deliberate parts and no
+    finding is right.
+  after: fix1/h_ok.xlsx
+  before: fix1/h_before.xlsx
+  source: fix-1
+- id: fix1-only-h1
+  label: warning|clean
+  edit: The same original (twelve months in B2:B13, Total =SUM(B2:B13) in row 14). The edit adds only 'H1' =SUM(B2:B7)
+    in row 15.
+  why: A first-half sum is a correct edit, so no error; but a single part does not split the block, and a sum that
+    stops at row 7 below a total over rows 2-13 has the shape of a range that missed rows, so a warning is tolerated
+    (today it is one).
+  after: fix1/h_one.xlsx
+  before: fix1/h_before.xlsx
+  source: fix-1
+- id: fix1-new-average-stale
+  label: error|warning
+  edit: The same original. The edit types a new month 2025-01 (999) into row 14 and moves the Total to row 15, extended
+    to =SUM(B2:B14). It also adds a new 'Average' =AVERAGE(B2:B13) in row 16, which leaves the new month out.
+  why: The Average misses 2025-01 while the Total above it includes it, so the edit is wrong; but the Average is
+    new, so the original cannot show that it once covered the same rows as the total, and SKILL.md makes that case
+    a warning rather than an error, so either is accepted (today it is a warning).
+  after: fix1/h_avg.xlsx
+  before: fix1/h_before.xlsx
+  source: fix-1
+- id: fix1-total-not-extended
+  label: error
+  edit: The same original. The edit types a new month 2025-01 (999) into row 14 and moves the Total to row 15, still
+    =SUM(B2:B13).
+  why: The Total sits directly below the new month and leaves it out, the mistake SKILL.md describes for totals
+    near the end of a table, so this must be an error (range-omits-adjacent-cells).
+  after: fix1/h_new.xlsx
+  before: fix1/h_before.xlsx
+  source: fix-1
+- id: fix1-chart-stops
+  label: error|warning
+  edit: A single file with no original. Revenue has Jan-Aug in B2:B9 and Total =SUM(B2:B9) in row 10. A bar chart
+    'Monthly revenue' has a series that covers only B2:B7 (Jan-Jun).
+  why: Jul and Aug were added above the total but the chart was not extended to them, so the chart is wrong; without
+    the original, the audit cannot rule out a chart meant to show only six months, so a warning is accepted (today
+    it is a warning that data continues to row 9).
+  after: fix1/c_wrong.xlsx
+  source: fix-1
+- id: fix1-chartsheet-deleted
+  label: error
+  edit: The original has Data (M1-M6 in rows 2-7) and a chart sheet 'Chart' with an untitled bar chart over Data!B2:B7.
+    The edit deletes the chart sheet; Data is unchanged.
+  why: 'A chart was lost, so this must be an error (sheet-removed: chart sheet ''Chart'' existed before and is gone).'
+  after: fix1/cs_gone.xlsx
+  before: fix1/cs_before.xlsx
+  source: fix-1
+- id: fix1-chartsheet-renamed
+  label: clean
+  edit: The same original. The edit renames the chart sheet from 'Chart' to 'Revenue chart' and keeps the same untitled
+    bar chart over Data!B2:B7.
+  why: Only the name changed, and SKILL.md counts a new chart sheet whose series reads the same column as renamed,
+    so no finding is right.
+  after: fix1/cs_renamed.xlsx
+  before: fix1/cs_before.xlsx
+  source: fix-1
+- id: fix1-sheet-replaced
+  label: any
+  edit: The original has one sheet 'Costs' (Month, Cost; M1-M12 with costs 57-134 in B2:B13). The edited file instead
+    has one sheet 'Revenue' (Month, Revenue; M1-M12 with 913-1056). The 'Month' header and the month labels are
+    the same; every number and the value header differ.
+  why: 'Known limit, kept for information: the cost figures may be lost, or the sheet may have been renamed and
+    updated on purpose; the files cannot tell. SKILL.md counts a new sheet that holds at least half of a removed
+    sheet''s constants as that sheet renamed, and ''Revenue'' holds 13 of Costs'' 26 (''Month'' and the month labels),
+    so the audit reports nothing. review2-s03-lost-sheet is the same trade-off.'
+  after: fix1/r_wrong.xlsx
+  before: fix1/r_before.xlsx
+  known_limit: true
+  now: clean
+  source: fix-1
+- id: recheck1-led-del
+  label: clean
+  edit: A Ledger (Date, Description, Amount, Balance with D2 =C2 and =D{r-1}+C{r} below) loses its 2024-03-06 'Invoice
+    18' row (300). The rows below move up one, the balance is refilled down to D10, and row 11 is cleared.
+  why: 'Deleting a transaction and refilling the running balance is a correct edit, so it must not be an error.
+    SKILL.md gives no finding when the row a balance reads holds the content that was next to it before, with only
+    deleted rows between them: D6 (Phone) now reads row 5 (Fuel), and before the edit only the deleted Invoice 18
+    row stood between them.'
+  after: recheck1/v-led_del.xlsx
+  before: recheck1/v-led_before.xlsx
+  source: recheck-1
+- id: recheck1-led-two
+  label: clean
+  edit: 'Two transactions are inserted into the same ledger: 2024-03-04 ''Refund'' 25 at row 5 and 2024-03-07 ''Deposit''
+    90 at row 9. The rows below move down and the balance is refilled through D13.'
+  why: The final ledger is correct, because each balance reads the row above it, so there must be no error. This
+    covers the boundary between two inserts, which once gave a false reference-meaning-changed error.
+  after: recheck1/v-led_two.xlsx
+  before: recheck1/v-led_before.xlsx
+  source: recheck-1
+- id: recheck1-led-one
+  label: clean
+  edit: One transaction, '2024-03-05b' 'Refund' 25, is inserted at row 6 below 'Fuel'. The rows below move down
+    one and the balance is refilled through D12.
+  why: An insert with the balance refilled is correct, and the dates in column A are unique so the audit can follow
+    every row, so there must be no error.
+  after: recheck1/v-led_one.xlsx
+  before: recheck1/v-led_before.xlsx
+  source: recheck-1
+- id: recheck1-h-above
+  label: clean
+  edit: On the Sales sheet (12 months in B2:B13), the single Total in B14 is replaced by H1 =SUM(B2:B7) in B14,
+    H2 =SUM(B8:B13) in B15 and a Year total =SUM(B2:B13) in B16.
+  why: H1 and H2 split the data block that ends right above them, and the Year row covers all of it. That is a correct
+    layout, so there must be no error.
+  after: recheck1/v-h_above.xlsx
+  before: recheck1/v-h_before.xlsx
+  source: recheck-1
+- id: recheck1-h-above2
+  label: clean
+  edit: The same H1/H2 split in B14:B15, but the Year total in B16 is written =B14+B15.
+  why: Adding the two halves gives the same correct year total, so this layout must not be an error either.
+  after: recheck1/v-h_above2.xlsx
+  before: recheck1/v-h_before.xlsx
+  source: recheck-1
+- id: recheck1-avg-stale
+  label: error
+  edit: Below 12 months with Total =SUM(B2:B13) and Average =AVERAGE(B2:B13), two months (2025-01, 2025-02) are
+    inserted at rows 14-15. The Total, now in B16, is extended to =SUM(B2:B15), but the Average in B17 still reads
+    B2:B13.
+  why: With --before, the audit can see that the Average and the Total covered the same rows 2-13 in the original
+    and only the Total grew. The stale Average is near-certainly wrong, and SKILL.md makes it an error.
+  after: recheck1/v-avg_after.xlsx
+  before: recheck1/v-avg_before.xlsx
+  source: recheck-1
+- id: recheck1-avg-stale-nobefore
+  label: error|warning
+  edit: The same edited file (Total B16 =SUM(B2:B15), Average B17 =AVERAGE(B2:B13)), audited without the original.
+  why: Without --before, nothing shows that the Average used to cover the same rows as the Total, and a shorter
+    aggregate below a total can be deliberate, so SKILL.md allows a warning. The edit is still wrong, so at least
+    a warning is required.
+  after: recheck1/v-avg_after.xlsx
+  source: recheck-1
+- id: recheck1-chart-sum
+  label: clean
+  edit: A Revenue sheet with Jan-Jun in A2:A7 and their revenue in B2:B7, 'Total' in A8 with =SUM(B2:B7) in B8,
+    and a bar chart 'Monthly revenue' over B2:B7 (categories A2:A7). There is no original.
+  why: A chart that leaves out the total row is correct, so there must be no finding; in particular, the audit must
+    not say that the data continues to row 8.
+  after: recheck1/v-chart_sum.xlsx
+  source: recheck-1
+- id: recheck1-chart-plus
+  label: clean
+  edit: The same chart over B2:B7, with the Total in B8 written =B2+B3+B4+B5+B6+B7.
+  why: A total written as a sum of single cells is still a total row, so a chart that stops above it is correct.
+    An earlier version warned that 'data continues to row 8' here.
+  after: recheck1/v-chart_plus.xlsx
+  source: recheck-1
+- id: recheck1-chart-subtotal
+  label: clean
+  edit: The same chart over B2:B7, with the Total in B8 written =SUBTOTAL(9,B2:B7).
+  why: SUBTOTAL(9, ...) adds up the rows above it, so B8 is a total row and the chart is right to leave it out.
+  after: recheck1/v-chart_subtotal.xlsx
+  source: recheck-1
+- id: recheck1-inv-wrong
+  label: error
+  edit: 'An Invoice (Service, Hours all 1, Rate, VAT all 0.2, Amount =B*C*(1+D)) gets a ''Bookkeeping'' row inserted
+    at row 2 with openpyxl''s insert_rows. The new E2 gets its own formula, but the moved Amounts keep their old
+    text: E3 (''Audit'') now reads row 2 (=B2*C2*(1+D2)), and so on down to E6.'
+  why: Every moved Amount now prices the row above it (E3 uses Bookkeeping's rate 60 instead of Audit's 120), so
+    this must be an error, even though the Hours and VAT columns hold the same value in every row.
+  after: recheck1/v-inv_wrong.xlsx
+  before: recheck1/v-inv_before.xlsx
+  source: recheck-1
+- id: recheck1-fo-note
+  label: clean
+  edit: 'The sheet ''Calc'', which holds only formulas (=Data!A1, ="North", SUMIF over Data, =SUM(B2:B3)), is renamed
+    ''Calculations''. Report!B1 is updated from =Calc!B4 to =Calculations!B4, and a note ''Source: Data sheet''
+    is added in Calculations!D1.'
+  why: A rename with every reference updated is correct, so there must be no finding. Adding one text cell must
+    not make the formula-only sheet look removed; an earlier version reported 'Calc' as a removed sheet here.
+  after: recheck1/v-fo_after.xlsx
+  before: recheck1/v-fo_before.xlsx
+  source: recheck-1
+- id: recheck1-fo-plain
+  label: clean
+  edit: The same rename of the formula-only 'Calc' sheet to 'Calculations', with Report!B1 updated to =Calculations!B4
+    and no note added.
+  why: A rename with its references updated is correct, so there must be no finding.
+  after: recheck1/v-fo_after_plain.xlsx
+  before: recheck1/v-fo_before.xlsx
+  source: recheck-1
+- id: recheck1-cs-swap
+  label: error
+  edit: The chart sheet 'Revenue chart' (a bar chart titled 'Revenue chart' over Data!B2:B7) is deleted, and a chart
+    sheet 'Cost chart' (titled 'Cost chart', over Data!C2:C7) is added.
+  why: The new chart shows a different column under a different title, so the revenue chart was lost, not renamed.
+    The old chart has a title and a series over a cell range, so SKILL.md makes its loss an error.
+  after: recheck1/v-cs_swap.xlsx
+  before: recheck1/v-cs_before.xlsx
+  forbid: its title and the columns its series read all differ
+  source: recheck-1
+- id: recheck1-cs-to-worksheet
+  label: error
+  edit: The chart sheet 'Revenue chart' is replaced by an empty worksheet with the same name, so the bar chart over
+    Data!B2:B7 is gone.
+  why: The chart is lost and only its name is left, so the audit must report the chart sheet as removed (an error).
+  after: recheck1/v-cs_ws.xlsx
+  before: recheck1/v-cs_before.xlsx
+  source: recheck-1
+- id: recheck1-cf-rows
+  label: clean
+  edit: A Revenue sheet (Jan-Jun in rows 2-7, 'Total' in A8 and =SUM(B2:B7) in B8) has a 'greater than 1200' conditional
+    format with a yellow fill on A2:B7, which covers both the month and the revenue column. There is no original.
+  why: Highlighting that stops above the Total row is correct, so there must be no finding. An earlier version warned
+    here that the data continues to row 8.
+  after: recheck1/v2-cf_rows.xlsx
+  source: recheck-1
+- id: recheck1-sort-same-sheet
+  label: error
+  edit: The Prices table (Product in A, Price in C) is sorted by price, highest first. 'Apple price' =C2 in B9 and
+    'Kiwi price' =C4 in B10, on the same sheet, are left alone, so B9 now shows Kiwi's 3.4 and B10 shows Apple's
+    2.1.
+  why: Both summary figures now read the wrong product, so this must be an error.
+  after: recheck1/v2-p_sorted_same.xlsx
+  before: recheck1/v2-p_before_same.xlsx
+  source: recheck-1
+- id: recheck1-sort-fixed
+  label: clean
+  edit: 'The same price sort, with the Summary sheet updated: ''Apple price'' in B2 goes from =Prices!C2 to =Prices!C4,
+    and ''Kiwi price'' in B3 from =Prices!C4 to =Prices!C2.'
+  why: The references follow the rows they were meant to read, so the sort is correct and must be clean.
+  after: recheck1/v2-p_sorted_fixed.xlsx
+  before: recheck1/v2-p_before.xlsx
+  source: recheck-1
+- id: recheck1-empty
+  label: unreadable
+  edit: A zero-byte file with an .xlsx name.
+  why: It is not a workbook, so the audit must refuse it with a message and exit code 3, not crash and not pass
+    it.
+  after: recheck1/v2-empty.xlsx
+  source: recheck-1
+- id: recheck1-notxlsx
+  label: unreadable
+  edit: A zip archive with an .xlsx name that holds only a text file, hello.txt, and no [Content_Types].xml.
+  why: It is a zip but not a workbook, so the audit must refuse it with a message and exit code 3 instead of a traceback.
+  after: recheck1/v2-notxlsx.xlsx
+  source: recheck-1
+- id: recheck1-adir
+  label: unreadable
+  edit: A directory named adir.xlsx, given in place of a workbook file.
+  why: There is no file to read, so the audit must refuse it with a message and exit code 3 instead of crashing.
+  after:
+    directory: adir.xlsx
+  source: recheck-1
+- id: recheck1-badchart
+  label: unreadable
+  edit: The xlsx-011 failure output (sheet Monthly with the line chart 'Revenue vs Costs 2024'), with its chart
+    part xl/charts/chart1.xml cut off halfway (3,376 of 6,752 bytes), so the chart XML does not parse.
+  why: The audit cannot read the chart, so it must refuse the file (exit code 3). It must not crash with a traceback
+    or pass a workbook whose chart it never checked.
+  after: recheck1/v3-badchart.xlsx
+  source: recheck-1
+- id: recheck1-category-sort
+  label: error
+  edit: The Prices table, with the same Category 'Fruit' in every row of column A and the Product in B, is sorted
+    by price, highest first. Summary 'Apple price' =Prices!C2 and 'Kiwi price' =Prices!C4 are left alone, so they
+    now show Kiwi's 3.4 and Apple's 2.1.
+  why: Both figures now read the wrong product, so this must be an error. Because the label in column A is the same
+    in every row, the audit has to follow the rows by their other values to find it.
+  after: recheck1/v4-cat_after.xlsx
+  before: recheck1/v4-cat_before.xlsx
+  source: recheck-1
+- id: recheck1-halves-no-total
+  label: clean
+  edit: H1 =SUM(B2:B7) in B14 and H2 =SUM(B8:B13) in B15 are added below 12 months of Sales that had no total row.
+  why: The two halves split the whole data block directly above them. That is a correct layout even without a covering
+    total, so there must be no error.
+  after: recheck1/v4-nt_halves.xlsx
+  before: recheck1/v4-nt_before.xlsx
+  source: recheck-1
+- id: recheck1-skill-011-failure
+  label: error|warning
+  edit: 'The xlsx-011 failure output (byte-identical to the case''s failure/monthly.xlsx): Nov and Dec are appended
+    to Monthly in rows 12-13, but the line chart ''Revenue vs Costs 2024'' still reads B2:B11 and C2:C11 (categories
+    A2:A11). There is no original.'
+  why: The chart leaves out the two new months, so the edit is wrong. Without the original, the audit can only see
+    that data continues past the chart's range, so at least a warning is required.
+  after: recheck1/skill-data.xlsx
+  source: recheck-1
+- id: fix2-h2-kept
+  label: error|warning
+  edit: Below 12 months (m01-m12) with Total =SUM(B2:B13), H1 =SUM(B2:B7) and H2 =SUM(B8:B13), two months m13 and
+    m14 are inserted at rows 14-15. The Total, now in B16, is extended to =SUM(B2:B15), while H1 (B17) and H2 (B18)
+    keep their ranges.
+  why: H2 left at B8:B13 may be the stale range the script meant, so at least a warning is required. The same cells
+    and ranges are correct in recheck2-i5-h2-2024 (only the labels differ), so SKILL.md keeps such parts at a warning;
+    that twin's label guards against an error here.
+  after: fix2/adv-h_stale.xlsx
+  before: fix2/adv-hb.xlsx
+  source: fix-2
+- id: fix2-h2-kept-nobefore
+  label: error|warning
+  edit: The same edited file (Total B16 =SUM(B2:B15), H1 B17 =SUM(B2:B7), H2 B18 =SUM(B8:B13)), audited without
+    the original.
+  why: Without --before, the audit only sees two sums that cover fewer rows than the total above them, which correct
+    edits also produce, so a warning is the expected outcome; at least a warning is required.
+  after: fix2/adv-h_stale.xlsx
+  source: fix-2
+- id: fix2-h2-extended
+  label: clean
+  edit: The same two months are inserted, the Total is extended to =SUM(B2:B15) in B16, and H2 is extended to =SUM(B8:B15)
+    in B18. H1 stays =SUM(B2:B7).
+  why: The halves still split the whole block and the total covers it, so the edit is consistent and must be clean.
+  after: fix2/adv-h_ok.xlsx
+  before: fix2/adv-hb.xlsx
+  source: fix-2
+- id: fix2-halves-not-extended
+  label: error
+  edit: 14 months (m01-m14) in rows 2-15, with H1 =SUM(B2:B7) in B16 and H2 =SUM(B8:B13) in B17 and no total row.
+    There is no original.
+  why: Rows 14-15, directly above the sums, are in no sum at all, so the halves were not extended and this must
+    be an error.
+  after: fix2/adv-h_nottotal.xlsx
+  source: fix-2
+- id: fix2-quarters-spacer
+  label: clean
+  edit: 12 months in rows 2-13, a blank row 14, then Q1-Q4 in B15:B18 (=SUM(B2:B4), =SUM(B5:B7), =SUM(B8:B10), =SUM(B11:B13)),
+    with no total. There is no original.
+  why: The quarters split the data block exactly, and one blank spacer row is ordinary layout, so this must be clean.
+  after: fix2/adv-q_spacer.xlsx
+  source: fix-2
+- id: fix2-quarters-gap
+  label: error
+  edit: The same quarter layout, except that Q4 in B18 is =SUM(B12:B13), so row 11 (m10) is in no quarter.
+  why: One month is in no quarter, so the audit must report an error, and the require pattern checks that it is
+    reported at Q4 (B18), the part that skips row 11, not at the correct quarters.
+  after: fix2/adv-q_gap.xlsx
+  require: B18
+  source: fix-2
+- id: fix2-avg-extended
+  label: clean
+  edit: 'In the original, 12 months (m01-m12) are followed by Total =SUM(B2:B13) in B14 and Average =AVERAGE(B2:B13)
+    in B15. Two months (m13, m14) are inserted at rows 14-15, above the Total and Average, which move to rows 16-17,
+    and both are extended: Total B16 =SUM(B2:B15), Average B17 =AVERAGE(B2:B15).'
+  why: Both aggregates cover the new rows, so the edit is correct and must be clean.
+  after: fix2/adv-avg_ok.xlsx
+  before: fix2/adv-avg_b.xlsx
+  source: fix-2
+- id: fix2-last6-added
+  label: warning|clean
+  edit: A new row 'Last 6' =SUM(B8:B13) is added in B16, below the unchanged Total =SUM(B2:B13) and Average =AVERAGE(B2:B13).
+  why: A new sum of the last six months is a correct addition, so there must be no error (a warning about the shorter
+    range is tolerated).
+  after: fix2/adv-avg_2024.xlsx
+  before: fix2/adv-avg_b.xlsx
+  source: fix-2
+- id: fix2-inv-rewritten
+  label: clean
+  edit: The invoice gets a 'Bookkeeping' row (rate 60) inserted at row 2, and every Amount in E2:E6 is rewritten
+    to read its own row (=B{r}*C{r}*(1+D{r})). As a result, only the new E6 formula differs from the original.
+  why: After the insert, each Amount reads its own row, so the edit is correct and must be clean, unlike the same
+    insert with the formulas moved as text.
+  after: fix2/adv-inv_ok.xlsx
+  before: fix2/adv-inv_b.xlsx
+  source: fix-2
+- id: fix2-inv-appended
+  label: clean
+  edit: A 'Bookkeeping' row with its own formula =B6*C6*(1+D6) is appended in row 6, and a 'Total' =SUM(E2:E6) is
+    added in E7.
+  why: Appending a row with its formula, plus a total over all the rows, is correct, so this must be clean.
+  after: fix2/adv-inv_append.xlsx
+  before: fix2/adv-inv_b.xlsx
+  source: fix-2
+- id: fix2-cs-renamed
+  label: clean
+  edit: The chart sheet 'Revenue chart' (a bar chart titled 'Chart of R' over Data!B2:B7) is renamed 'Revenue'.
+    The chart itself is unchanged.
+  why: The title and the series are the same, so this is a rename and must be clean.
+  after: fix2/adv-cs_ren.xlsx
+  before: fix2/adv-cs_b.xlsx
+  source: fix-2
+- id: fix2-cs-renamed-extended
+  label: clean
+  edit: The untitled chart sheet 'Revenue chart' over Data!B2:B7 is renamed 'Revenue'. Two rows (M7, M8) are added
+    to Data in rows 8-9, and the series is extended to Data!B2:B9.
+  why: The chart still reads the same column, now including the new rows, so this is a correct rename and extension
+    and must be clean.
+  after: fix2/adv-cs_ren_ext.xlsx
+  before: fix2/adv-cs_bu.xlsx
+  source: fix-2
+- id: fix2-cs-data-renamed
+  label: clean
+  edit: Both sheets are renamed. The data sheet 'Data' becomes 'Sales' with the same values, and the untitled chart
+    sheet 'Revenue chart' becomes 'Revenue', with its series now over Sales!B2:B7.
+  why: The chart still shows the same revenue column on the renamed data sheet, so this must be clean.
+  after: fix2/adv-cs_ren2.xlsx
+  before: fix2/adv-cs_bu.xlsx
+  source: fix-2
+- id: fix2-cs-swap
+  label: error
+  edit: The untitled chart sheet 'Revenue chart' over Data!B2:B7 is deleted, and an untitled chart sheet 'Cost chart'
+    over Data!C2:C7 is added.
+  why: The new chart reads another column, so the revenue chart was lost and this must be an error.
+  after: fix2/adv-cs_swap.xlsx
+  before: fix2/adv-cs_bu.xlsx
+  forbid: its title and the columns its series read all differ
+  source: fix-2
+- id: fix2-cs-added
+  label: clean
+  edit: A second chart sheet, 'Cost chart' (titled 'Chart of C', over Data!C2:C7), is added. The 'Revenue chart'
+    sheet is kept as it was.
+  why: Adding a chart sheet removes nothing, so this must be clean.
+  after: fix2/adv-cs_add.xlsx
+  before: fix2/adv-cs_b.xlsx
+  source: fix-2
+- id: fix2-price-insert-stale
+  label: error
+  edit: In the Prices table (Category 'Fruit' in every row of A, Product in B, Price in C), 'Plum' (2.2) is inserted
+    at row 2 and the rows below move down. Summary 'Apple price' =Prices!C2 and 'Kiwi price' =Prices!C4 are left
+    alone, so they now show Plum's 2.2 and Banana's 1.2.
+  why: Both summary figures now read the wrong product, so this must be an error.
+  after: fix2/adv-p_ins.xlsx
+  before: fix2/adv-p_b.xlsx
+  source: fix-2
+- id: fix2-price-insert-ok
+  label: clean
+  edit: The same insert of 'Plum' at row 2, with the Summary references updated to =Prices!C3 (Apple) and =Prices!C5
+    (Kiwi).
+  why: The references follow their rows, so the insert is correct and must be clean.
+  after: fix2/adv-p_ins_ok.xlsx
+  before: fix2/adv-p_b.xlsx
+  source: fix-2
+- id: fix2-price-append
+  label: clean
+  edit: '''Plum'' (2.2) is appended at row 7 of Prices. The Summary references =Prices!C2 and =Prices!C4 still point
+    at Apple and Kiwi.'
+  why: No row moved, so the references keep their meaning and this must be clean.
+  after: fix2/adv-p_app.xlsx
+  before: fix2/adv-p_b.xlsx
+  source: fix-2
+- id: fix2-price-same
+  label: clean
+  edit: 'The after file is a byte-for-byte copy of the original Prices/Summary workbook: no cell changed.'
+  why: An unchanged workbook must be clean.
+  after: fix2/adv-p_same.xlsx
+  before: fix2/adv-p_b.xlsx
+  source: fix-2
+- id: fix2-kind-ledger-insert
+  label: clean
+  edit: In a Ledger where column A repeats 'Income'/'Expense' (Date in B, Amount in C, Balance =D{r-1}+C{r} in D),
+    an 'Income' row dated '2024-03-05b' (amount 9) is inserted at row 7. The rows below move down and the balance
+    is refilled through D13.
+  why: An insert with the balance refilled is correct, so there must be no error even though the labels in column
+    A repeat.
+  after: fix2/adv-l_ins.xlsx
+  before: fix2/adv-l_b.xlsx
+  source: fix-2
+- id: fix2-kind-ledger-delete
+  label: clean
+  edit: The same ledger loses its 'Income' row dated 2024-03-06 (amount 2) at row 7. The rows below move up, the
+    balance is refilled through D11, and row 12 is cleared.
+  why: A delete with the balance refilled is correct, so there must be no error.
+  after: fix2/adv-l_del.xlsx
+  before: fix2/adv-l_b.xlsx
+  source: fix-2
+- id: fix2-ledger-sorted
+  label: warning|clean
+  edit: An eight-row Ledger (Date, Text, Amount, and Balance with D2 =C2 and =D{r-1}+C{r} below) is sorted by amount,
+    smallest first, and the balance column is refilled in the new order.
+  why: The refilled balance is right if the sort was the task, and the audit cannot tell whether it was, so SKILL.md
+    makes this at most a warning. An error would be a false error; an earlier version reported five reference-meaning-changed
+    errors here.
+  after: fix2/lim-ls.xlsx
+  before: fix2/lim-lb.xlsx
+  source: fix-2
+- id: fix2-dup-label-sorted
+  label: error
+  edit: Sheet P ('Fruit' in every row of column A, prices 2.1, 1.2, 3.4 in B) is sorted to 3.4, 2.1, 1.2. S!B1 =P!B2
+    is left alone, so it now reads 3.4 instead of 2.1.
+  why: A reference left stale by a sort is wrong. The label in column A repeats, but each row's two constants are
+    unique together, so the audit can follow row 2's content to row 3 and must report an error.
+  after: fix2/lim-ps.xlsx
+  before: fix2/lim-pb.xlsx
+  source: fix-2
+- id: fix2-single-constant-sorted
+  label: error
+  edit: 'Sheet P (column A empty below its ''Cat'' header, one price per row in B: 2.1, 1.2, 3.4) is sorted to 3.4,
+    2.1, 1.2. S!B1 =P!B2 is left alone, so it now reads 3.4 instead of 2.1.'
+  why: 'Known limit: the reference is stale, so an error would be right, but SKILL.md says rows with a single constant
+    are not tracked, so the audit cannot see where row 2 went and reports nothing.'
+  after: fix2/lim-ps1.xlsx
+  before: fix2/lim-pb1.xlsx
+  known_limit: true
+  now: clean
+  source: fix-2
+- id: recheck2-i5-h2-2024
+  label: warning|clean
+  edit: Sales has 2024-01 to 2024-12 in rows 2-13, Total =SUM(B2:B13) in B14, and 'H1 2024' =SUM(B2:B7) and 'H2
+    2024' =SUM(B8:B13) below it. The edit adds 2025-01 and 2025-02 in rows 14-15, extends the Total (now B16) to
+    =SUM(B2:B15) and keeps H1 2024 (B17) and H2 2024 (B18) on 2024's months.
+  why: 'The edit is correct: H1 2024 and H2 2024 must stay on 2024''s months, so an error would be false. They have
+    the cells and ranges of the wrong edit in fix2-h2-kept (only the labels differ), so SKILL.md keeps such parts
+    at a warning, which the audit gives today.'
+  after: recheck2/atk-i5_h2_2024.xlsx
+  before: recheck2/atk-i5_b.xlsx
+  source: recheck-2
+- id: recheck2-i5-q4-2024
+  label: warning|clean
+  edit: 'Original: 2024-01 to 2024-12 in rows 2-13, Total =SUM(B2:B13) in B14, ''Q4 2024'' =SUM(B11:B13) in B15.
+    The edit adds 2025-01 and 2025-02 in rows 14-15, extends the Total (now B16) to =SUM(B2:B15) and keeps Q4 2024
+    (B17) at =SUM(B11:B13).'
+  why: The edit is correct (Q4 2024 must stay October to December 2024), so an error would be false; SKILL.md keeps
+    a part that starts lower than the total at a warning, because correct edits keep such parts.
+  after: recheck2/atk-i5_q4.xlsx
+  before: recheck2/atk-i5_qb.xlsx
+  libreoffice_sample: true
+  source: recheck-2
+- id: recheck2-i5-avg-above-total
+  label: error
+  edit: 'Original: 12 months in rows 2-13, Total =SUM(B2:B13) in B14, Average =AVERAGE(B2:B13) in B15. The edit
+    adds 2025-01 and 2025-02 in rows 14-15, puts the Average first (B16, left at =AVERAGE(B2:B13)) and the Total
+    after it (B17, =SUM(B2:B15)).'
+  why: 'Wrong: the Average leaves out the two new months, and because it now sits directly under them with no total
+    in between, its range stops above values right next to it, which is an error even without the original.'
+  after: recheck2/atk-i5_avg_above.xlsx
+  before: recheck2/atk-i5_ab.xlsx
+  source: recheck-2
+- id: recheck2-i5-avg-max-stale
+  label: error
+  edit: 'Original rows 14-16: Total =SUM(B2:B13), Average =AVERAGE(B2:B13), Max =MAX(B2:B13). The edit adds 2025-01
+    and 2025-02 in rows 14-15, extends the Total (B16) to =SUM(B2:B15) and leaves Average (B17) and Max (B18) at
+    B2:B13.'
+  why: 'Wrong: in the original the Average and Max covered the same rows as the Total (rows 2-13), and only the
+    Total was extended, which is the case SKILL.md makes an error with --before. The forbid pattern rules out a
+    message that cites the original Average (row 15: =AVERAGE(B2:B13)) as the total; today the message names the
+    total in row 14 (=SUM(B2:B13)).'
+  after: recheck2/atk-i5_avg_max.xlsx
+  before: recheck2/atk-i5_mb.xlsx
+  forbid: 'row 15: =AVERAGE'
+  source: recheck-2
+- id: recheck2-i5-preexisting
+  label: warning
+  edit: The original already has 2024-01 to 2025-02 in rows 2-15, Total =SUM(B2:B15) in B16, and an Average =AVERAGE(B2:B13)
+    in B17 that stops at 2024-12. The edit only writes 'Note' in C1.
+  why: The short Average was there before the edit and never covered the same rows as the Total, so it is only a
+    warning (a shorter aggregate below a longer total); the require pattern makes sure the warning says it is also
+    in the original, so the edit is not blamed for it.
+  after: recheck2/atk-i5_k.xlsx
+  before: recheck2/atk-i5_kb.xlsx
+  require: also in the original
+  source: recheck-2
+- id: recheck2-i4-stale-plus-new
+  label: error|warning
+  edit: 'Original: 12 months in rows 2-13, Total =SUM(B2:B13) in B14. The edit adds 2025-01 and 2025-02 in rows
+    14-15, leaves the Total (now B16) at =SUM(B2:B13) and adds ''Jan-Feb 2025'' =SUM(B14:B15) in B17.'
+  why: 'Wrong: the row labelled Total no longer covers every month, and the original shows this formula was the
+    total of the whole block, which has since grown. But the ranges match a correct 2024 / 2025 split, so SKILL.md
+    makes it a warning with --before; an error would also be acceptable.'
+  after: recheck2/atk-i4_stale_plus_new.xlsx
+  before: recheck2/atk-i4_b.xlsx
+  libreoffice_sample: true
+  source: recheck-2
+- id: recheck2-i4-stale-plus-new-nobefore
+  label: warning|clean
+  edit: 'The same edited file, audited without the original: 2024-01 to 2025-02 in rows 2-15, ''Total'' =SUM(B2:B13)
+    in B16, ''Jan-Feb 2025'' =SUM(B14:B15) in B17.'
+  why: 'A trade-off: the edit is wrong, but without the original its ranges are exactly those of a correct split
+    (one sum of rows 2-13, one of rows 14-15), so clean is accepted to keep real splits free of false errors; the
+    label only rules out an error.'
+  after: recheck2/atk-i4_stale_plus_new.xlsx
+  source: recheck-2
+- id: recheck2-i4-avg-parts
+  label: clean
+  edit: The Total in B14 (=SUM(B2:B13)) is replaced by 'H1 avg' =AVERAGE(B2:B7) in B14 and 'H2 avg' =AVERAGE(B8:B13)
+    in B15, directly below the 12 months.
+  why: 'The two averages cover consecutive halves that together are exactly rows 2-13: a split that leaves nothing
+    out, so no range finding is right. Whether the Total should have been dropped depends on the task, which the
+    audit does not see.'
+  after: recheck2/atk-i4_avg_parts.xlsx
+  before: recheck2/atk-i4_b.xlsx
+  source: recheck-2
+- id: recheck2-i4-overlap
+  label: error
+  edit: The Total in B14 is replaced by 'H1' =SUM(B2:B8), 'H2' =SUM(B8:B13) and 'Year' =SUM(B2:B13) in B14:B16.
+  why: 'Wrong: both halves include row 8 (2024-07), so H1 plus H2 counts July twice. Overlapping parts are not a
+    split, and H1 stopping at row 8 while rows 9-13 hold values is an error.'
+  after: recheck2/atk-i4_overlap.xlsx
+  before: recheck2/atk-i4_b.xlsx
+  require: 'overlaps it: both include row 8'
+  source: recheck-2
+- id: recheck2-i4-spacer4
+  label: warning|clean
+  edit: The Total in B14 is removed. After four blank rows (14-17), 'H1' =SUM(B2:B7) and 'H2' =SUM(B8:B13) are added
+    in B18:B19.
+  why: 'Known limit: the halves tile rows 2-13, so no error is right. SKILL.md lists half-year sums four or more
+    blank rows below the data as a known misreading, because parts count as a split only within three blank rows,
+    so today H1 is an error.'
+  after: recheck2/atk-i4_spacer4.xlsx
+  before: recheck2/atk-i4_b.xlsx
+  known_limit: true
+  now: error
+  source: recheck-2
+- id: recheck2-i4-data-below
+  label: error|warning
+  edit: 'Original: 12 months in rows 2-13 with ''H1'' =SUM(B2:B7) and ''H2'' =SUM(B8:B13) in B14:B15 and no total.
+    The edit appends 2025-01 (300) and 2025-02 (310) in rows 16-17, below the half-year rows.'
+  why: 'Known limit: the new months sit below the summary rows, outside every sum, so at least a warning is right.
+    SKILL.md lists months appended below half-year sums that have no total as a known miss; today clean.'
+  after: recheck2/atk-i4_data_below.xlsx
+  before: recheck2/atk-i4_hb2.xlsx
+  known_limit: true
+  now: clean
+  source: recheck-2
+- id: recheck2-i4-data-below-nobefore
+  label: error|warning
+  edit: 'The same edited file, audited without the original: 2024 months in rows 2-13, ''H1'' =SUM(B2:B7) and ''H2''
+    =SUM(B8:B13) in rows 14-15, then 2025-01 (300) and 2025-02 (310) in rows 16-17.'
+  why: 'Known limit: the 2025 months are outside every sum, so at least a warning is right. SKILL.md lists months
+    appended below half-year sums that have no total as a known miss; today clean.'
+  after: recheck2/atk-i4_data_below.xlsx
+  known_limit: true
+  now: clean
+  source: recheck-2
+- id: recheck2-i7-chart-short
+  label: error|warning
+  edit: 'One sheet, Revenue: months M1-M6 in rows 2-7 (revenue in B2:B7), ''Total'' =B2+B3+B4+B5+B6+B7 in B8, and
+    a bar chart ''Monthly revenue'' that plots only B2:B6.'
+  why: 'Wrong: the chart leaves out M6 in row 7, and a chart that stops before its data ends is at least a warning.
+    The Total written with + has to end the data at row 7 rather than count as data.'
+  after: recheck2/atk-i7_short.xlsx
+  source: recheck-2
+- id: recheck2-i7-sumsum-total
+  label: clean
+  edit: 'One sheet, Revenue: months M1-M6 in rows 2-7 (revenue in B2:B7), a bar chart ''Monthly revenue'' over B2:B7,
+    and ''Total'' in A8 with B8 =SUM(B2:B4)+SUM(B5:B7).'
+  why: 'Known limit: the two sums together cover B2:B7, so clean is right. SKILL.md lists this way of writing a
+    total as a known misreading: each SUM is checked on its own, so B2:B4 looks short. Today error.'
+  after: recheck2/atk-i7_sumsum.xlsx
+  known_limit: true
+  now: error
+  source: recheck-2
+- id: recheck2-i7-dv-status
+  label: clean
+  edit: 'One sheet: a Status dropdown (list ''ok,late'') on C2:C7, with A8 ''Total'', B8 =SUM(B2:B7) and C8 empty.'
+  why: 'Correct: the dropdown covers the Status cell of every data row and stops above the Total row, which has
+    no status.'
+  after: recheck2/atk-i7_dv.xlsx
+  source: recheck-2
+- id: recheck2-i7-cf-column-a
+  label: clean
+  edit: 'One sheet: a conditional format (cell value greater than 1200) on A2:A7 only, with the label ''Total''
+    in A8 and =SUM(B2:B7) in B8.'
+  why: 'Known limit: stopping above the Total row is right, so clean. SKILL.md lists conditional formatting on column
+    A that stops above a ''Total'' label as a known misreading (it warns that data continues to row 8); today warning.'
+  after: recheck2/atk-i7_cfa.xlsx
+  known_limit: true
+  now: warning
+  source: recheck-2
+- id: recheck2-i7-cf-row-plus-total
+  label: clean
+  edit: 'One sheet: a conditional format on A2:C7, with ''Total'' in A8 and =B2+B3+B4+B5+B6+B7 in B8.'
+  why: 'Correct: the format covers all six data rows, and a total that adds the cells above it ends the data just
+    as =SUM(B2:B7) would.'
+  after: recheck2/atk-i7_cfrow.xlsx
+  source: recheck-2
+- id: recheck2-i7-fib-chart
+  label: error|warning
+  edit: 'One sheet, R: months M1-M10 in A2:A11, 5 in B2, B3 =B2+B2, and from B4 to B11 formulas that add the two
+    cells above (=B3+B2 through =B10+B9). An untitled line chart plots B2:B6.'
+  why: The chart stops at row 6 (M5) while column B holds values down to row 11 (M10), so at least a warning is
+    right. These formulas add cells above them the way a total does, but they are data rows, and treating them as
+    totals would hide the short chart.
+  after: recheck2/atk-i7_fib.xlsx
+  source: recheck-2
+- id: recheck2-i8-untitled-add-series
+  label: clean
+  edit: The untitled bar chart on chart sheet 'Chart1' (series Data!B2:B7) is renamed 'Revenue and cost', and a
+    second series over Data!C2:C7 is added.
+  why: 'Correct: the old series is still plotted, so the chart sheet was renamed and extended, not removed. SKILL.md
+    counts a new chart sheet with a series over one of the old columns as the old one renamed.'
+  after: recheck2/atk-i8_add.xlsx
+  before: recheck2/atk-i8_b.xlsx
+  libreoffice_sample: true
+  source: recheck-2
+- id: recheck2-i8-title-changed-add
+  label: clean
+  edit: Chart sheet 'Revenue chart' (title 'Revenue', series Data!B2:B7) is renamed 'Sales chart', its title is
+    changed to 'Revenue and cost', and a series over Data!C2:C7 is added.
+  why: 'Correct: the title and name changed, but the chart still plots column B, so it is the same chart renamed
+    and extended.'
+  after: recheck2/atk-i8_title.xlsx
+  before: recheck2/atk-i8_bt.xlsx
+  source: recheck-2
+- id: recheck2-i8-same-title-add
+  label: clean
+  edit: Chart sheet 'Revenue chart' is renamed 'Sales chart'. It keeps its title 'Revenue' and gains a series over
+    Data!C2:C7 beside B2:B7.
+  why: 'Correct: the title is the same and the old column is still plotted, so it is a rename plus an added series.'
+  after: recheck2/atk-i8_sametitle.xlsx
+  before: recheck2/atk-i8_bt.xlsx
+  source: recheck-2
+- id: recheck2-i8-two-one-swapped
+  label: error
+  edit: 'Original chart sheets: ''Rev'' (title ''Revenue'', Data!B2:B7) and ''Cost'' (title ''Cost'', Data!C2:C7).
+    The edit keeps ''Rev'', deletes ''Cost'' and adds ''Profit'' (title ''Profit'', Data!D2:D7).'
+  why: 'Wrong: the cost chart is gone, and the only new chart sheet has a different title and plots a different
+    column, so it cannot be ''Cost'' renamed; a removed chart sheet is an error.'
+  after: recheck2/atk-i8_two.xlsx
+  before: recheck2/atk-i8_b2.xlsx
+  forbid: its title and the columns its series read all differ
+  source: recheck-2
+- id: recheck2-i8-two-renamed
+  label: clean
+  edit: Both chart sheets are renamed, 'Rev' to 'Revenue' and 'Cost' to 'Costs'; titles and series are unchanged.
+  why: 'Correct: each new chart sheet has the title and column of exactly one old one, so both are renames and nothing
+    was removed.'
+  after: recheck2/atk-i8_two_ren.xlsx
+  before: recheck2/atk-i8_b2.xlsx
+  source: recheck-2
+- id: recheck2-i8-same-title-other-col
+  label: error|warning
+  edit: Chart sheet 'Revenue chart' (title 'Revenue', Data!B2:B7) is deleted, and a chart sheet 'Cost chart' is
+    added with the same title 'Revenue' but a series over Data!C2:C7.
+  why: 'Known limit: the revenue chart is gone and the new chart shows another column under the old title, so at
+    least a warning is right. SKILL.md counts a new chart sheet with the same title as a rename; today clean.'
+  after: recheck2/atk-i8_same_title_other.xlsx
+  before: recheck2/atk-i8_bt.xlsx
+  known_limit: true
+  now: clean
+  source: recheck-2
+- id: recheck2-i6-values-wiped
+  label: error
+  edit: Sheet 'Data' (12 months in A2:B13, Total =SUM(B2:B13) in B14, shares =B2/B14 and =B3/B14 in C2:C3) loses
+    every constant, labels and numbers alike. Only those formulas remain, the sheet is renamed 'Summary', and Report!B1
+    is changed from =Data!B14 to =Summary!B14.
+  why: 'Wrong: the data behind the Report total is gone, so the total shows 0. SKILL.md says a sheet renamed with
+    its values cleared and its formulas kept is reported as removed, and an error is right either way.'
+  after: recheck2/atk-i6_wiped.xlsx
+  before: recheck2/atk-i6_b.xlsx
+  source: recheck-2
+- id: recheck2-i6-replaced-left
+  label: error
+  edit: 'Sheet ''Data'' is deleted, and a new sheet ''Notes'' holds only =SUM(B2:B13), =B2/B14 and =B3/B14 in A1:A3:
+    Data''s formula texts, now reading Notes'' empty cells. Report!B1 still reads =Data!B14.'
+  why: 'Wrong: the data sheet and all its values are gone, and ''Notes'' holds none of its constants, so it is not
+    a rename. The require pattern makes the audit report sheet-removed at Data, and forbid rules out a message saying
+    Data was renamed.'
+  after: recheck2/atk-i6_replaced.xlsx
+  before: recheck2/atk-i6_b.xlsx
+  require: sheet-removed at Data
+  forbid: was renamed
+  libreoffice_sample: true
+  source: recheck-2
+- id: recheck2-i10-same-sheet-fg
+  label: error
+  edit: Prices lists Apple, Banana, Kiwi, Mango and Pear in rows 2-6 (A2:A6 all 'Fruit', prices in C2:C6), with
+    'Apple price' =C2 in G2 and 'Kiwi price' =C4 in G3 beside the table. The edit sorts the table by price, highest
+    first, and leaves G2:G3 unchanged.
+  why: G2 'Apple price' now shows Kiwi's 3.4 and G3 'Kiwi price' shows Apple's 2.1, so the audit must report an
+    error. The label in column A repeats ('Fruit'), so the rows are told apart by the table's own constants, not
+    by the summary beside it.
+  after: recheck2/atk-i10_ss.xlsx
+  before: recheck2/atk-i10_ss_b.xlsx
+  source: recheck-2
+- id: recheck2-i10-same-sheet-fg-anchored
+  label: error
+  edit: 'The same table and sort, with the summary beside it anchored: G2 =$C$2 (''Apple price'') and G3 =$C$4 (''Kiwi
+    price'').'
+  why: 'As with relative references: both anchored summary cells now read the wrong product, so the audit must report
+    an error. The summary''s labels in F2:F3 sit in the table''s rows, so the rows are told apart by the table''s
+    columns only.'
+  after: recheck2/atk-i10_ssa.xlsx
+  before: recheck2/atk-i10_ssa_b.xlsx
+  source: recheck-2
+- id: recheck2-i10-delete-stale
+  label: error
+  edit: Prices lists Apple, Banana, Kiwi, Mango and Pear in rows 2-6; Summary has 'Apple price' =Prices!C2 in B2
+    and 'Kiwi price' =Prices!C4 in B3. The edit deletes the Banana row (the rows below move up) and leaves Summary
+    unchanged.
+  why: 'Wrong: Kiwi is now in row 3, so =Prices!C4 returns Mango''s 2.9. Each row''s product and price are unique
+    in both files, so the audit can see that Kiwi''s row moved, and an error is right.'
+  after: recheck2/atk-i10_del.xlsx
+  before: recheck2/atk-i10_b.xlsx
+  source: recheck-2
+- id: recheck2-i10-delete-ok
+  label: clean
+  edit: The Banana row is deleted in the same way, and Summary!B3 is updated to =Prices!C3.
+  why: 'Correct: ''Kiwi price'' follows Kiwi to row 3, and ''Apple price'' still reads row 2.'
+  after: recheck2/atk-i10_del_ok.xlsx
+  before: recheck2/atk-i10_b.xlsx
+  source: recheck-2
+- id: recheck2-i10-price-edit
+  label: clean
+  edit: Only Apple's price in Prices!C2 changes, from 2.1 to 2.4.
+  why: 'Correct: a value edited in place, which Summary!B2 =Prices!C2 should pick up; a row whose values changed
+    must not be mistaken for a row that moved.'
+  after: recheck2/atk-i10_price.xlsx
+  before: recheck2/atk-i10_b.xlsx
+  source: recheck-2
+- id: recheck2-i10-dup-appended
+  label: clean
+  edit: A copy of the Apple row (Fruit, Apple, 2.1, kg) is appended in row 7; rows 2-6 and Summary are unchanged.
+  why: 'Correct for the references: row 2 still holds Apple, so =Prices!C2 still reads its price. The duplicate
+    makes Apple''s values no longer unique, and that must not be read as row 2 having moved.'
+  after: recheck2/atk-i10_dup.xlsx
+  before: recheck2/atk-i10_b.xlsx
+  source: recheck-2
+- id: recheck2-s-rel-sorted
+  label: error
+  edit: Prices lists five fruits in rows 2-6 (A2:A6 all 'Fruit'), with 'Apple price' =C2 in B9 and 'Kiwi price'
+    =C4 in B10 below the table. The edit sorts the table by price, highest first, and leaves B9:B10 unchanged.
+  why: 'Known limit: ''Apple price'' now shows Kiwi''s 3.4 and ''Kiwi price'' shows Apple''s 2.1, so an error is
+    right. This is SKILL.md''s own example of what is not tracked: a summary below the table that reads =C2, without
+    $, when the label in column A repeats. Today clean.'
+  after: recheck2/atk2-s_rel.xlsx
+  before: recheck2/atk2-s_b.xlsx
+  known_limit: true
+  now: clean
+  source: recheck-2
+- id: recheck2-s-anc-sorted
+  label: error
+  edit: The same table and sort, with B9 =$C$2 and B10 =$C$4.
+  why: 'Wrong, and the audit can tell: anchored references are tracked by the row''s constants (product and price,
+    unique in both files), so it sees that Apple moved to row 4 and Kiwi to row 2 and reports both.'
+  after: recheck2/atk2-s_anc.xlsx
+  before: recheck2/atk2-sa_b.xlsx
+  source: recheck-2
+- id: recheck2-s-anc-updated
+  label: clean
+  edit: The same sort, with B9 changed to =$C$4 and B10 to =$C$2 so they follow Apple and Kiwi.
+  why: 'Correct: both references follow their rows.'
+  after: recheck2/atk2-s_anc_ok.xlsx
+  before: recheck2/atk2-sa_b.xlsx
+  source: recheck-2
+- id: recheck2-l-del2
+  label: clean
+  edit: Ledger lists ten transactions dated 2024-03-02 to 2024-03-11 in rows 2-11, with D2 =C2 and each later balance
+    =D(row above)+C(own row). The edit deletes Invoice 17 (row 4) and Bank fee (row 8) and refills the balance down
+    to row 9.
+  why: 'Correct: after refilling, each balance reads the row that was next to it before, with only deleted rows
+    in between, which SKILL.md leaves without a finding.'
+  after: recheck2/atk2-l_del2.xlsx
+  before: recheck2/atk2-l_b.xlsx
+  source: recheck-2
+- id: recheck2-l-top
+  label: clean
+  edit: A Deposit of 70 dated 2024-03-02 is inserted in row 3, right after the opening row; the later rows move
+    down and the balance is refilled to row 12.
+  why: 'Correct: a refill after an insert. The new row''s balance and the one below it involve a new row, which
+    SKILL.md leaves without a finding, and the other balances read their old neighbours.'
+  after: recheck2/atk2-l_top.xlsx
+  before: recheck2/atk2-l_b.xlsx
+  source: recheck-2
+- id: recheck2-l-mix
+  label: clean
+  edit: Fuel (row 5) is deleted, and a Refund of 15 dated 2024-03-08, the same date as Bank fee, is inserted after
+    Bank fee in row 8; the balance is refilled.
+  why: 'Correct: one delete plus one insert, refilled, so every balance reads the row above it as intended; an error
+    would be false.'
+  after: recheck2/atk2-l_mix.xlsx
+  before: recheck2/atk2-l_b.xlsx
+  libreoffice_sample: true
+  source: recheck-2
+- id: recheck2-l-dup
+  label: warning|clean
+  edit: A second copy of Invoice 18 (2024-03-06, 300) is inserted right after it, in row 7; the balance is refilled
+    to row 12.
+  why: 'Correct: a duplicated transaction, refilled. With two identical rows the audit cannot tell which one moved,
+    so SKILL.md allows at most a warning.'
+  after: recheck2/atk2-l_dup.xlsx
+  before: recheck2/atk2-l_b.xlsx
+  source: recheck-2
+- id: recheck2-l-insert-moved
+  label: error
+  edit: A row is inserted at row 6 with openpyxl (2024-03-05, Refund, 25, D6 =D5+C6). The balances below move down
+    with their old texts, D7 =D5+C6 through D12 =D10+C11, so each adds the amount of the row above to the balance
+    two rows up.
+  why: 'Wrong: from D7 on, every balance lags one transaction behind, and Invoice 20 in C12 is never added. SKILL.md
+    reports balances moved by an insert and not refilled as an error, formula-moved-as-text.'
+  after: recheck2/atk2-l_ins_moved.xlsx
+  before: recheck2/atk2-l_b.xlsx
+  source: recheck-2
+- id: recheck2-l-delete-moved
+  label: error
+  edit: The Fuel row (row 5) is deleted with openpyxl. The balances below move up with their old texts, so D5 =D5+C6
+    reads itself and D6 =D6+C7 through D10 =D10+C11 each read their own cell.
+  why: 'Wrong: D5 to D10 each read their own cell, so all six are circular references, and each adds the amount
+    of the row below rather than its own; the formulas moved without their references being updated, and an error
+    is right.'
+  after: recheck2/atk2-l_del_moved.xlsx
+  before: recheck2/atk2-l_b.xlsx
+  source: recheck-2
+- id: recheck2-share-stale
+  label: error
+  edit: S lists Item 1-6 in rows 2-7, with 'Total' =SUM(B2:B7) in row 8 and shares =B2/B8 to =B7/B8 in C2:C7. The
+    edit adds Item 7 (76) in row 8, moves the Total to row 9 as =SUM(B2:B8), leaves C2:C7 at =B2/B8 to =B7/B8 and
+    adds C8 =B8/B8.
+  why: 'Wrong: the shares now divide by Item 7''s amount instead of the Total (C8 =B8/B8 gives 100%), and the original
+    shows that row 8 was the ''Total'' row, which is now in row 9; an error.'
+  after: recheck2/atk2-sh_stale.xlsx
+  before: recheck2/atk2-sh_b.xlsx
+  source: recheck-2
+- id: recheck2-share-ok
+  label: clean
+  edit: The same insert, with the shares refilled as =B2/B9 to =B8/B9.
+  why: 'Correct: every share divides by the moved Total.'
+  after: recheck2/atk2-sh_ok.xlsx
+  before: recheck2/atk2-sh_b.xlsx
+  source: recheck-2
+- id: recheck2-inv-allsame
+  label: error
+  edit: Invoice lists Audit, Tax return, Payroll and Advice, each 1 hour at rate 100 with VAT 0.2 and Amount =B*C*(1+D)
+    of its own row. A row is inserted at row 2 with openpyxl (Bookkeeping, 1 hour, rate 60, E2 =B2*C2*(1+D2)); the
+    old amounts move down with their texts, so E3 =B2*C2*(1+D2) through E6 =B5*C5*(1+D5) each read the row above.
+  why: 'Wrong: Audit''s amount in E3 now uses Bookkeeping''s rate (72 instead of 120), and the other amounts only
+    look right because their rows hold the same values. The moved texts are an error even though the repeated values
+    leave evidence in only one formula.'
+  after: recheck2/atk2-inv_allsame.xlsx
+  before: recheck2/atk2-inv_b.xlsx
+  source: recheck-2
+- id: recheck2-inv-col
+  label: clean
+  edit: 'A column is inserted before Amount: E1 is now ''Note'', and the Amount formulas move to F2:F5 with their
+    texts unchanged (=B2*C2*(1+D2) and so on).'
+  why: 'Correct: the cells the formulas read, in columns B:D, did not move, so unchanged texts are right, just as
+    when Excel inserts a column.'
+  after: recheck2/atk2-inv_col.xlsx
+  before: recheck2/atk2-inv_b.xlsx
+  source: recheck-2
+- id: recheck2-inv-spacer
+  label: clean
+  edit: The original has a blank row 6 and 'Total' =SUM(E2:E5) in row 7. The edit inserts a row at 6 holding '(spacer)'
+    in A6, which moves the Total to row 8 with =SUM(E2:E5) unchanged.
+  why: 'Correct: the service rows 2-5 did not move, so the moved total''s unchanged range still covers all of them.'
+  after: recheck2/atk2-inv_spacer.xlsx
+  before: recheck2/atk2-inv_b2.xlsx
+  source: recheck-2
+- id: recheck2-inv-cut
+  label: clean
+  edit: The Total formula =SUM(E2:E5) is moved from E7 to F7 with its text unchanged; 'Total' stays in A7.
+  why: Correct for a cut and paste, which keeps references in Excel, so the total still sums E2:E5.
+  after: recheck2/atk2-inv_cut.xlsx
+  before: recheck2/atk2-inv_b2.xlsx
+  source: recheck-2
+- id: recheck2-r-replaced
+  label: error
+  edit: '''Data'' (2024-01 to 2024-12 in A2:B13, with =SUM, =AVERAGE and =MAX of B2:B13 in D1:D3) is deleted. A
+    new sheet ''Figures'' holds only those three formula texts in A1:A3, which read its own empty column B, and
+    Report!B1 is changed from =Data!D1 to =Figures!A1.'
+  why: 'Wrong: the twelve months are gone and the Report total now sums empty cells. Matching formula texts do not
+    make ''Figures'' the old sheet renamed (SKILL.md compares formulas only for a sheet that held no constants),
+    so the require pattern makes the audit report sheet-removed at Data.'
+  after: recheck2/atk2-r_replaced.xlsx
+  before: recheck2/atk2-r_b.xlsx
+  require: sheet-removed at Data
+  source: recheck-2
+- id: recheck2-scatter-renamed
+  label: clean
+  edit: Chart sheet 'Chart1', holding an untitled scatter chart (y values Data!B2:B8, x values Data!A2:A8), is renamed
+    'Growth'; the chart is unchanged.
+  why: 'Correct: a pure rename. With no title, only the series identify the chart, and for a scatter chart those
+    are its y values (Data!B2:B8), which must be read to see that the chart is the same; shared x values alone would
+    not pair it (recheck3-sc-other).'
+  after: recheck2/i8-scatter_ren.xlsx
+  before: recheck2/i8-scatter_b.xlsx
+  libreoffice_sample: true
+  source: recheck-2
+- id: recheck2-pie-renamed
+  label: clean
+  edit: Chart sheet 'Chart1', holding an untitled pie chart over Data!B2:B8, is renamed 'Growth'; the chart is unchanged.
+  why: 'Correct: a pure rename, identified by the same series.'
+  after: recheck2/i8-pie_ren.xlsx
+  before: recheck2/i8-pie_b.xlsx
+  source: recheck-2
+- id: recheck2-i8q-a
+  label: clean
+  edit: Chart sheet 'Chart1' (an untitled bar chart over 'Sales data'!B2:B7, categories A2:A7) is renamed 'Revenue';
+    the chart is unchanged.
+  why: 'Correct: a pure rename. The data sheet''s name contains a space, so the series references are quoted and
+    must still match.'
+  after: recheck2/i8q-a.xlsx
+  before: recheck2/i8q-b.xlsx
+  source: recheck-2
+- id: recheck2-i8q-a2
+  label: clean
+  edit: The same rename, and the chart is also changed from a bar chart to a line chart over the same cells.
+  why: 'Correct: a new chart type over the same series is still the old chart, renamed.'
+  after: recheck2/i8q-a2.xlsx
+  before: recheck2/i8q-b.xlsx
+  source: recheck-2
+- id: recheck2-i8q-a3
+  label: clean
+  edit: The data sheet 'Sales data' is renamed 'Sales 2024' and the chart sheet 'Chart1' is renamed 'Revenue', with
+    the series rewritten to 'Sales 2024'!B2:B7 and A2:A7.
+  why: 'Correct: both sheets were renamed and the chart still plots the same data, which the audit must see through
+    the data sheet''s rename.'
+  after: recheck2/i8q-a3.xlsx
+  before: recheck2/i8q-b.xlsx
+  source: recheck-2
+- id: recheck2-day-insert
+  label: clean
+  edit: Ledger has nine rows dated 2024-03-01 to 2024-03-05 in A2:A10, two per day except 2024-03-05 (Coffee only),
+    with D2 =C2 and each later balance =D(row above)+C(own row). A Refund of 25 dated 2024-03-02 is inserted after
+    Fuel, in row 6, and the balance is refilled to row 11.
+  why: 'Correct: the refilled balance reads the row above as intended. The dates in column A repeat, so the audit
+    tells the rows apart by their constants (date, description and amount, unique in both files); D6 and D7 involve
+    the new Refund row, which SKILL.md leaves without a finding, and every other balance reads its old neighbour.'
+  after: recheck2/i3m-day_ins.xlsx
+  before: recheck2/i3m-day_before.xlsx
+  libreoffice_sample: true
+  source: recheck-2
+- id: recheck2-day-delete
+  label: clean
+  edit: The same ledger with Fuel (row 5) deleted and the balance refilled to row 9.
+  why: 'Correct: after the refill, D5 (Invoice 18) reads Invoice 17''s row, which was next to it before with only
+    the deleted Fuel row in between, and every other balance reads its old neighbour, which SKILL.md leaves without
+    a finding. The repeated dates do not hide where rows went, because each row''s date, description and amount
+    are unique in both files.'
+  after: recheck2/i3m-day_del.xlsx
+  before: recheck2/i3m-day_before.xlsx
+  source: recheck-2
+- id: recheck2-whole-column-insert
+  label: clean
+  edit: S has regions and amounts in A2:B6, with =SUM(B:B) in E2 and =SUMIF(A:A,"N",B:B) in E3. A whole row (W,
+    5) is inserted at row 2, which moves the formulas to E3:E4 with their texts unchanged.
+  why: 'Correct: whole-column references cannot go stale when rows move, and both totals still cover every row,
+    so a formula-moved-as-text error would be false.'
+  after: recheck2/wc-a.xlsx
+  before: recheck2/wc-b.xlsx
+  libreoffice_sample: true
+  source: recheck-2
+- id: recheck2-avg-stale-renamed
+  label: error
+  edit: 'Original ''Sales'': 12 months, Total =SUM(B2:B13) in B14, Average =AVERAGE(B2:B13) in B15. The edit renames
+    the sheet ''Sales 2024'', adds 2025-01 (300) and 2025-02 (310) in rows 14-15, extends the Total (B16) to =SUM(B2:B15)
+    and leaves the Average (B17) at =AVERAGE(B2:B13).'
+  why: 'Wrong: in the original the Average covered the Total''s rows, and it was not extended with the Total, which
+    is an error with --before. The sheet rename must not hide this, so the audit has to pair ''Sales'' with ''Sales
+    2024''.'
+  after: recheck2/v-avg_after_ren.xlsx
+  before: recheck2/v-avg_before.xlsx
+  source: recheck-2
+- id: recheck2-lo-titled_bar-in
+  label: clean
+  edit: In a file written by openpyxl, chart sheet 'Revenue chart' (title 'Revenue', series Data!B2:B7) is renamed
+    'Renamed chart'; the chart is unchanged.
+  why: 'Correct: a pure rename with the same title and series. This renamed file is the one LibreOffice re-saved
+    for the re-saved probe.'
+  after: recheck2/lo-in-titled_bar_ren.xlsx
+  before: recheck2/lo-in-titled_bar.xlsx
+  source: recheck-2
+- id: recheck2-lo-untitled_bar-in
+  label: clean
+  edit: In a file written by openpyxl, the untitled bar chart sheet 'Chart1' (series Data!B2:B7) is renamed 'Renamed
+    chart'; the chart is unchanged.
+  why: 'Correct: a pure rename, identified by the same series.'
+  after: recheck2/lo-in-untitled_bar_ren.xlsx
+  before: recheck2/lo-in-untitled_bar.xlsx
+  source: recheck-2
+- id: recheck2-lo-titled_bar-resaved
+  label: clean
+  edit: 'The renamed file, re-saved by LibreOffice 24.2: ''Renamed chart'' is now an ordinary worksheet holding
+    the same chart (title ''Revenue'', series Data!B2:B7) instead of a chart sheet.'
+  why: 'Known limit: only a rename was made, so clean is right. SKILL.md says a chart sheet in a file re-saved by
+    LibreOffice 24.2 becomes a worksheet and is reported as removed; today error.'
+  after: recheck2/lo-out-titled_bar_ren.xlsx
+  before: recheck2/lo-in-titled_bar.xlsx
+  known_limit: true
+  now: error
+  source: recheck-2
+- id: recheck2-lo-untitled_bar-resaved
+  label: clean
+  edit: 'The renamed untitled-chart file, re-saved by LibreOffice 24.2: ''Renamed chart'' is now an ordinary worksheet
+    holding the same untitled bar chart (series Data!B2:B7) instead of a chart sheet.'
+  why: 'Known limit: only a rename was made, so clean is right. SKILL.md says a chart sheet in a file re-saved by
+    LibreOffice 24.2 becomes a worksheet and is reported as removed; today error.'
+  after: recheck2/lo-out-untitled_bar_ren.xlsx
+  before: recheck2/lo-in-untitled_bar.xlsx
+  known_limit: true
+  now: error
+  source: recheck-2
+- id: fix3-cs-renamed
+  label: clean
+  edit: The chart sheet 'Revenue and cost', an untitled bar chart over Data!B2:B7 and C2:C7, is renamed 'Revenue
+    & cost 2024'. The chart itself does not change.
+  why: Renaming a chart sheet is a correct edit. The new sheet's series read the same columns, so the audit must
+    pair the two sheets and report nothing.
+  after: fix3/cs2_ren.xlsx
+  before: fix3/cs2_b.xlsx
+  source: fix-3
+- id: fix3-cs-series-dropped
+  label: any
+  edit: The chart sheet 'Revenue and cost' (series over Data!B2:B7 and C2:C7) is renamed 'Cost', and its series
+    over column B is removed, so only C2:C7 is left.
+  why: 'For information only: whether column B was meant to go depends on the task. SKILL.md says a new chart sheet
+    with a series over at least one of the old chart''s columns counts as that sheet renamed, so the audit passes
+    it clean. The probe records this trade-off and checks only that the audit does not crash.'
+  after: fix3/cs2_drop.xlsx
+  before: fix3/cs2_b.xlsx
+  known_limit: true
+  now: clean
+  source: fix-3
+- id: fix3-cs-replaced
+  label: error
+  edit: The chart sheet 'Revenue and cost' (series over Data!B2:B7 and C2:C7) is deleted. A new chart sheet 'Profit'
+    shows an untitled chart over D2:D7 only.
+  why: Neither chart has a title, and the new chart's only series reads D2:D7, a column the old chart did not read,
+    so the old chart is gone, not renamed. The audit must report the removed chart sheet as an error.
+  after: fix3/cs2_other.xlsx
+  before: fix3/cs2_b.xlsx
+  require: the two share no title and no column or name that a series plots as values
+  forbid: its title and the columns its series read all differ
+  source: fix-3
+- id: fix3-subtotal-total-avg-stale
+  label: error
+  edit: In Sales, two months (2025-01 and 2025-02) are added in rows 14-15. The Total, =SUBTOTAL(9,B2:B13) in row
+    14, becomes =SUM(B2:B15) in row 16, but the Average in row 17 stays =AVERAGE(B2:B13).
+  why: In the original, the Average covered the same rows as the Total. Now it leaves out the two new months, so
+    it is an error. The require pattern checks that the message identifies the original total by its row (row 14,
+    =SUBTOTAL), even though its function changed from SUBTOTAL to SUM.
+  after: fix3/sub_stale.xlsx
+  before: fix3/sub_b.xlsx
+  require: 'the total was in row 14: =SUBTOTAL'
+  source: fix-3
+- id: fix3-subtotal-total-avg-ok
+  label: clean
+  edit: 'The same edit as the stale variant, except that the Average in row 17 is also extended: =AVERAGE(B2:B15),
+    next to the Total =SUM(B2:B15).'
+  why: Both aggregates cover all 14 months. The edit is correct, so the audit must stay clean.
+  after: fix3/sub_ok.xlsx
+  before: fix3/sub_b.xlsx
+  source: fix-3
+- id: fix3-year-split
+  label: warning|clean
+  edit: Two 2025 months are added in rows 14-15. The original 'Total 2024' =SUM(B2:B13) moves to row 16 with its
+    range unchanged, and 'Total 2025' =SUM(B14:B15) is added in row 17.
+  why: A correct year split (in the original, row 14 was already labelled 'Total 2024'), so no error. It has the
+    cells and rows of a total left at its old range followed by a sum of only the new rows (recheck3-yr-stale-new),
+    so SKILL.md allows a warning, which the audit gives today.
+  after: fix3/yr_split.xlsx
+  before: fix3/yr_b.xlsx
+  source: fix-3
+- id: fix3-year-split-nobefore
+  label: clean
+  edit: 'The same split workbook, audited without the original: 14 months in rows 2-15, ''Total 2024'' =SUM(B2:B13)
+    in row 16 and ''Total 2025'' =SUM(B14:B15) in row 17.'
+  why: Without the original, nothing shows that row 16 was once the total of every row. The two sums cover rows
+    2-13 and 14-15 with no gap or overlap, as a correct split does, so the audit must stay clean.
+  after: fix3/yr_split.xlsx
+  source: fix-3
+- id: fix3-year-extended
+  label: clean
+  edit: Two 2025 months are added in rows 14-15, and the original 'Total 2024' =SUM(B2:B13) is replaced by 'Total'
+    =SUM(B2:B15) in row 16.
+  why: The total covers every month. The edit is correct, so the audit must stay clean.
+  after: fix3/yr_ext.xlsx
+  before: fix3/yr_b.xlsx
+  source: fix-3
+- id: fix3-mom-sorted
+  label: warning|clean
+  edit: 'The Monthly sheet holds Jan to Jul without Apr, with a Change column running from C3 =B3-B2 to C7 =B7-B6.
+    It is sorted by revenue: Feb and Mar swap rows, Jun and Jul swap rows, and the Change formulas stay where they
+    were.'
+  why: If the sort was the task, each Change formula reading the row above is what refilling the column gives, so
+    the edit can be correct. SKILL.md says such a column after a sort gets at most a warning. No error is allowed,
+    and a warning is tolerated.
+  after: fix3/mom_sorted.xlsx
+  before: fix3/mom_b.xlsx
+  source: fix-3
+- id: fix3-mom-insert
+  label: clean
+  edit: The missing month Apr (130) is inserted in row 5 of Monthly, and the Change column is filled down to C8
+    =B8-B7.
+  why: Every Change formula reads the row above it in the new order, which is the intended refill after an insert.
+    The audit must stay clean.
+  after: fix3/mom_ins.xlsx
+  before: fix3/mom_b.xlsx
+  source: fix-3
+- id: fix3-next-insert
+  label: clean
+  edit: 'Here the Change column reads the row below: C2 =B3-B2 down to C6 =B7-B6, with the last row empty. Apr is
+    inserted in row 5 and C7 =B8-B7 is added.'
+  why: Refilling after an insert is correct whether the formula reads the row above or the row below. The audit
+    must stay clean in both directions.
+  after: fix3/next_ins.xlsx
+  before: fix3/next_b.xlsx
+  source: fix-3
+- id: fix3-mom-moved
+  label: error
+  edit: Apr is inserted in row 5 by moving the rows below it down without updating their formulas. C5 is empty,
+    C6 holds =B5-B4 (formerly in C5), C7 holds =B6-B5 and C8 holds =B7-B6.
+  why: The formulas moved with their rows but still read the old addresses, so from May on each Change shows the
+    previous month's change (C6, in the May row, computes Apr minus Mar) and Apr has none. The label asks for an
+    error; today the audit reports it as formula-moved-as-text at Monthly!C6.
+  after: fix3/mom_moved.xlsx
+  before: fix3/mom_b.xlsx
+  source: fix-3
+- id: fix3-wholecol-col-stale
+  label: error
+  edit: On sheet S, a 'Note' column is inserted at B, which moves Amount to column C. The formulas move from E2/E3
+    to F2/F3 but keep their text, =SUM(B:B) and =SUMIF(A:A,"N",B:B), so they now read the empty Note column.
+  why: Both totals now come out 0, so this is an error. The probe checks that a whole-column reference still goes
+    stale when columns move, even though it cannot when only rows move.
+  after: fix3/wc_col_stale.xlsx
+  before: fix3/wc_b.xlsx
+  source: fix-3
+- id: fix3-wholecol-col-ok
+  label: clean
+  edit: The same column insert, with F2 and F3 updated to =SUM(C:C) and =SUMIF(A:A,"N",C:C).
+  why: The formulas follow Amount to column C. The edit is correct, so the audit must stay clean.
+  after: fix3/wc_col_ok.xlsx
+  before: fix3/wc_b.xlsx
+  source: fix-3
+- id: fix3-chart-plus-total
+  label: clean
+  edit: 'A single workbook with no original: six months in B2:B7, ''Total'' =B2+B3+B4+B5+B6+B7 in row 8, and a bar
+    chart over B2:B7.'
+  why: Row 8 adds every cell above it, so it is the block's total, and a chart that stops above the total is right.
+    The audit must stay clean.
+  after: fix3/ch_plus_spacer.xlsx
+  source: fix-3
+- id: fix3-chart-partial-plus
+  label: warning
+  edit: The same sheet, except that the 'Total' in B8 is =B6+B7, which adds only the last two months. The chart
+    still covers B2:B7.
+  why: 'A sum of two cells is not the block''s total, so row 8 may be data that the chart leaves out. The audit
+    cannot tell which, so the intended outcome is a warning (range-stops-before-data-ends): neither clean nor an
+    error.'
+  after: fix3/ch_partial_plus.xlsx
+  source: fix-3
+- id: recheck3-vat-overwrite
+  label: error
+  edit: In Sales, the new month 2025-01 (300) is written over the Total row, row 14. The Total is added again in
+    row 16 as =SUM(B2:B14), and the VAT line in B15 stays =B14*0.2.
+  why: VAT is now 20% of one month instead of 20% of the total. VAT is a one-off formula, not one filled down a
+    column, so SKILL.md's leniency for refilled balances does not apply. The require pattern checks for the error
+    reference-meaning-changed at B15.
+  after: recheck3/mine-vat_overwrite.xlsx
+  before: recheck3/mine-vat_b.xlsx
+  require: \[error\] reference-meaning-changed at Sales!B15
+  source: recheck-3
+- id: recheck3-pl-overwrite
+  label: error
+  edit: Sheet PL holds Revenue 1000, Cost 600 and Profit =B2-B3. 'Marketing' 50 is written over the Cost row (row
+    3), Cost 600 moves to row 5 below Profit, and Profit stays =B2-B3.
+  why: Profit now subtracts Marketing instead of Cost and shows 950. A one-off formula whose row now holds other
+    content is an error, and the require pattern checks for reference-meaning-changed at B4.
+  after: recheck3/mine-pl_overwrite.xlsx
+  before: recheck3/mine-pl_b.xlsx
+  require: \[error\] reference-meaning-changed at PL!B4
+  source: recheck-3
+- id: recheck3-wc-diag-stale
+  label: error
+  edit: On sheet S, a title row ('Sales by region') is inserted at row 1 and a 'Code' column at B, both without
+    updating formulas. =SUM(B:B) and =SUMIF(A:A,"N",B:B) move from E2/E3 to F3/F4 and now read the empty Code column,
+    while Amount sits in column C.
+  why: The totals now read the wrong column, so this is an error. The probe checks that a column shift still makes
+    whole-column references stale when rows moved as well. The require pattern asks for formula-moved-as-text.
+  after: recheck3/mine-wc_diag_stale.xlsx
+  before: recheck3/mine-wc_b.xlsx
+  require: formula-moved-as-text
+  source: recheck-3
+- id: recheck3-wc-diag-ok
+  label: clean
+  edit: The same row and column insert, with F3 and F4 updated to =SUM(C:C) and =SUMIF(A:A,"N",C:C).
+  why: The formulas follow Amount to column C. The edit is correct, so the audit must stay clean.
+  after: recheck3/mine-wc_diag_ok.xlsx
+  before: recheck3/mine-wc_b.xlsx
+  source: recheck-3
+- id: recheck3-wc-mix-stale
+  label: error
+  edit: On sheet S, E2 holds =SUM(B:B)/B2. A row 'W' (5) is inserted at row 2 without updating formulas, so =SUM(B:B)/B2
+    moves to E3 and now divides by the new row's 5 instead of N's 10.
+  why: The whole-column part cannot go stale when rows move, but the B2 part does, so the formula is still an error
+    (formula-moved-as-text). E4 =SUMIF(A:A,"N",B:B) reads only whole columns and is rightly not reported.
+  after: recheck3/mine-wc_mix_stale.xlsx
+  before: recheck3/mine-wc_mix_b.xlsx
+  source: recheck-3
+- id: recheck3-sp-stale
+  label: error
+  edit: In Sales, two months are added in rows 14-15, followed by a blank row 16. The Total, =SUBTOTAL(9,B2:B13)
+    in row 14, becomes =SUM(B2:B15) in row 17, while the Average (row 18) and Max (row 19) stay at B2:B13.
+  why: In the original, Average and Max covered the same rows as the Total. Now they miss the new months, so both
+    are errors. The require and forbid patterns check that the message names row 14 (=SUBTOTAL) as the original
+    total, not row 15, which held the Average.
+  after: recheck3/mine-sp_stale.xlsx
+  before: recheck3/mine-sp_b.xlsx
+  require: 'the total was in row 14: =SUBTOTAL'
+  forbid: the total was in row 15
+  source: recheck-3
+- id: recheck3-nt-stale
+  label: error
+  edit: The original has no total, only Max (row 14) and Average (row 15) over B2:B13. After two months are added,
+    a new Total =SUM(B2:B15) appears in row 16, Max is extended to =MAX(B2:B15) in row 17, and Average stays =AVERAGE(B2:B13)
+    in row 18.
+  why: The Average misses the new months. In the original it covered the same rows as the Max above it, with a different
+    formula, and the new Total starts at the same row, so SKILL.md makes it an error. The original had no total,
+    so the forbid pattern checks that the message neither names an original total row nor says the total 'was extended'.
+  after: recheck3/mine-nt_stale.xlsx
+  before: recheck3/mine-nt_b.xlsx
+  forbid: the total was in row 14|was extended
+  source: recheck-3
+- id: recheck3-dup-kept
+  label: warning|clean
+  edit: The original has 'Total' and 'Total 2024', both =SUM(B2:B13). Two 2025 months are added; Total becomes =SUM(B2:B15)
+    in row 16, and 'Total 2024' keeps =SUM(B2:B13) in row 17.
+  why: '''Total 2024'' should still cover only the 2024 months. The edit is correct, so no error is allowed; a warning
+    asking the user to confirm the shorter range is tolerated.'
+  after: recheck3/mine-dup_kept.xlsx
+  before: recheck3/mine-dup_b.xlsx
+  source: recheck-3
+- id: recheck3-yt-split-total
+  label: clean
+  edit: In the original, 'Total' =SUM(B2:B13) is in row 14. Two 2025 months are added in rows 14-15. Row 16 holds
+    '2024' =SUM(B2:B13), row 17 '2025' =SUM(B14:B15) and row 18 'Total' =SUM(B2:B15).
+  why: A total of all 14 months sits in the same block of total rows, so the old-range sum is plainly the 2024 part.
+    SKILL.md says this case is not even a warning, so the audit must stay clean.
+  after: recheck3/mine4b-yt_split_total.xlsx
+  before: recheck3/mine4b-yt_b.xlsx
+  source: recheck-3
+- id: recheck3-yt-total-split
+  label: clean
+  edit: 'The same rows in another order: ''Total'' =SUM(B2:B15) in row 16, then ''2024'' =SUM(B2:B13) in row 17
+    and ''2025'' =SUM(B14:B15) in row 18.'
+  why: As with the total placed last, the block of total rows holds a total of every month. The audit must stay
+    clean whatever the order.
+  after: recheck3/mine4b-yt_total_split.xlsx
+  before: recheck3/mine4b-yt_b.xlsx
+  source: recheck-3
+- id: recheck3-yr-stale-new
+  label: error|warning
+  edit: Two 2025 months are added in rows 14-15. The 'Total' stays =SUM(B2:B13), now in row 16, and a '2025' =SUM(B14:B15)
+    is added in row 17.
+  why: The Total no longer covers every month, so the edit is wrong and needs at least a warning. Its formulas and
+    their rows have the shape of a correct 2024 / 2025 split, so SKILL.md allows a warning rather than an error.
+  after: recheck3/mine-yr_stale_new.xlsx
+  before: recheck3/mine-yr_b.xlsx
+  source: recheck-3
+- id: recheck3-yrs-stale-new
+  label: error|warning
+  edit: In the original, a blank row 14 separates the months from 'Total' =SUM(B2:B13) in row 15. Two 2025 months
+    (400 and 410) are added in rows 14-15. A blank row 16 still separates them from the totals, 'Total' stays =SUM(B2:B13),
+    now in row 17, and '2025' =SUM(B14:B15) is added in row 18.
+  why: A blank spacer row must not hide that the Total was left at its old range, so at least a warning is required.
+  after: recheck3/mine-yrs_stale_new.xlsx
+  before: recheck3/mine-yrs_b.xlsx
+  source: recheck-3
+- id: recheck3-hh-new
+  label: clean
+  edit: The original has half-year parts 'H1' =SUM(B2:B7) and 'H2' =SUM(B8:B13) and no total. Two 2025 months are
+    added, H1 and H2 are kept, and 'Jan-Feb 2025' =SUM(B14:B15) is added in row 18.
+  why: The parts were never a total of every row, and the new part covers the new rows. The edit is correct, so
+    the audit must stay clean.
+  after: recheck3/mine-hh_new.xlsx
+  before: recheck3/mine-hh_b.xlsx
+  source: recheck-3
+- id: recheck3-year-plus
+  label: clean
+  edit: A single workbook with no original. Sheet Y has the number 2024 as the header in B1, six months in B2:B7,
+    'Total' =B2+B3+B4+B5+B6+B7 in row 8 and a line chart over B2:B7.
+  why: The row-1 header is a label even though it is a number, and row 8 adds every month, so the chart covers all
+    the data. The audit must stay clean.
+  after: recheck3/mine-year_plus.xlsx
+  source: recheck-3
+- id: recheck3-year-sum
+  label: clean
+  edit: The same sheet, with the total written as =SUM(B2:B7).
+  why: This is the plain SUM counterpart of the '+' total. The chart covers every month, so the audit must stay
+    clean.
+  after: recheck3/mine-year_sum.xlsx
+  source: recheck-3
+- id: recheck3-nm-replaced
+  label: error
+  edit: The chart sheet Chart1, an untitled bar chart whose series reads the defined name Revenue (Data!$B$2:$B$8),
+    is deleted. A new chart sheet 'Profit', titled 'Profit', shows D2:D8.
+  why: The old chart is lost. SKILL.md counts a series over a name that stands for a range as that range (B2:B8),
+    so the audit can see that the new chart shares neither its title nor its column and must report an error. The
+    forbid pattern keeps out an old message that claimed both charts had titles.
+  after: recheck3/mine2-nm_replaced.xlsx
+  before: recheck3/mine2-nm_b.xlsx
+  forbid: its title and the columns its series read all differ
+  source: recheck-3
+- id: recheck3-nm-renamed
+  label: clean
+  edit: The same chart sheet, with its series over the name Revenue, is renamed from Chart1 to 'Revenue'.
+  why: A pure rename is correct. The series reads the same name in both files, and a name that stands for a range
+    counts as that range, so the audit pairs the sheets and no finding is right.
+  after: recheck3/mine2-nm_renamed.xlsx
+  before: recheck3/mine2-nm_b.xlsx
+  source: recheck-3
+- id: recheck3-nm2-one-gone
+  label: error
+  edit: 'There are two untitled chart sheets: Chart1 over the name Revenue (B2:B8) and Chart2 over C2:C8. Chart2
+    is renamed ''Costs'' without other changes, and Chart1 is replaced by ''Profit'' over D2:D8.'
+  why: Chart1 is lost, and its series reads a name that stands for a range, so the audit must report an error. The
+    forbid pattern checks that Chart2, which was only renamed, is not reported as removed, and keeps out an old
+    message that claimed both charts had titles.
+  after: recheck3/mine2-nm2_one_gone.xlsx
+  before: recheck3/mine2-nm2_b.xlsx
+  forbid: sheet-removed at Chart2|its title and the columns its series read all differ
+  source: recheck-3
+- id: recheck3-sc-other
+  label: error
+  edit: The chart sheet Chart1, an untitled scatter chart with y values Data!B2:B8 against x values A2:A8, is replaced
+    by a chart sheet 'Cost' with y values C2:C8 against the same x values.
+  why: The new chart shows other values, so the old chart is gone. A shared x column alone must not make it a rename,
+    so the audit must report an error.
+  after: recheck3/mine4b-sc_other.xlsx
+  before: recheck3/mine4b-sc_b.xlsx
+  require: the two share no title and no column or name that a series plots as values
+  forbid: its title and the columns its series read all differ
+  source: recheck-3
+- id: recheck3-sc-ren
+  label: clean
+  edit: The same scatter chart sheet is renamed from Chart1 to 'Revenue' and otherwise left as it was.
+  why: Renaming the sheet is correct. Pairing reads the scatter chart's y values, so the audit must stay clean.
+  after: recheck3/mine4b-sc_ren.xlsx
+  before: recheck3/mine4b-sc_b.xlsx
+  source: recheck-3
+- id: recheck3-led-cleared
+  label: error
+  edit: 'In the Ledger, the balance starts at D2 =C2, and each later row adds its amount to the balance above it
+    (D3 =D2+C3 down to D11 =D10+C11). All of row 7 is cleared: its date, description, amount (63) and balance formula
+    in A7:D7. D8 =D7+C8 now reads the empty D7.'
+  why: 'The balance restarts from zero at row 8, so every later balance is wrong: an error. Row 7 is simply empty,
+    so the forbid pattern checks that the message does not claim rows were reordered or that row 7 ''holds other
+    content''.'
+  after: recheck3/mine-led_cleared.xlsx
+  before: recheck3/mine-led_b.xlsx
+  forbid: reordered|holds other content
+  source: recheck-3
+- id: recheck3-led-cleared-abc
+  label: warning|clean
+  edit: Only A7:C7 are cleared. The balance D7 =D6+C7 is kept and now carries D6 forward, and D8 onward follow from
+    it.
+  why: The balance chain is intact (D7 still carries D6 forward), so no error. Row 7 has lost its date, description
+    and amount while its balance formula stays, so a warning is allowed; the forbid pattern checks that a warning
+    does not claim reordering or other content.
+  after: recheck3/mine-led_cleared_abc.xlsx
+  before: recheck3/mine-led_b.xlsx
+  forbid: reordered|holds other content
+  source: recheck-3
+- id: recheck3-led-ins-ok
+  label: clean
+  edit: A 'Refund' (2024-03-05, 25) is inserted at row 7 of the Ledger, and the balance column is filled down to
+    D12 =D11+C12.
+  why: Every row has a balance formula that reads the row above, which is the correct refill after an insert. The
+    audit must stay clean.
+  after: recheck3/mine-led_ins_ok.xlsx
+  before: recheck3/mine-led_b.xlsx
+  source: recheck-3
+- id: recheck3-mom-overwrite
+  label: warning|clean
+  edit: 'On sheet M, the June row is corrected in place: A7 ''2024-06'' becomes ''2024-06b'' and B7 changes from
+    125 to 999. The Change formulas C7 =B7-B6 and C8 =B8-B7 do not change.'
+  why: The Change formulas filled down the column still read their neighbours, as intended, so no error is allowed.
+    A warning about the changed label is tolerated.
+  after: recheck3/mine-mom_overwrite.xlsx
+  before: recheck3/mine-mom_b.xlsx
+  source: recheck-3
+- id: recheck3-blank-sorted
+  label: error
+  edit: On sheet Prices, column A (Category) is blank in the product rows. The rows B2:D6 are sorted by price, highest
+    first, while 'Apple price' B9 =C2 and 'Kiwi price' B10 =C4 stay as they were, so they now show Kiwi's 3.4 and
+    Apple's 2.1.
+  why: Both summaries now show the wrong product's price, so an error would be right. SKILL.md says that single-cell
+    references on the formula's own sheet without $ are not tracked when the label in column A is blank or repeats,
+    so today the audit passes it clean.
+  after: recheck3/mine4b-blank_sorted.xlsx
+  before: recheck3/mine4b-blank_b.xlsx
+  known_limit: true
+  now: clean
+  source: recheck-3
+- id: recheck3-led-ins-nobal
+  label: error|warning
+  edit: A 'Refund' (2024-03-05, 25) is inserted at row 7 of the Ledger, but D7 is left empty, so D8 =D7+C8 now reads
+    an empty cell.
+  why: The balance restarts at row 8, so at least a warning would be right. SKILL.md says a row inserted without
+    its own balance formula gets no finding, so today the audit passes it clean.
+  after: recheck3/mine-led_ins_nobal.xlsx
+  before: recheck3/mine-led_b.xlsx
+  known_limit: true
+  now: clean
+  source: recheck-3
+- id: recheck3-three-profit
+  label: any
+  edit: The chart sheet 'Overview', titled 'Revenue, cost and profit' and showing Data!B2:B8, C2:C8 and D2:D8, is
+    replaced by a chart sheet 'Profit', titled 'Profit', that shows D2:D8 only.
+  why: For information only. The new chart shares column D with the old one, and SKILL.md says that counts as a
+    rename even when only one of the old chart's columns remains, so the audit passes it clean. Whether the revenue
+    and cost series were meant to go depends on the task.
+  after: recheck3/mine2-three_profit.xlsx
+  before: recheck3/mine2-three_b.xlsx
+  known_limit: true
+  now: clean
+  source: recheck-3
+- id: recheck3-ds-template-all
+  label: error
+  edit: Sheet Data is renamed 'Template' and every constant on it is cleared, header row included. The Share formulas
+    C2:C13 =B2/B$14 and the Total B14 =SUM(B2:B13) stay, and Report!B1 now reads ='Template'!B14, which sums empty
+    cells.
+  why: 'The twelve monthly figures are lost and the Report total drops to 0, so an error is right, and the audit
+    gives one. The limit is the wording: SKILL.md says formulas are compared only for a sheet that held no constants,
+    so the sheet is reported as removed instead of as renamed with its values cleared. The require pattern names
+    the wording a fix would give (''renamed''); the test pins that today''s findings lack it.'
+  after: recheck3/mine2-ds_template_all.xlsx
+  before: recheck3/mine2-ds_b.xlsx
+  known_limit: true
+  now: require-unmet
+  require: renamed
+  source: recheck-3
+- id: recheck3-ds-template-hdr
+  label: error
+  edit: The same edit, except that the header row Month / Revenue / Share in A1:C1 is kept and only the twelve months
+    and their figures are cleared.
+  why: As in the variant with every constant cleared, the data is lost, so an error is right. Keeping the header
+    does not get past the wording limit. 'Template' holds only 3 of Data's 28 constants (11%), less than the half
+    that SKILL.md requires for a rename, so the sheet is reported as removed rather than as renamed with its values
+    cleared. The require pattern names the wording a fix would give ('renamed'); the test pins that today's findings
+    lack it.
+  after: recheck3/mine2-ds_template_hdr.xlsx
+  before: recheck3/mine2-ds_b.xlsx
+  known_limit: true
+  now: require-unmet
+  require: renamed
+  source: recheck-3
+- id: recheck3-year-sumsum
+  label: clean
+  edit: A single workbook with no original. Sheet Y has 2024 as the header in B1, six months in B2:B7, 'Total' =SUM(B2:B4)+SUM(B5:B7)
+    in row 8 and a line chart over B2:B7.
+  why: 'The two sums together add every month, so the total and the chart are right, and clean would be correct.
+    SKILL.md lists this total as a known misreading: the audit reads B2:B4 as a range that stops above more data
+    and reports an error.'
+  after: recheck3/mine-year_sumsum.xlsx
+  known_limit: true
+  now: error
+  source: recheck-3
+- id: fix4-dyn-renamed
+  label: clean
+  edit: The chart sheet Chart1, an untitled bar chart whose series reads the name DynRev (an OFFSET over column
+    B of Data), is renamed 'Revenue' and otherwise left as it was.
+  why: A rename is correct. A name that stands for no plain range pairs only with the same name, and the new chart
+    also reads DynRev, so the audit must stay clean.
+  after: fix4/dyn_renamed.xlsx
+  before: fix4/dyn_b.xlsx
+  source: fix-4
+- id: fix4-dyn-replaced
+  label: error|warning
+  edit: Chart1 (untitled, with its series over DynRev) is deleted, and a chart sheet 'Profit', titled 'Profit',
+    over D2:D8 is added.
+  why: The old chart is lost, so at least a warning is required. The old chart has no title and its series reads
+    no cell range, so nothing tells a rename from a replacement, and SKILL.md makes this a warning. The require
+    pattern checks that the finding is a sheet-removed finding at Chart1.
+  after: fix4/dyn_replaced.xlsx
+  before: fix4/dyn_b.xlsx
+  require: sheet-removed at Chart1
+  source: fix-4
+- id: fix4-dyn-gone
+  label: error
+  edit: Chart1 (untitled, with its series over DynRev) is deleted, and no chart sheet is added.
+  why: 'There is no new chart sheet that could be Chart1 under a new name, so the chart is plainly gone: an error.'
+  after: fix4/dyn_gone.xlsx
+  before: fix4/dyn_b.xlsx
+  source: fix-4
+- id: fix4-dyn2-one-gone
+  label: error|warning
+  edit: 'There are two untitled chart sheets: Chart1 over DynRev and Chart2 over C2:C8. Chart2 is renamed ''Costs''
+    without other changes, and Chart1 is replaced by ''Profit'' over D2:D8.'
+  why: Chart1 is lost, so at least a warning is required. Chart2 can be identified and must be paired with 'Costs'
+    first; the forbid pattern checks that Chart2 is never reported as removed.
+  after: fix4/dyn2_one_gone.xlsx
+  before: fix4/dyn2_b.xlsx
+  forbid: sheet-removed at Chart2
+  source: fix-4
+- id: fix4-local-name-renamed
+  label: clean
+  edit: Chart1's series reads Rev, a name local to the Data sheet (Data!$B$2:$B$8). The data sheet is renamed 'Sales',
+    so the name becomes Sales!$B$2:$B$8; the chart sheet is renamed 'Revenue' with its series over Sales!Rev. No
+    values change.
+  why: 'Both sheets were only renamed: the data matches and the local name still stands for column B. The audit
+    must pair the sheets and stay clean.'
+  after: fix4/loc_renamed.xlsx
+  before: fix4/loc_b.xlsx
+  source: fix-4
+- id: fix4-local-name-replaced
+  label: error
+  edit: Chart1 (untitled, with its series over the local name Data!Rev, which is B2:B8) is replaced by an untitled
+    chart sheet 'Profit' over D2:D8.
+  why: 'The local name stands for column B, which the new chart does not read, and neither chart has a title, so
+    the chart is gone: an error.'
+  after: fix4/loc_replaced.xlsx
+  before: fix4/loc_b.xlsx
+  forbid: its title and the columns its series read all differ
+  source: fix-4
+- id: fix4-name-to-range
+  label: clean
+  edit: Chart1's series reads the workbook-level name Revenue (Data!$B$2:$B$8). The sheet is renamed 'Revenue chart',
+    and its series now reads 'Data'!$B$2:$B$8 directly.
+  why: The name stands for the same range, so this is the same chart under a new name. The audit must stay clean.
+  after: fix4/wbn_direct.xlsx
+  before: fix4/wbn_b.xlsx
+  source: fix-4
+- id: fix4-change-overwrite
+  label: warning|clean
+  edit: 'In Sales, the Change column is filled down from C3 =B3-B2 to C13 =B13-B12. The June row is corrected in
+    place: A7 ''2024-06'' becomes ''2024-06 (rev.)'' and B7 changes from 125 to 999.'
+  why: After a correction, the filled-down Change formulas still read their neighbours, as intended. No error is
+    allowed, and a warning is tolerated.
+  after: fix4/chg_overwrite.xlsx
+  before: fix4/chg_b.xlsx
+  source: fix-4
+- id: fix4-one-off-overwrite
+  label: error
+  edit: In Sales, the 'Share of last' line B15 =B13/B14 divides December by the Total in row 14. 2025-01 (300) is
+    written over the Total row, the Total is added again in row 16 as =SUM(B2:B14), and B15 is left unchanged.
+  why: 'The share now divides December by January 2025 instead of by the Total. B15 is a one-off formula, not one
+    filled down a column, so it gets no leniency: an error.'
+  after: fix4/one_overwrite.xlsx
+  before: fix4/one_b.xlsx
+  source: fix-4
+- id: fix4-ledger-date-cleared
+  label: warning|clean
+  edit: In the 10-row Ledger, only the date in A7 is cleared. Row 7 keeps its description, amount and balance formula.
+  why: Every balance stays right, so no error is allowed. A warning that row 7 has lost its label is tolerated.
+  after: fix4/led_label_only.xlsx
+  before: fix4/led_b.xlsx
+  source: fix-4
+- id: fix4-ledger-two-cleared
+  label: error
+  edit: Rows 5 and 9 of the Ledger are cleared across A:D, so D6 =D5+C6 and D10 =D9+C10 read empty balances.
+  why: 'The running balance restarts at row 6 and again at row 10, so every balance from row 6 down is wrong: an
+    error.'
+  after: fix4/led_two_cleared.xlsx
+  before: fix4/led_b.xlsx
+  source: fix-4
+- id: fix4-year-split-grand
+  label: clean
+  edit: Two 2025 months are added. The original 'Total' =SUM(B2:B13) is kept in row 16, and '2025' =SUM(B14:B15)
+    and 'Grand total' =SUM(B2:B15) are added in rows 17 and 18.
+  why: The grand total covers every month and sits in the same block of totals, so the kept Total is the 2024 part,
+    and SKILL.md says this case is not a warning.
+  after: fix4/yr_split_grand.xlsx
+  before: fix4/yr_b.xlsx
+  source: fix-4
+- id: fix4-year-split-short-total
+  label: error|warning
+  edit: Two 2025 months are added, with '2024' =SUM(B2:B13) and '2025' =SUM(B14:B15) in rows 16-17. But the 'Total'
+    in row 18 is =SUM(B3:B15), which leaves out January 2024 in B2.
+  why: 'No total covers every month: the ''Total'' in B18 leaves out B2, which the 2024 part includes, so it must
+    be reported (the require pattern checks B18). The warning on the 2024 sum in B16 may stay.'
+  after: fix4/yr_split_short_total.xlsx
+  before: fix4/yr_b.xlsx
+  require: B18
+  source: fix-4
+- id: fix4-year-plus-short
+  label: error|warning
+  edit: A single workbook with no original. Sheet Y has 2024 as the header in B1, six months in B2:B7, 'Total' =B2+B3+B4+B5+B6+B7
+    in row 8 and a line chart over B2:B6 only.
+  why: 'The chart leaves out the last month, so at least a warning is required (as for recheck2-i7-chart-short).
+    The require pattern checks that the message says the data continues to row 7: the numeric header must not turn
+    the ''+'' total in row 8 into data.'
+  after: fix4/year_plus_short.xlsx
+  require: data continues to row 7
+  source: fix-4
+- id: check-quarters-gap-first
+  label: error
+  edit: 'Sales holds 2024-01 to 2024-12 in B2:B13 and quarter sums below them: Q1 =SUM(B3:B4), which leaves out
+    January, and Q2 to Q4 over B5:B13.'
+  why: 'January is in no quarter, so the audit must report an error: the parts start one row below the first data
+    row.'
+  after: check/quarters_gap_first.xlsx
+  source: check
+- id: check-late-total
+  label: error
+  edit: Sales holds 2024-01 to 2024-12 in B2:B13. The Total in B14 changes from =SUM(B2:B13) to =SUM(B3:B13), so
+    it leaves out January.
+  why: The total no longer covers the first month, and in the original the same cell covered it, so the audit must
+    report an error.
+  after: check/late_total.xlsx
+  before: check/late_total_b.xlsx
+  source: check
+- id: check-beside-own-row
+  label: error
+  edit: 'Prices lists five products with unique names in A and prices in B, and a summary beside the table: ''Apple
+    price'' in F2, =$B$2 in G2. The table is sorted by price, highest first, and G2 is left alone, so it now shows
+    Kiwi''s 3.4.'
+  why: 'The summary beside the table now shows the wrong price, so the audit must report an error: its label ''Apple
+    price'' stayed in row 2 while the table''s rows moved.'
+  after: check/beside_own_row.xlsx
+  before: check/beside_own_row_b.xlsx
+  source: check
+- id: check-beside-two
+  label: error
+  edit: 'The same table and sort, with two summary cells beside it: G2 ''Apple price'' =$B$2 and G3 ''Kiwi price''
+    =$B$4. Both are left alone, so both show the wrong price.'
+  why: Both summary cells are wrong, so the audit must report an error, and the require pattern checks that G2,
+    which reads its own row, is reported too, not only G3.
+  after: check/beside_two.xlsx
+  before: check/beside_two_b.xlsx
+  require: Prices!G2
+  source: check
+- id: check-top-row-sorted
+  label: warning|clean
+  edit: Data lists five products with prices; Summary!B1 'Top row' =Data!A2. The table is sorted by price, highest
+    first, and B1 is left alone, so it now shows Kiwi instead of Apple.
+  why: 'If the sort was the task, B1 now shows the most expensive product as intended, so an error is not established:
+    its label ''Top row'' names a position and it reads the label in column A itself. The rows were reordered, so
+    the audit asks for a check (a warning) instead of reporting an error.'
+  after: check/top_row_sorted.xlsx
+  before: check/top_row_b.xlsx
+  source: check
+- id: check-charts-two-new
+  label: error
+  edit: 'The chart sheet ''Revenue chart'' (title ''Revenue'', a bar chart over Data!B2:B7) is deleted, and two
+    chart sheets are added: ''Cost chart'' over C2:C7 and ''Profit chart'' over D2:D7, with those titles.'
+  why: The revenue chart is lost and neither new chart can be it, so an error is right. The require and forbid patterns
+    check that the message speaks of several new charts, not of 'the two'.
+  after: check/charts_two_new.xlsx
+  before: check/charts_b.xlsx
+  require: 'show other charts: none of them shares a title, or a column or name that a series plots as values'
+  forbid: the two share
+  source: check
+- id: misses-opening-quarters
+  label: clean
+  edit: Cash holds an opening balance in B2 and twelve monthly flows in B3:B14, with Q1 to Q4 =SUM(B3:B5) ... =SUM(B12:B14)
+    and a Closing =B2+SUM(B15:B18) below.
+  why: Equal quarters of the flows are correct; the opening balance above them is not a month they leave out.
+  after: misses/opening_quarters.xlsx
+  source: misses
+- id: misses-halves-of-a-later-year
+  label: clean
+  edit: 2024-01 to 2025-12 in B2:B25, with 'H1 2025' =SUM(B14:B19), 'H2 2025' =SUM(B20:B25) and a Total =SUM(B2:B25)
+    below.
+  why: The halves split their own year exactly; 2024's rows above them are an earlier period, not a gap.
+  after: misses/halves_2025.xlsx
+  source: misses
+- id: misses-halves-of-quarters
+  label: clean
+  edit: Q1 to Q4 over the twelve months in B15:B18, then H1 =SUM(B15:B16), H2 =SUM(B17:B18) and Year =SUM(B15:B18),
+    which add the quarter rows.
+  why: 'Totals of the quarter rows are correct: they start on the quarters, not below missing months.'
+  after: misses/quarters_of_quarters.xlsx
+  source: misses
+- id: misses-quarters-and-halves
+  label: clean
+  edit: Q1 to Q4 in B15:B18 and H1 =SUM(B2:B7), H2 =SUM(B8:B13) below them, with no year total.
+  why: H1 adds exactly Q1 and Q2, and H2 Q3 and Q4, so no range leaves data out (an error before this fix).
+  after: misses/quarters_and_halves.xlsx
+  source: misses
+- id: misses-two-row-header
+  label: clean
+  edit: Row 1 holds the titles and row 2, with column A blank, the years 2024 and 2025; the months are in rows 3-14,
+    with H1, H2 and Year sums below.
+  why: The years in row 2 are a header, not a first month the sums leave out.
+  after: misses/two_row_header.xlsx
+  source: misses
+- id: misses-two-sections
+  label: clean
+  edit: A P&L with an 'Income' label row, three income lines, an 'Expenses' label row and three expense lines, with
+    Total income =SUM(B3:B5) and Total expenses =SUM(B7:B9) below.
+  why: Section totals separated by a label row split their sections exactly (an error before this fix).
+  after: misses/two_sections.xlsx
+  source: misses
+- id: misses-budget-actual-forecast
+  label: clean
+  edit: Budget and Actual blocks with their totals, a Variance =B11-B6, then a Forecast block with H1, H2 and a
+    total of its own rows.
+  why: The Variance row is computed from two totals, so it is not a row the Forecast total leaves out.
+  after: misses/budget_actual_forecast.xlsx
+  source: misses
+- id: misses-calc-block-sorted
+  label: clean
+  edit: A table in A:C, an empty column D, and a block with a repeated 'EUR' in E and Value =B2*C2 ... in F. Whole
+    rows are sorted by price, as Excel does, so each formula follows its row.
+  why: A per-row calculation moves with its row; a repeated constant such as 'EUR' is not a summary's own label.
+  after: misses/calc_block_sorted.xlsx
+  before: misses/calc_block_b.xlsx
+  source: misses
+- id: misses-second-table-untouched
+  label: clean
+  edit: Products in A:C and regions in E:F side by side; only the product table is sorted. Summary!B1 =Data!$F$4
+    reads East's units in the region table, which did not move.
+  why: The reference reads a table that was not sorted, so its meaning did not change (an error before this fix,
+    which judged the row by the product name in column A).
+  after: misses/two_tables_sorted.xlsx
+  before: misses/two_tables_b.xlsx
+  source: misses
+- id: misses-halves-total-below
+  label: warning|clean
+  edit: 2024-01 to 2025-02 in B2:B15, with 'H1 2024' =SUM(B2:B7), 'H2 2024' =SUM(B8:B13) and a Total =SUM(B2:B15)
+    below them.
+  why: Halves of 2024 kept below a total of all the months are correct, as when the total stands above them; the
+    new months after H2 are at most a question (an error before this fix).
+  after: misses/halves_total_below.xlsx
+  source: misses
+- id: misses-quarters-two-gaps
+  label: error
+  edit: 'Q1 =SUM(B2:B4), Q2 =SUM(B6:B7), Q3 =SUM(B8:B10), Q4 =SUM(B12:B13): May and November (rows 5 and 11) are
+    in no quarter.'
+  why: Months missing from the quarters must be one error naming both rows, at the quarter after the first gap.
+  after: misses/quarters_two_gaps.xlsx
+  require: 'Sales!B16: .*rows 5, 11 are in none of them'
+  source: misses
+- id: misses-h1-starts-late
+  label: error
+  edit: 'H1 =SUM(B5:B7) and H2 =SUM(B8:B13) below the twelve months: January to March are in neither half.'
+  why: 'The first half is the short one, so the rows above it are missing months: an error at H1.'
+  after: misses/h1_late.xlsx
+  require: 'Sales!B15: .*rows 2-4 are in none of them'
+  source: misses
+- id: misses-stats-block-total-late
+  label: error
+  edit: A Total/Average/Max/Min block below the months; the Total changes from =SUM(B2:B13) to =SUM(B3:B13).
+  why: The Total no longer covers January, which it covered in the original, so it must be an error even though
+    the Average, Max and Min below it still cover the whole block.
+  after: misses/stats_block_late.xlsx
+  before: misses/stats_block_b.xlsx
+  require: 'Sales!B14: B3:B13 starts at row 3'
+  source: misses
+- id: misses-spacer-column-sorted
+  label: error
+  edit: One table with an empty spacer column D (Category, Product, Price in A:C, Qty in E) is sorted by price;
+    Summary!B1 'Apple qty' =Data!$E$2 is left alone and now reads Kiwi's quantity.
+  why: 'A spacer column inside one table must not hide the sort: the reference is stale.'
+  after: misses/spacer_sorted.xlsx
+  before: misses/spacer_b.xlsx
+  source: misses
+- id: position-highest-price
+  label: warning|clean
+  edit: Data lists five products with prices (Apple 2.1, Banana 1.2, Kiwi 3.4, Mango 2.9, Pear 1.8) and is sorted
+    by price, highest first; the Summary formulas are left alone. Summary!B1 'Highest price' =Data!$B$2 now reads
+    Kiwi's 3.4.
+  why: 'After a sort by price the top row holds the highest price, so the formula reads what its label says: not
+    an error, at most a question.'
+  after: position/highest_price_sorted.xlsx
+  before: position/highest_price_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-top-three-names
+  label: warning|clean
+  edit: Data lists five products with prices (Apple 2.1, Banana 1.2, Kiwi 3.4, Mango 2.9, Pear 1.8) and is sorted
+    by price, highest first; the Summary formulas are left alone. Summary!B1:B3 'Top 1' to 'Top 3' =Data!A2, A3,
+    A4 now read Kiwi, Mango and Apple.
+  why: Top-N names read the first rows on purpose; after the sort they are right.
+  after: position/top3_names_sorted.xlsx
+  before: position/top3_names_b.xlsx
+  source: position
+- id: position-chinese-highest
+  label: warning|clean
+  edit: Data lists five products with prices (Apple 2.1, Banana 1.2, Kiwi 3.4, Mango 2.9, Pear 1.8) and is sorted
+    by price, highest first; the Summary formulas are left alone. Summary!B1 '最高价格' =Data!B2 now reads Kiwi's 3.4.
+  why: A Chinese label that names a position ('highest') is read the same way as an English one.
+  after: position/zh_highest_sorted.xlsx
+  before: position/zh_highest_b.xlsx
+  source: position
+- id: position-item-named
+  label: error
+  edit: Data lists five products with prices (Apple 2.1, Banana 1.2, Kiwi 3.4, Mango 2.9, Pear 1.8) and is sorted
+    by price, highest first; the Summary formulas are left alone. Summary!B1 'Apple price (first in the list)' =Data!$B$2
+    now reads Kiwi's 3.4.
+  why: 'The label names Apple, the row the formula read, so it must follow Apple: an error, even though the label
+    also mentions a position.'
+  after: position/item_named_sorted.xlsx
+  before: position/item_named_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-plain-label
+  label: error
+  edit: Data lists five products with prices (Apple 2.1, Banana 1.2, Kiwi 3.4, Mango 2.9, Pear 1.8) and is sorted
+    by price, highest first; the Summary formulas are left alone. Summary!B1 'Price' =Data!$B$2 now reads Kiwi's
+    3.4.
+  why: Nothing says the formula is meant to read a position, so a reference that now reads another product after
+    a sort stays an error.
+  after: position/plain_price_sorted.xlsx
+  before: position/plain_price_b.xlsx
+  source: position
+- id: position-item-word-in-label
+  label: error
+  edit: Data lists products with price and discount (Apple, Banana, 'Kiwi fruit', Mango, Pear) and is sorted by
+    price, highest first. Summary!B1 'Max discount for Kiwi' =Data!$C$4 read Kiwi fruit's discount and now reads
+    Apple's.
+  why: 'The label names the item by a word of its name (''Kiwi''), so the formula must follow that row: an error,
+    although ''Max'' is a position word.'
+  after: position/kiwi_fruit_a.xlsx
+  before: position/kiwi_fruit_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-name-card-top-row
+  label: error
+  edit: Staff (ID, First name, Last name) is sorted by last name. A contact card on Summary, 'First name'
+    =Staff!$B$2 and 'Last name' =Staff!$C$2, read Mia Young and now reads Leo Adams, the new top row.
+  why: '''First name'' and ''Last name'' are field names, not positions, so the card must follow its person: an
+    error at both cells, although the rows read are now the top row.'
+  after: position/name_card_a.xlsx
+  before: position/name_card_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1(?s:.*)\[error\] reference-meaning-changed at Summary!B2
+  source: position
+- id: position-insert-is-not-a-sort
+  label: error
+  edit: Orders (Date, Customer, Amount) gets a late order inserted at row 3, in date order. Summary!B1 'Latest
+    order amount' =Orders!$C$7 read the last order (Stark, 95) and now reads Acme's 210; the last order moved to row 8.
+  why: 'An insert shifts every row below by one; nothing was reordered, so the label''s position word does not make
+    the moved reference a question: an error.'
+  after: position/insert_latest_a.xlsx
+  before: position/insert_latest_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-insert-repeated-labels
+  label: error
+  edit: Data (Category, Product, Price) repeats 'Fruit' and 'Veg' in column A. A row (Veg, Okra, 5) is inserted at
+    the top. Summary!B1 'Top price' =Data!C2 read Kiwi's 3.4 and now reads Okra's 5.
+  why: 'With repeated labels the audit tells the rows apart by content: Kiwi''s row moved down by one with every row
+    below it, an insert, not a sort, so a formula that read it now reads another row: an error.'
+  after: position/insert_repeated_a.xlsx
+  before: position/insert_repeated_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-max-middle-row
+  label: error
+  edit: Data lists five products with prices and is sorted by price, highest first. Summary!B1 'Max price'
+    =Data!$B$4 read Kiwi's 3.4 and now reads Apple's 2.1, in the middle of the table.
+  why: 'Row 4 is neither the top nor the bottom row and does not hold the highest price, so the label''s position
+    word does not explain what the formula reads now: an error.'
+  after: position/max_middle_a.xlsx
+  before: position/max_middle_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-highest-reads-lowest
+  label: error
+  edit: Data lists five products sorted by price, highest first, and is re-sorted lowest first. Summary!B1 'Highest
+    price' =Data!$B$2 read Kiwi's 3.4 and now reads Banana's 1.2.
+  why: The top row now holds the lowest price, not the highest, so the label contradicts what the formula reads.
+  after: position/highest_ascending_a.xlsx
+  before: position/highest_ascending_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-number-in-a-name
+  label: error
+  edit: "Data (Site, Stock) lists 'Warehouse 1' to 'Warehouse 4' and is sorted by stock, highest first. Summary!B1
+    'Warehouse #1 stock' =Data!$B$2 read Warehouse 1's 500 and now reads Warehouse 2's 820."
+  why: '''Warehouse #1'' names a site, not a rank, so the formula must follow it: an error.'
+  after: position/warehouse_hash_a.xlsx
+  before: position/warehouse_hash_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-top3-name-and-price
+  label: warning|clean
+  edit: Data lists five products with prices and is sorted by price, highest first. Summary rows 'Top 1' to 'Top 3'
+    each read a name and a price (=Data!A2 and =Data!B2, then rows 3 and 4) and now read Kiwi, Mango and Apple.
+  why: A Top-N list reads the first rows on purpose; after the sort each line reads the right product and price.
+  after: position/top3_name_price_a.xlsx
+  before: position/top3_name_price_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-lowest-last-row
+  label: warning|clean
+  edit: Data (Product, Price, Qty) is sorted by price, highest first. Summary!B1 'Lowest price' =Data!$B$6 read
+    Pear's 1.8 and now reads Banana's 1.2, the lowest.
+  why: The bottom row now holds the lowest price, so the formula reads what its label says.
+  after: position/lowest_last_a.xlsx
+  before: position/lowest_last_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-latest-by-date
+  label: warning|clean
+  edit: Orders (Date, Customer, Amount) is sorted by date, newest first. Summary!B1 'Latest order' =Orders!$C$2
+    read the oldest order's 120 and now reads the newest order's 210.
+  why: The table is in date order and the top row is now the latest order, so the formula reads what its label says.
+  after: position/latest_dated_a.xlsx
+  before: position/latest_dated_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-rank-numbers
+  label: warning|clean
+  edit: Data lists five products with prices and is sorted by price, highest first. Summary has a 'Rank', 'Product',
+    'Price' table with ranks 1 to 3 in column A, each row reading =Data!A and =Data!B of rows 2 to 4.
+  why: The rank number beside each line names its position; after the sort each line reads the right product.
+  after: position/rank_numbers_a.xlsx
+  before: position/rank_numbers_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-header-and-sibling
+  label: warning|clean
+  edit: Data lists five products with prices and is sorted by price, highest first. Summary has the title 'Price
+    report', the headers 'Product' and 'Top price' in row 3, and A4 =Data!A2, B4 =Data!B2 below them.
+  why: 'The ''Top price'' header names the top row, and A4 reads the name of the same row beside it, so both are
+    meant to read the top row.'
+  after: position/header_row3_a.xlsx
+  before: position/header_row3_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-same-sheet-beside-table
+  label: warning|clean
+  edit: Data (Product, Price) in A:B is sorted by price, highest first. Beside it, E1 'Top product' F1 =A2 and E4
+    'Top price' F4 =B2 now read Kiwi and 3.4.
+  why: 'Both labels name the top row. F4 sits in a table row whose cells (Apple, 2.1 before the sort) are table data,
+    not a label that names the row F4 reads.'
+  after: position/same_sheet_a.xlsx
+  before: position/same_sheet_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-runner-up
+  label: warning|clean
+  edit: Table (Team, Points) is sorted by points, highest first. Summary!B1 'Runner-up points' and B2 'Second place
+    points', both =Table!B3, read Celtic's 38 and now read Benfica's 55, the second highest.
+  why: '''Runner-up'' and ''second place'' name the second row, which is what both formulas read now.'
+  after: position/runner_up_a.xlsx
+  before: position/runner_up_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-medals
+  label: warning|clean
+  edit: Table (Team, Points) is sorted by points, highest first. Summary row 'Gold' =Table!A2 and =Table!B2 read
+    Ajax and 41 and now read Dynamo and 60; the 'Silver' row reads row 3, which holds Benfica before and after.
+  why: '''Gold'' names the first place, which the line reads now.'
+  after: position/medals_a.xlsx
+  before: position/medals_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-label-right-of-formula
+  label: warning|clean
+  edit: Data lists five products with prices and is sorted by price, highest first. Summary!A1 =Data!B2 with the label
+    'highest price' to its right in B1 now reads Kiwi's 3.4.
+  why: The label names the top row, as in position-highest-price, but it is to the right of the formula, where the
+    audit does not look for labels (SKILL.md).
+  after: position/label_right_a.xlsx
+  before: position/label_right_b.xlsx
+  known_limit: true
+  now: error
+  source: position
+- id: position-first-in-history
+  label: error
+  edit: Data lists five products with prices and is sorted by price, highest first. Summary!B1 'Price of the first
+    product we bought' =Data!$B$2 read Apple's 2.1 and now reads Kiwi's 3.4.
+  why: '''First'' here names a product by its history, not a position in the table, so the formula must follow
+    Apple. The audit cannot tell the two meanings apart and only warns (SKILL.md).'
+  after: position/first_bought_a.xlsx
+  before: position/first_bought_b.xlsx
+  known_limit: true
+  now: warning
+  source: position
+- id: position-item-in-another-language
+  label: error
+  edit: Data lists five products with prices (in English) and is sorted by price, highest first. Summary!B1 'Precio
+    manzana (top ventas)' =Data!$B$2 read Apple's 2.1 and now reads Kiwi's 3.4.
+  why: '''Manzana'' is Spanish for apple, so the label names the item; the audit matches item names only as written
+    in the table and only warns because of ''top'' (SKILL.md).'
+  after: position/spanish_label_a.xlsx
+  before: position/spanish_label_b.xlsx
+  known_limit: true
+  now: warning
+  source: position
+- id: position-crosstab-header
+  label: warning|clean
+  edit: Data (Product, Units, Revenue) is sorted by revenue, highest first. Summary is a cross-tab with the column
+    headers 'Highest' and 'Lowest' and the row labels 'Product' and 'Revenue (USD)'; B2 =Data!A2 and B3 =Data!C2 now
+    read Date and 1000, C2 =Data!A7 and C3 =Data!C7 Fig and 300.
+  why: The column headers name the positions, and after the sort each cell reads the highest or lowest revenue.
+  after: position/crosstab_header_a.xlsx
+  before: position/crosstab_header_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-list-label-above
+  label: warning|clean
+  edit: Data (Product, Units, Revenue) is sorted by revenue, highest first. Summary!A3 'Top 3 products' labels B3:B5
+    =Data!A2, A3, A4, with A4 and A5 empty; they now read Date, Cherry and Elderberry.
+  why: The label in A3 covers the three formulas below it, which now read the top three.
+  after: position/list_label_above_a.xlsx
+  before: position/list_label_above_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-title-and-header
+  label: warning|clean
+  edit: Data (Product, Units, Revenue) is sorted by revenue, highest first. Summary has the title 'Top 5 products by
+    revenue' in A1, the headers 'Product' and 'Revenue' in row 2, and A3:B7 =Data!A2:A6 and =Data!C2:C6 below.
+  why: The title over the header names the first five rows, which the formulas now read.
+  after: position/title_and_header_a.xlsx
+  before: position/title_and_header_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-data-title-row
+  label: warning|clean
+  edit: Data has the title 'Product sales FY2026' in row 1, its header in row 2 and six products in rows 3 to 8,
+    sorted by revenue, highest first. Summary 'Top product' =Data!A3, 'Top revenue (USD)' =Data!C3 and 'Worst
+    product' =Data!A8 now read Date, 1000 and Fig.
+  why: Row 3 is the table's first data row and row 8 its last, under the title and header rows.
+  after: position/data_title_row_a.xlsx
+  before: position/data_title_row_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-zh-medal-words
+  label: warning|clean
+  edit: 数据 (产品, 销量, 销售额) is sorted by 销售额, highest first. 汇总 lists 冠军, 亚军 and 季军 with B2:B4 =数据!A2, A3,
+    A4, which now read the first three.
+  why: 冠军, 亚军 and 季军 name the first, second and third place, which the formulas read now.
+  after: position/zh_medal_words_a.xlsx
+  before: position/zh_medal_words_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-second-highest
+  label: warning|clean
+  edit: Bids (Bidder, Bid) is sorted by bid, highest first. Result 'Highest bid' =Bids!B2, 'Second-highest bid'
+    =Bids!B3 and '2nd highest bidder' =Bids!A3 now read 6100, 5900 and Delta.
+  why: 'Row 3 now holds the second-highest bid, which both labels name.'
+  after: position/second_highest_a.xlsx
+  before: position/second_highest_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-biggest-drop
+  label: warning|clean
+  edit: Stocks (Ticker, Close, Change %) is sorted by change, lowest first. Movers 'Biggest drop' =Stocks!A2 and
+    'Biggest drop (%)' =Stocks!C2 now read NVDA and -5.2; 'Biggest gain (%)' =Stocks!C6 reads 1.9.
+  why: The biggest drop is the lowest change, which row 2 now holds; the biggest gain is the highest, in row 6.
+  after: position/biggest_drop_a.xlsx
+  before: position/biggest_drop_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-rotation-sort
+  label: warning|clean
+  edit: Scores (Player, Score) lists Alice 90, Bob 80, Cara 70, Dan 60 and Eve 95 and is sorted by score, highest
+    first, so Eve moves from the last row to the top and the others move down by one. Top3 rows '#1' to '#3' read
+    =Scores!A and B of rows 2 to 4.
+  why: 'The same rows in another order is a sort, although most rows moved down by one as after an insert; each line
+    reads its rank now.'
+  after: position/rotation_sort_a.xlsx
+  before: position/rotation_sort_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-total-row-below
+  label: warning|clean
+  edit: Data rows 2 to 7 are sorted by revenue, highest first, with a Total row (=SUM) in row 8. Summary 'Best
+    seller' =Data!A2, 'Worst seller' =Data!A7 and 'Lowest revenue' =Data!C7 now read Date, Banana and 450.
+  why: Row 7 is the last data row, above the Total row, and holds the lowest revenue.
+  after: position/total_row_below_a.xlsx
+  before: position/total_row_below_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-latest-year
+  label: warning|clean
+  edit: History (Year 2021 to 2025, Revenue, Profit) is sorted newest year first. KPIs 'Latest year' =History!A2 and
+    'Latest year revenue' =History!B2 now read 2025 and 1,900,000.
+  why: The years in a 'Year' column are dates for 'latest'; row 2 now holds the latest year.
+  after: position/latest_year_a.xlsx
+  before: position/latest_year_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-named-value-column
+  label: warning|clean
+  edit: Menu (Dish, Orders, Price) is sorted by orders, most first. Report 'Most ordered dish' =Menu!A2 and 'Price
+    of most ordered dish' =Menu!C2 now read Ramen and its 15.5, although Pho's 16 is the highest price.
+  why: '''Most ordered'' is about the Orders column, not the price the formula reads; row 2 holds the most orders.'
+  after: position/named_value_column_a.xlsx
+  before: position/named_value_column_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-vertical-sibling
+  label: warning|clean
+  edit: Calls (Agent, Calls, Longest call) is sorted by longest call, longest first. Report 'Agent with longest call'
+    =Calls!A2 and, below it, 'Longest call (min)' =Calls!C2 now read Blake and 42.
+  why: 'B3''s label is the column''s own name, but B2 above it reads the same row by its position: one card read by
+    position. The audit does not carry a position from one line of a card to the next, because on most cards the
+    lines are fields of one item (SKILL.md), so B3 stays an error.'
+  after: position/vertical_sibling_a.xlsx
+  before: position/vertical_sibling_b.xlsx
+  known_limit: true
+  now: error
+  source: position
+- id: position-rank-as-text
+  label: warning|clean
+  edit: Data (Product, Units, Revenue) is sorted by revenue, highest first. Top3 has a 'Rank' column holding the text
+    '1', '2', '3' (as from a CSV) and B2:B4 =Data!A2, A3, A4.
+  why: Ranks stored as text are still ranks, and each line now reads its rank.
+  after: position/rank_as_text_a.xlsx
+  before: position/rank_as_text_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-most-expensive-resorted
+  label: error
+  edit: Products (Product, Category, Price) was sorted by price, lowest first; Dashboard 'Most expensive' =Products!A6
+    and =Products!C6 read Desk and 240. Products is re-sorted by name, so the line now reads Stapler and 8.5.
+  why: Row 6 is still the last row but no longer holds the highest price, which the label names.
+  after: position/most_expensive_resorted_a.xlsx
+  before: position/most_expensive_resorted_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-top-reads-minimum
+  label: error
+  edit: Sales (Rep, Units) was sorted by units, lowest first; Dashboard 'Top seller' =Sales!A6 and 'Top seller units'
+    =Sales!B6 read Hal and 90. Sales is sorted highest first, so they now read Dana and 40, the fewest.
+  why: Row 6 is the bottom row and holds the fewest units; 'Top seller' names the first row or the most units.
+  after: position/top_reads_minimum_a.xlsx
+  before: position/top_reads_minimum_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-latest-reversed
+  label: error
+  edit: Orders (Order, Date, Customer, Amount) was in date order; Dashboard 'Latest order — customer' =Orders!C6 and
+    '— amount' =Orders!D6 read the newest order. Orders is sorted newest first, so they now read the oldest.
+  why: Row 6 now holds the earliest date, not the latest.
+  after: position/latest_reversed_a.xlsx
+  before: position/latest_reversed_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-po-number
+  label: error
+  edit: "POs (PO 1 to 6, Vendor, Amount) is sorted by amount, highest first. Dashboard 'PO #3 amount' =POs!C4 and
+    'PO #3 vendor' =POs!B4 read PO 3 and now read PO 5."
+  why: '''PO #3'' names a purchase order by its number, not a rank: an error.'
+  after: position/po_number_a.xlsx
+  before: position/po_number_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-quantity-not-rank
+  label: error
+  edit: Catalog (Item, SKU, Unit price) is sorted by price, highest first. A quote has typed quantities 200 and 12 in
+    column A under 'Qty', with =Catalog!A2 and C2 (Bolt M6) and =Catalog!A6 and C6 beside them; the first line now
+    prices 200 hinges.
+  why: A number beside a line is a rank only under a rank header ('Rank', '#', '名次'); a quantity is not.
+  after: position/quantity_not_rank_a.xlsx
+  before: position/quantity_not_rank_b.xlsx
+  require: \[error\] reference-meaning-changed at Quote!B2
+  source: position
+- id: position-no-label
+  label: error
+  edit: Clients (Client, Street, City, Postcode) is sorted by city. A shipping label reads =Clients!A2:D2 in row 1
+    with no labels, so it is now addressed to Dunmore Ltd instead of Arden Books.
+  why: Nothing names a position, so the label must follow its client.
+  after: position/no_label_a.xlsx
+  before: position/no_label_b.xlsx
+  require: \[error\] reference-meaning-changed at Label!A1
+  source: position
+- id: position-zh-item-in-label
+  label: error
+  edit: 价格表 (品名, 本周最低价, 本周最高价) is sorted by 本周最低价, lowest first. 看板 '苹果本周最低价' =价格表!B2 read 苹果's
+    price and now reads 香蕉's.
+  why: The label names 苹果 inside the Chinese text, and 本周最低价 is the column's name, so the formula must follow 苹果.
+  after: position/zh_item_in_label_a.xlsx
+  before: position/zh_item_in_label_b.xlsx
+  require: \[error\] reference-meaning-changed at '?看板'?!B2
+  source: position
+- id: position-plural-item
+  label: error
+  edit: Prices (Fruit, Lowest price, Highest price) is sorted by lowest price. Dashboard 'Lowest price paid for apples'
+    =Prices!B2 read Apple's and now reads Banana's.
+  why: '''apples'' names Apple, and ''Lowest price'' is the column''s name: an error.'
+  after: position/plural_item_a.xlsx
+  before: position/plural_item_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-field-header-last
+  label: error
+  edit: Quotes (Ticker, Last, Chg %) is sorted by change, highest first. Focus has the headers Ticker, Last and Chg %
+    over A2:C2 =Quotes!A2:C2, which read AAPL and now read NVDA.
+  why: '''Last'' is the name of the price column the formula reads (the last trade), not a position.'
+  after: position/field_header_last_a.xlsx
+  before: position/field_header_last_b.xlsx
+  require: \[error\] reference-meaning-changed at Focus!B2
+  source: position
+- id: position-minutes-unit
+  label: error
+  edit: Queues (Queue, Tickets, 'AHT (min)') is sorted by handle time. Dashboard 'Billing handle time (min)'
+    =Queues!C2 read Q-BILL's 7.9 and now reads Q-RET's 5.2, the lowest.
+  why: '''(min)'' is minutes, not the minimum: the formula must follow the billing queue.'
+  after: position/minutes_unit_a.xlsx
+  before: position/minutes_unit_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-section-heading
+  label: error
+  edit: Regions (Region, Revenue, Top rep, Best month) is sorted by revenue. A Dashboard section headed 'North' in A1
+    has 'Top rep' =Regions!C2 and 'Best month' =Regions!D2 in row 2, which read North's row and now read South's.
+  why: The heading above names North, and 'Top rep' and 'Best month' are the names of the columns read.
+  after: position/section_heading_a.xlsx
+  before: position/section_heading_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-column-header-item
+  label: error
+  edit: Prices (Fruit, Lowest price, Highest price) is sorted by lowest price. Card has the column header 'Apple' in
+    B1 and 'Cheapest this week' =Prices!B2 below it, which read Apple's price and now reads Banana's.
+  why: The column header names Apple, so the formula must follow it.
+  after: position/column_header_item_a.xlsx
+  before: position/column_header_item_b.xlsx
+  require: \[error\] reference-meaning-changed at Card!B2
+  source: position
+- id: position-field-last-service
+  label: error
+  edit: Fleet (Reg, Model, Last service) is sorted by last service date. Dashboard 'Big delivery van — last service'
+    =Fleet!C5 read the Sprinter's date and now reads the Vivaro's, the latest.
+  why: '''Last service'' is the name of the column read, not a position; the formula must follow the van.'
+  after: position/field_last_service_a.xlsx
+  before: position/field_last_service_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-computed-column
+  label: error
+  edit: Data (Product, Price, Cost, Margin) has Margin as formulas (=B2-C2) and was sorted by margin, Plum first. It
+    is re-sorted by price, so Summary 'Highest margin' =Data!D2 and 'Product with highest margin' =Data!A2 now read
+    Pear, whose margin is 0.3.
+  why: The margins are formulas, not known without recalculation, so the audit cannot show that row 2 holds the
+    highest margin and keeps the error, as for the same table with typed margins.
+  after: position/computed_column_a.xlsx
+  before: position/computed_column_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1(?s:.*)\[error\] reference-meaning-changed at Summary!B2
+  source: position
+- id: position-deletes-keep-order
+  label: error
+  edit: Data (Product, Revenue) lists Prod A to Prod G by revenue. Prod B and Prod D are deleted and Prod H is added at
+    the bottom; the order is kept. The 'Top 5 products' block (ranks 1 to 5 in column A) reads =Data!A2:B6.
+  why: 'Nothing was reordered: rows were removed. Rank 3 (B4) read Prod C and now reads Prod E: an error, without
+    the claim that the rows were reordered.'
+  after: position/deletes_keep_order_a.xlsx
+  before: position/deletes_keep_order_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B4
+  forbid: reordered
+  source: position
+- id: position-huge-rank-number
+  label: error
+  edit: Data lists six products and is sorted by price, highest first. Summary!A1 holds '#' followed by 5,000 pasted
+    digits, and B1 =Data!A2 read Apple and now reads Pear.
+  why: 'The pasted number is no rank, and the audit must not fail on it (it once raised ValueError): an error, as
+    without a label.'
+  after: position/huge_rank_number_a.xlsx
+  before: position/huge_rank_number_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-merged-label-cell
+  label: warning|clean
+  edit: Data lists six products and is sorted by price, highest first. Summary has the title 'Top 3 products by
+    price' merged across A1:C1, ranks 1 to 3 in A2:A4, and B2:C4 =Data!A2:B4.
+  why: The title names the first three rows, which the formulas read; a warning quotes the cell that holds the title
+    (A1), not an empty cell inside the merge.
+  after: position/merged_label_cell_a.xlsx
+  before: position/merged_label_cell_b.xlsx
+  require: '\(A1\)'
+  forbid: \[error\]
+  source: position
+- id: position-computed-title
+  label: warning|clean
+  edit: Data lists six products and is sorted by price, highest first. Summary!B1 is the title ="Top "&D1&" products"
+    with D1 = 3, and B2:C4 =Data!A2:B4 below it list the top three.
+  why: The title shows 'Top 3 products', as in position-title-and-header, but it is a formula, and the audit reads only
+    typed labels (SKILL.md).
+  after: position/computed_title_a.xlsx
+  before: position/computed_title_b.xlsx
+  known_limit: true
+  now: error
+  source: position
+- id: position-gold-plan-named
+  label: error
+  edit: Plans lists 'Gold plan', 'Silver plan', 'Bronze plan' and 'Free plan' and is sorted by subscribers, most first.
+    Dashboard 'Gold subscribers' =Plans!C2 read Gold plan's 120 and now reads Free plan's 2400.
+  why: '''Gold'' names the Gold plan, a word only that row has, not a first place: an error.'
+  after: position/gold_plan_named_a.xlsx
+  before: position/gold_plan_named_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B1
+  source: position
+- id: position-order-line-numbers
+  label: error
+  edit: "Catalog is sorted by price, highest first. An order form headed 'No. | Product | Unit price | Qty | Line
+    total' has lines 1 to 5 reading =Catalog!A2:A6 and C2:C6, with typed quantities; line 1 (200 pieces) read Bolt M6
+    and now prices Hasp & staple."
+  why: A line with typed numbers of its own is an item's line; its 'No.' is a line number, not a rank.
+  after: position/order_line_numbers_a.xlsx
+  before: position/order_line_numbers_b.xlsx
+  require: \[error\] reference-meaning-changed at Order!C2
+  source: position
+- id: position-top-seller-resorted-by-name
+  label: error
+  edit: Sales was sorted by units, highest first (Hal 90), and is re-sorted by name. Dashboard 'Top seller units'
+    =Sales!C2 read Hal's 90 and now reads Ada's 41, the fewest.
+  why: Row 2 is still the first row, but the table is no longer in order of units, and the row holds the fewest.
+  after: position/top_seller_resorted_by_name_a.xlsx
+  before: position/top_seller_resorted_by_name_b.xlsx
+  require: \[error\] reference-meaning-changed at Dashboard!B2
+  source: position
+- id: position-date-in-label
+  label: error
+  edit: Daily (Date, Visitors, Sales) covers 1 to 6 March in date order and is sorted by sales. Summary 'Sales on 3rd
+    March (launch day)' =Daily!C4 read 3 March's 8800 and now reads 5 March's 5200.
+  why: '''3rd March'' is the date of the row read, not a third place.'
+  after: position/date_in_label_a.xlsx
+  before: position/date_in_label_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-repeated-customer-named
+  label: error
+  edit: Orders (Order, Date, Customer, Amount) repeats Acme three times and is sorted by amount. Summary "Acme's last
+    order" =Orders!D7 read Acme's newest order and now reads a Globex order.
+  why: The label names Acme, which the row read held and the row read now does not, although Acme is in other rows.
+  after: position/repeated_customer_named_a.xlsx
+  before: position/repeated_customer_named_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-most-popular-other-column
+  label: error
+  edit: Menu (Product, Price, Units sold, Stock) was sorted by units, most first, and is re-sorted by price. Summary
+    'Most popular product' =Menu!A2 read Oat latte and now reads Mocha, the dearest but with few units.
+  why: Before the edit the row held the most units; now it holds the highest price instead, so 'most popular' no
+    longer fits by the column that showed it.
+  after: position/most_popular_other_column_a.xlsx
+  before: position/most_popular_other_column_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-top3-resorted-by-name
+  label: error
+  edit: Data was sorted by revenue, highest first, and is re-sorted by name. Summary 'Top 3 products by revenue' lists
+    =Data!A2:A4 and =Data!C2:C4, which now show Apple, Banana and Kiwi.
+  why: The list is no longer the top three by revenue, which the title names.
+  after: position/top3_resorted_by_name_a.xlsx
+  before: position/top3_resorted_by_name_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B3
+  source: position
+- id: position-zh-tier-part-name
+  label: error
+  edit: 会员 lists 金牌会员, 银牌会员, 铜牌会员 and 普通会员 and is sorted by 人数. 看板 '金牌人数' =会员!B2 read 金牌会员's 120 and now
+    reads 普通会员's 2400.
+  why: '金牌 is part of the tier''s name, which only that row has: an error, not a first place.'
+  after: position/zh_tier_part_name_a.xlsx
+  before: position/zh_tier_part_name_b.xlsx
+  require: \[error\] reference-meaning-changed at '?看板'?!B1
+  source: position
+- id: position-bom-positions
+  label: error
+  edit: "Parts is sorted by part number. A bill of materials headed 'Pos | Part | Description | Qty | Cost' reads
+    Parts rows 2 to 5 with typed quantities; Pos 1 read the housing and now costs a gasket."
+  why: A BOM position with its own quantity is an item number, not a rank.
+  after: position/bom_positions_a.xlsx
+  before: position/bom_positions_b.xlsx
+  require: \[error\] reference-meaning-changed at BOM!E2
+  source: position
+- id: position-field-prefix-last-order
+  label: error
+  edit: Customers (Customer, Orders, Last order date) is sorted by name, Z to A. Summary mirrors it under 'Customer |
+    Orders | Last order'; C5 read Umbrella's date and now reads Acme's.
+  why: '''Last order'' is the first words of the column''s name, a field, not a position.'
+  after: position/field_prefix_last_order_a.xlsx
+  before: position/field_prefix_last_order_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!C5
+  source: position
+- id: position-best-reversed-order
+  label: error
+  edit: Sales (title, header, four regions, a Total row) was sorted by revenue, highest first, and is re-sorted lowest
+    first. Summary 'Best region revenue' =Sales!B3 read East's 520 and now reads West's 260.
+  why: The table was in order of revenue, highest first, when the label fitted; now it runs the other way and the first
+    row holds the lowest.
+  after: position/best_reversed_order_a.xlsx
+  before: position/best_reversed_order_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B2
+  source: position
+- id: position-sheet-name-names-row
+  label: error
+  edit: Regions is sorted by revenue. A sheet named 'North' has the title 'Top-line figures' and 'Revenue' =Regions!B2,
+    which read North's 410 and now reads East's 520.
+  why: The sheet's name names North, and 'top-line' is a finance term, not a position.
+  after: position/sheet_name_names_row_a.xlsx
+  before: position/sheet_name_names_row_b.xlsx
+  require: \[error\] reference-meaning-changed at North!B3
+  source: position
+- id: position-card-field-sibling
+  label: error
+  edit: Plans (Plan, Price, Seat limit) is sorted by seat limit. An account card has 'Current plan' =Plans!A2,
+    'Monthly price' =Plans!B2 and 'Max seats' =Plans!C2; it read Team and now reads Business.
+  why: The card is one plan's fields; 'Max seats' on the next line does not make 'Current plan' a position.
+  after: position/card_field_sibling_a.xlsx
+  before: position/card_field_sibling_b.xlsx
+  require: \[error\] reference-meaning-changed at Account!B1
+  source: position
+- id: position-zh-heading-part-name
+  label: error
+  edit: 门店 lists 北京王府井店 and three more stores and is sorted by 单日客流峰值. A card headed '王府井店' has '销售额（万元）'
+    =门店!B2, which read 王府井店's 182 and now reads 上海南京路店's 240.
+  why: The heading names the store by part of its name.
+  after: position/zh_heading_part_name_a.xlsx
+  before: position/zh_heading_part_name_b.xlsx
+  require: \[error\] reference-meaning-changed at '?看板'?!B2
+  source: position
+- id: position-ranks-after-name-sort
+  label: error
+  edit: Data was sorted by revenue, highest first, and is re-sorted by name. Top3 ('Rank | Product | Revenue', ranks 1
+    to 3) reads Data rows 2 to 4; rank 1 read Kiwi's 9300 and now reads Apple's 6000.
+  why: The ranks ranked revenue; in name order the rows no longer hold those ranks.
+  after: position/ranks_after_name_sort_a.xlsx
+  before: position/ranks_after_name_sort_b.xlsx
+  require: \[error\] reference-meaning-changed at Top3!C2
+  source: position
+- id: position-field-last-mile
+  label: error
+  edit: Lanes (Lane, Line haul, Last mile) is sorted by line haul. A quote card reads row 6 (LDN-MAN) as 'Lane', 'Line
+    haul' and 'Last-mile cost'; it now reads LDN-BRS.
+  why: '''Last-mile'' is the column''s name and a logistics term, not a position; the quote must follow its lane.'
+  after: position/field_last_mile_a.xlsx
+  before: position/field_last_mile_b.xlsx
+  require: \[error\] reference-meaning-changed at Quote!B2
+  source: position
+- id: position-row-total-column
+  label: warning|clean
+  edit: Sales (Region, Q1 to Q4, Total as a per-row =SUM(B2:E2)) is sorted by total. Dashboard 'Third place' =Sales!A4
+    and =Sales!F4 now read North, the third-highest total.
+  why: A per-row total is data, not a total row; row 4 is third by the total, which is worked out from the quarters.
+  after: position/row_total_column_a.xlsx
+  before: position/row_total_column_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-computed-revenue
+  label: warning|clean
+  edit: Products (Product, Units, Price, Revenue =B2*C2) is sorted by revenue. KPIs 'Highest revenue product'
+    =Products!A2 and 'Highest revenue' =Products!D2 now read Grapes and its revenue, the highest.
+  why: The revenue formulas are simple arithmetic on the row, so the audit works out that row 2 holds the highest.
+  after: position/computed_revenue_a.xlsx
+  before: position/computed_revenue_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-year-headers
+  label: warning|clean
+  edit: Data has the header 'Region | 2024 | 2025' with the years as numbers and is sorted by 2025. Summary 'Top 3
+    regions (2025 sales)' has ranks 1 to 3 reading Data rows 2 to 4.
+  why: Years across the first row are its header, so row 2 is the first data row.
+  after: position/year_headers_a.xlsx
+  before: position/year_headers_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-rank-formula-plus-one
+  label: warning|clean
+  edit: Standings is sorted by points. Board's 'Rank' column holds 1, =A4+1 and =A5+1 beside =Standings!A2:B4.
+  why: Ranks worked out by =A4+1 are ranks too, and each line now reads its rank.
+  after: position/rank_formula_plus_one_a.xlsx
+  before: position/rank_formula_plus_one_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-three-title-rows
+  label: warning|clean
+  edit: Reps has three title rows, a header in row 4 and data from row 5, sorted by bookings. Board ranks 1 to 3 read
+    =Reps!A5:A7.
+  why: Row 5 is the first data row under the titles and the header.
+  after: position/three_title_rows_a.xlsx
+  before: position/three_title_rows_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-month-text
+  label: warning|clean
+  edit: Monthly (Month as text '2026-05' to '2026-09', Revenue) is sorted newest first. Overview 'Latest month'
+    =Monthly!A2 now reads '2026-09'.
+  why: '''YYYY-MM'' text is a date for ''latest''.'
+  after: position/month_text_a.xlsx
+  before: position/month_text_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-zh-date-text
+  label: warning|clean
+  edit: 订单 has 下单日期 as text like '2026年10月12日' and is sorted newest first. 看板 '最新订单' =订单!B2 now reads the newest
+    order.
+  why: Dates written 'YYYY年M月D日' are dates for 最新.
+  after: position/zh_date_text_a.xlsx
+  before: position/zh_date_text_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-third-text-above
+  label: warning|clean
+  edit: Products is sorted by revenue. A dashboard list has 'Top 3 products', 'by revenue, USD' and the header
+    'Product | Revenue' above =Products!A2:B4.
+  why: The list's title is the third text above the formulas.
+  after: position/third_text_above_a.xlsx
+  before: position/third_text_above_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-note-row-below
+  label: warning|clean
+  edit: Results (Runner, Time) has a note row '* Chip times, official results' under the data and is sorted by time.
+    Podium 'Last place' =Results!A6 now reads the slowest runner.
+  why: The note row is not a data row, so row 6 is the last one.
+  after: position/note_row_below_a.xlsx
+  before: position/note_row_below_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-latest-three
+  label: warning|clean
+  edit: Orders (real dates) is sorted newest first. Home 'Latest 3 orders' lists =Orders!B2:D4.
+  why: Each line is among the three newest orders.
+  after: position/latest_three_a.xlsx
+  before: position/latest_three_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-zh-serial-rank
+  label: warning|clean
+  edit: 门店 is sorted by 销售额. 排行 ('门店销售排行榜', header '序号 | 门店 | 销售额（万元）', 序号 1 to 3) reads 门店 rows 2 to 4.
+  why: A 序号 column on a ranking with no typed numbers of its own is a rank.
+  after: position/zh_serial_rank_a.xlsx
+  before: position/zh_serial_rank_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-item-like-position-word
+  label: warning|clean
+  edit: Categories (Tops, Bottoms, Dresses, ...) is sorted by sales. Summary 'Top category' =Categories!A2 read 'Tops'
+    and now reads 'Dresses', the top seller.
+  why: '''Top'' is a position here; the item ''Tops'' is another word.'
+  after: position/item_like_position_word_a.xlsx
+  before: position/item_like_position_word_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-zh-best-selling
+  label: warning|clean
+  edit: 产品 is sorted by 销量. 总结 '最畅销产品', '销量最好的产品' and '最受欢迎' read =产品!A2, and '表现最差的产品' =产品!A6.
+  why: 最畅销, 最好 and 最受欢迎 name the first place, 最差 the last.
+  after: position/zh_best_selling_a.xlsx
+  before: position/zh_best_selling_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-total-row-at-top
+  label: warning|clean
+  edit: Sales has a total row 'All regions' =SUM(B3:B7) above the regions, which are sorted by sales. Summary '第一名'
+    =Sales!A3 and '第二名' =Sales!A4 now read the first two regions.
+  why: A total row at the top is not a data row, so row 3 is the first region.
+  after: position/total_row_at_top_a.xlsx
+  before: position/total_row_at_top_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-horizontal-strip
+  label: warning|clean
+  edit: Products is sorted by revenue. A dashboard strip has 'Top 3 products' in B2 and =Products!A2, A3, A4 in B3:D3.
+  why: The label above the first cell of the strip covers the strip.
+  after: position/horizontal_strip_a.xlsx
+  before: position/horizontal_strip_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-first-place-first-name
+  label: warning|clean
+  edit: Results (First, Last, Score) is sorted by score. Podium 'First place' =Results!A2 now reads the top scorer's
+    first name.
+  why: '''First place'' is a rank, although the column read is named ''First''.'
+  after: position/first_place_first_name_a.xlsx
+  before: position/first_place_first_name_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-caption-below
+  label: warning|clean
+  edit: Sales is sorted by units. A card shows =Sales!A2 in B3 with the caption 'Best seller' below it in B4.
+  why: The caption names the first place, but the audit does not read labels below a formula (SKILL.md).
+  after: position/caption_below_a.xlsx
+  before: position/caption_below_b.xlsx
+  known_limit: true
+  now: error
+  source: position
+- id: position-total-row-sorted-in
+  label: error
+  edit: Data lists seven products and a typed Total row (values) at the bottom. The whole range, Total included, is
+    sorted by revenue, so the Total row is now row 2. Summary 'Top product' =Data!A2 now reads 'Total'.
+  why: The top row now holds the totals, not a product.
+  after: position/total_row_sorted_in_a.xlsx
+  before: position/total_row_sorted_in_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!B1
+  source: position
+- id: position-zh-total-row-sorted-in
+  label: error
+  edit: 销售 lists four regions and a 合计 row (a value), and everything is sorted by 销量, so 合计 is now row 2. 汇总
+    '销量冠军' =销售!A2 now reads 合计.
+  why: The 'champion' is now the total row.
+  after: position/zh_total_row_sorted_in_a.xlsx
+  before: position/zh_total_row_sorted_in_b.xlsx
+  require: \[error\] reference-meaning-changed at '?汇总'?!B1
+  source: position
+- id: position-unpaired-months
+  label: error
+  edit: Jan and Feb (Store, Sales) list the same stores in the same order. Only Feb is sorted by sales. Summary 'Top
+    store (Feb)' row has =Feb!A2, =Feb!B2, =Jan!B2 and E2 =Feb!B2-Jan!B2.
+  why: E2 paired one store's two months; it now subtracts Bath's January from Hull's February.
+  after: position/unpaired_months_a.xlsx
+  before: position/unpaired_months_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!E2
+  source: position
+- id: position-unpaired-quota
+  label: error
+  edit: Sales (Rep, Sales) and Quota (Rep, Quota) list the same reps in the same order. Sales is sorted by sales and
+    Quota by quota. KPI 'Top rep attainment' =Sales!B2/Quota!B2 now divides Dee's sales by Cy's quota.
+  why: The two references read one rep before and two reps now.
+  after: position/unpaired_quota_a.xlsx
+  before: position/unpaired_quota_b.xlsx
+  require: \[error\] reference-meaning-changed at KPI!B1
+  source: position
+- id: position-zh-annual-units-not-years
+  label: error
+  edit: 门店 (门店, 年销量, 盘点日期) was in stocktake order, latest first, and is sorted by 年销量. 汇总 '最近一次盘点' =门店!B2
+    now reads a store whose stocktake is not the latest.
+  why: 年销量 counts units, so its numbers near 2000 are not years; the stocktake dates show row 2 is not the latest.
+  after: position/zh_annual_units_not_years_a.xlsx
+  before: position/zh_annual_units_not_years_b.xlsx
+  require: \[error\] reference-meaning-changed at '?汇总'?!B1
+  source: position
+- id: position-two-sheets-one-cell
+  label: error
+  edit: Jan and Feb (Store, Sales) are both re-sorted. Summary row 2 'Highest Feb sales' has typed numbers, D2
+    =Feb!B2-Jan!B2 and F2 =Jan!B2, which read Hull in January and now read Bath.
+  why: Nothing names a position for F2's January row; the audit once reused D2's result for Feb as F2's.
+  after: position/two_sheets_one_cell_a.xlsx
+  before: position/two_sheets_one_cell_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!F2
+  source: position
+- id: position-title-of-other-block
+  label: error
+  edit: Data is sorted by price. Summary has 'Top 3 products' over A2:A4, a blank row, then a second block headed
+    'Reorder check | Stock' with =Data!A3, C3, A4 and C4.
+  why: The second block's header names no position; the title of the block above does not cover it.
+  after: position/title_of_other_block_a.xlsx
+  before: position/title_of_other_block_b.xlsx
+  require: \[error\] reference-meaning-changed at Summary!A7
+  source: position
+- id: position-zh-hundredth-place
+  label: warning|clean
+  edit: 成绩 (120 rows) is sorted by score. 汇总 '第一百名' =成绩!A101 and =成绩!B101 now read the 100th place.
+  why: 第一百名 is the 100th place, which row 101 now holds.
+  after: position/zh_hundredth_place_a.xlsx
+  before: position/zh_hundredth_place_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-fullwidth-ranks
+  label: warning|clean
+  edit: Data is sorted by price. 排行 has 名次 as full-width text '１' to '６' beside =Data!A2:B7.
+  why: Full-width digits are ranks too, and each line reads its rank.
+  after: position/fullwidth_ranks_a.xlsx
+  before: position/fullwidth_ranks_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-top-thousand
+  label: warning|clean
+  edit: Customers (1,200 rows) is sorted by spend. 'Top 1000 customers' is merged over A2:A1001 beside
+    =Customers!A2:A1001.
+  why: Each line is among the first 1,000.
+  after: position/top_thousand_a.xlsx
+  before: position/top_thousand_b.xlsx
+  forbid: \[error\]
+  source: position
+- id: position-card-fields-below
+  label: warning|clean
+  edit: Data is sorted by price. A card has 'Most expensive product' =Data!A2 and below it 'Price', 'Stock',
+    'Supplier' and more, each reading row 2.
+  why: The card shows the most expensive product's fields, but the audit does not carry the position from the card's
+    first line to the next (SKILL.md), so the field lines stay errors.
+  after: position/card_fields_below_a.xlsx
+  before: position/card_fields_below_b.xlsx
+  known_limit: true
+  now: error
+  source: position
+- id: position-third-party-phrase
+  label: error
+  edit: Costs was sorted by Amount, descending. Summary!B4 is 'Third-party fees' =Costs!B4. Before the sort it read Outsourcing
+    (21500). After the sort it reads Office rent (18000). Outsourcing moved to row 3.
+  why: '''Third-party'' is a fixed phrase, not a third place.'
+  after: position/third_party_phrase_a.xlsx
+  before: position/third_party_phrase_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Summary'?!B4
+  source: position
+- id: position-zh-third-party-phrase
+  label: error
+  edit: 费用 was sorted by 金额, descending. 汇总!B4 is '第三方费用' =费用!B4. Before the sort it read 外包服务 (21500). After the sort
+    it reads 房租 (18000).
+  why: 第三方 means a third party, not a third place.
+  after: position/zh_third_party_phrase_a.xlsx
+  before: position/zh_third_party_phrase_b.xlsx
+  require: \[error\] reference-meaning-changed at '?汇总'?!B4
+  source: position
+- id: position-last-minute-phrase
+  label: error
+  edit: Budget was sorted by Cost, ascending. Check!B2 is 'Last-minute buffer' =Budget!B6. Before the sort it read Contingency
+    (900). After the sort it reads Venue hire (4800), the last row.
+  why: '''Last-minute'' is a fixed phrase, not the last row.'
+  after: position/last_minute_phrase_a.xlsx
+  before: position/last_minute_phrase_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Check'?!B2
+  source: position
+- id: position-per-second-unit
+  label: error
+  edit: 'Metrics (Node | Req/s | ...) was sorted by Req/s, descending. Health!B3 is ''Primary node: requests per second''
+    =Metrics!B3. Before the sort it read pg-02 (700). After the sort it reads pg-01 (820).'
+  why: '''Per second'' is a unit, not a second place.'
+  after: position/per_second_unit_a.xlsx
+  before: position/per_second_unit_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Health'?!B3
+  source: position
+- id: position-trailing-months-field
+  label: error
+  edit: Accounts was sorted by 'Revenue (TTM)', descending. Review!B3 is 'Revenue, last 12 months' =Accounts!B4 on a key-account
+    review. Before the sort it read Fabrikam (655000). After the sort it reads Northwind.
+  why: '''Last 12 months'' in the formula''s own label is a time window (a field), not the newest twelve rows.'
+  after: position/trailing_months_field_a.xlsx
+  before: position/trailing_months_field_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Review'?!B3
+  source: position
+- id: position-zh-recent-months-field
+  label: error
+  edit: 供应商 was sorted by 合同到期, ascending. 主供应商!B3 is '最近12个月采购额' =供应商!B4; the column header is '近12个月采购额'. Before the
+    sort it read 北辰电子. After the sort it reads 华东钢材.
+  why: 最近12个月 in the formula's own label is a time window, not a position.
+  after: position/zh_recent_months_field_a.xlsx
+  before: position/zh_recent_months_field_b.xlsx
+  require: \[error\] reference-meaning-changed at '?主供应商'?!B3
+  source: position
+- id: position-zh-field-name-prefix
+  label: error
+  edit: 标准 (城市 | 最低工资标准(元/月) | 生效日期) was sorted by wage, descending. 测算!B3 is '当地最低工资' =标准!B5. Before the sort it read
+    杭州 (2490). After the sort it reads 广州 (2300), the lowest.
+  why: 最低工资 is the start of the column's name 最低工资标准, a field, not the lowest.
+  after: position/zh_field_name_prefix_a.xlsx
+  before: position/zh_field_name_prefix_b.xlsx
+  require: \[error\] reference-meaning-changed at '?测算'?!B3
+  source: position
+- id: position-abbreviated-field-name
+  label: error
+  edit: Cranes was sorted by 'Max load (kg)', descending. The job's lift plan has 'Max. load' =Cranes!B2. Before the sort
+    it read Liebherr LTM 1050 (50000). After the sort it reads Grove GMK 3060 (60000). The 'Crane' line B3 =Cranes!A2
+    keeps its error.
+  why: '''Max. load'' is the column ''Max load (kg)'' written with a full stop: a field, not the maximum.'
+  after: position/abbreviated_field_name_a.xlsx
+  before: position/abbreviated_field_name_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Lift plan'?!B4
+  source: position
+- id: position-zh-highest-degree-term
+  label: error
+  edit: 员工 (工号 | 姓名 | 学历 | 月薪) was sorted by 月薪, descending. The onboarding form has '最高学历' =员工!C2. Before the sort it
+    read 周杰's 本科. After the sort it reads 孙丽's 博士. B3 (姓名) keeps its error.
+  why: 最高学历 (highest degree) is a fixed term for a field, not the highest number.
+  after: position/zh_highest_degree_term_a.xlsx
+  before: position/zh_highest_degree_term_b.xlsx
+  require: \[error\] reference-meaning-changed at '?登记'?!B4
+  source: position
+- id: position-order-by-sku-not-ranking
+  label: error
+  edit: Products (SKU | Product | Units | Price) was re-sorted by SKU, ascending. Homepage!B3 is 'Top seller' =Products!B2,
+    the featured product. Before the sort it read Classic Tee. After the sort it reads Canvas Tote (120 units, the fewest
+    but one).
+  why: An order by SKU is the table's natural order, not a ranking, so 'Top seller' is not shown.
+  after: position/order_by_sku_not_ranking_a.xlsx
+  before: position/order_by_sku_not_ranking_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Homepage'?!B3
+  source: position
+- id: position-shift-leader-role
+  label: error
+  edit: Rates was sorted by Hourly rate, descending. Shift!B3 is 'Shift leader rate' =Rates!B2 in a night-shift cost calculation.
+    Before the sort it read Supervisor (24.0). After the sort it reads Technician (27.0). The 'Operator rate' line keeps
+    its error.
+  why: '''Shift leader'' is a role, not a first place.'
+  after: position/shift_leader_role_a.xlsx
+  before: position/shift_leader_role_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Shift'?!B3
+  source: position
+- id: position-zh-countdown-term
+  label: error
+  edit: 项目 was sorted by 预算, descending. 看板!B3 is '交付倒数天数' =项目!C5-TODAY(). Before the sort it read 展厅装修's deadline. After
+    the sort it reads 园区绿化's, the last row.
+  why: 倒数天数 is a countdown, not the last place.
+  after: position/zh_countdown_term_a.xlsx
+  before: position/zh_countdown_term_b.xlsx
+  require: \[error\] reference-meaning-changed at '?看板'?!B3
+  source: position
+- id: position-first-draft-title
+  label: error
+  edit: Vendors was sorted by Amount, descending. Under the merged title A1:C1 'Vendor budget, first draft', the line
+    'Main contractor' =Vendors!B2 read Brightline Builders. After the sort it reads Hoist & Co.
+  why: '''First draft'' in the title names a version of the sheet, not a position.'
+  after: position/first_draft_title_a.xlsx
+  before: position/first_draft_title_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Budget'?!B3
+  source: position
+- id: position-store-number-named
+  label: error
+  edit: 'The leaderboard has a typed Rank, a typed Store (''Store 12'', ''Store 30'', ''Store 15'') and Sales =Weekly!C2..C4.
+    Weekly (header ''Store #'' | City | Sales) got the new week''s figures pasted and was re-sorted, descending. C2 now
+    shows Store 30''s sales beside ''Store 12''.'
+  why: '''Store 12'' names store 12 under the column header ''Store #''.'
+  after: position/store_number_named_a.xlsx
+  before: position/store_number_named_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Leaders'?!C2
+  source: position
+- id: position-zh-store-number-named
+  label: error
+  edit: The ranking has 名次 1/2, a typed 门店 '12号店'/'30号店', and 销售额 =周报!C2/C3. 周报 (门店编号 | 城市 | 销售额) got this week's figures
+    and was re-sorted. C2 now shows store 30's sales beside '12号店'.
+  why: 12号店 names store 12.
+  after: position/zh_store_number_named_a.xlsx
+  before: position/zh_store_number_named_b.xlsx
+  require: \[error\] reference-meaning-changed at '?排行'?!C2
+  source: position
+- id: position-typed-serial-named
+  label: error
+  edit: The shortlist copies the 序号 of chosen people from 明细 (序号 | 姓名 | 部门 | 绩效分; 序号 1-6 in row order). Line 序号 5 has
+    =明细!B6 and =明细!D6. 明细 was sorted by 绩效分, with 序号 moving along. Row 6 now holds 杨帆 (序号 6) instead of 陈晨 (序号 5).
+  why: The 序号 typed beside the formula is the ID of the person it read.
+  after: position/typed_serial_named_a.xlsx
+  before: position/typed_serial_named_b.xlsx
+  require: \[error\] reference-meaning-changed at '?评优候选'?!B3
+  source: position
+- id: position-irregular-plural-named
+  label: error
+  edit: Sales got the new week's figures and was re-sorted by Revenue. Notes!B3 is 'Knives (best seller)' =Sales!C2. It
+    read Chef's knife; it now reads Frying pan.
+  why: '''Knives'' is the plural of the knife the formula read.'
+  after: position/irregular_plural_named_a.xlsx
+  before: position/irregular_plural_named_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Notes'?!B3
+  source: position
+- id: position-date-log-natural-order
+  label: warning|clean
+  edit: Orders (Date | Customer | Amount ($)) is an order log in date order. The edit sorts it by Amount, largest first.
+    Dashboard A3 'Top customer', B3 =Orders!B2. Before it read 'Northwind Traders' (1840, the first entry); after, 'Adventure
+    Works' (7480, the largest).
+  why: An order log in date order shows nothing about 'Top customer'; after the sort by amount the first row is the top
+    customer.
+  after: position/date_log_natural_order_a.xlsx
+  before: position/date_log_natural_order_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Dashboard'?!B3
+  source: position
+- id: position-id-order-natural-order
+  label: warning|clean
+  edit: Players (Player ID 101-105 | Player | Points) is in ID order, sorted by Points, highest first. Summary A3 'Current
+    leader', B3 =Players!B2. Before it read 'Maya Chen' (2210); after, 'Noah Kim' (2890).
+  why: A table in ID order shows nothing about 'Current leader'; the first row now has the most points.
+  after: position/id_order_natural_order_a.xlsx
+  before: position/id_order_natural_order_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Summary'?!B3
+  source: position
+- id: position-zh-student-id-order
+  label: warning|clean
+  edit: '成绩 (学号 20260101.. | 姓名 | 总分) is in 学号 order, sorted by 总分, highest first. 成绩汇总 A3 冠军, B3 =成绩!B2: 王明 (268) becomes
+    刘洋 (290). A5 季军, B5 =成绩!B4: 张伟 becomes 陈静 (274, third).'
+  why: 学号 order is the natural order; after the sort by 总分 冠军 and 季军 read the first and third.
+  after: position/zh_student_id_order_a.xlsx
+  before: position/zh_student_id_order_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?成绩汇总'?!B3
+  source: position
+- id: position-model-year-not-measure
+  label: warning|clean
+  edit: 'Models (Model | Model year | Units sold) is alphabetical, sorted by Units sold, highest first. Dashboard A3 ''Best-selling
+    model'', B3 =Models!A2: ''Aria Hybrid'' (18,420) becomes ''Corolla Cross'' (26,880).'
+  why: '''Model year'' is not the measure ''Best-selling model'' is about; the first row now has the most units.'
+  after: position/model_year_not_measure_a.xlsx
+  before: position/model_year_not_measure_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Dashboard'?!B3
+  source: position
+- id: position-finish-times-as-times
+  label: warning|clean
+  edit: 'Results (Bib | Runner | Finish time, h:mm:ss, read back as datetime.time) is sorted by time, fastest first. Podium
+    A3 ''1st place'', B3 =Results!B2: ''Ana Silva'' becomes ''Dev Rao'' (0:38:47). A5 ''3rd place'', B5 =Results!B4 now
+    reads ''Elif Kaya'' (0:41:09).'
+  why: Finish times stored as times are an order; the first row is now the fastest.
+  after: position/finish_times_as_times_a.xlsx
+  before: position/finish_times_as_times_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Podium'?!B3
+  source: position
+- id: position-lap-times-as-durations
+  label: warning|clean
+  edit: 'Laps (Car | Best lap, [mm]:ss.000, read back as timedelta) is sorted by lap time, fastest first. Session A3 ''Fastest
+    lap'', B3 =Laps!A2: ''Car 7'' (1:32.418) becomes ''Car 3'' (1:31.905).'
+  why: Lap times stored as durations are an order; the first row is now the fastest lap.
+  after: position/lap_times_as_durations_a.xlsx
+  before: position/lap_times_as_durations_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Session'?!B3
+  source: position
+- id: position-zh-month-day-dates
+  label: warning|clean
+  edit: '日程 (活动 | 日期 ''11月3日'' text | 城市) is sorted by date. 看板 A3 第一场, B3 =日程!A2: 产品发布会 (11月8日) becomes 客户答谢会 (11月3日).
+    A4 第二场, B4 =日程!A3 now reads 渠道大会 (11月6日).'
+  why: Dates written 11月3日 are dates; 第一场 and 第二场 read the first two.
+  after: position/zh_month_day_dates_a.xlsx
+  before: position/zh_month_day_dates_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?看板'?!B3
+  source: position
+- id: position-typed-total-row
+  label: warning|clean
+  edit: 'Stores (Store | Sales) ends with a typed total row ''All stores'' 380650, as in a values-only export. The store
+    rows are sorted by Sales, highest first, and the total stays at the bottom. D1 ''Top store'', E1 =A2: ''Downtown''
+    becomes ''Harbor'' (102,350).'
+  why: A typed row whose numbers are the column's sums is a total row, not data.
+  after: position/typed_total_row_a.xlsx
+  before: position/typed_total_row_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Stores'?!E1
+  source: position
+- id: position-customer-named-total
+  label: warning|clean
+  edit: Customers (Customer | Q3 revenue ($)) is alphabetical, sorted by revenue, highest first, so the customer 'Total
+    Wine & More' (91,400) moves to row 2. Accounts A3 'Top account', B3 =Customers!A2 now reads it. A4 'Second account',
+    B4 =A3 now reads 'Westside Spirits' (55,100).
+  why: '''Total Wine & More'' is a customer, not a Total row.'
+  after: position/customer_named_total_a.xlsx
+  before: position/customer_named_total_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Accounts'?!B3
+  source: position
+- id: position-rank-line-with-prize
+  label: warning|clean
+  edit: 'Podium table: Place 1/2/3 | Team =Scores!A2..A4 | Score =Scores!B2..B4 | Prize ($) typed 500/250/100. Scores
+    is sorted by Score, highest first. B3 (Place 2): ''Team Orca'' becomes ''Team Heron'' (91, second).'
+  why: 'A typed prize on a podium line is no quantity: the place numbers are ranks.'
+  after: position/rank_line_with_prize_a.xlsx
+  before: position/rank_line_with_prize_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Podium'?!B3
+  source: position
+- id: position-date-in-title
+  label: warning|clean
+  edit: 'Orders (Order date | Order # | Customer | Amount) is newest first, sorted by Amount, highest first. Weekly A1
+    ''Week ending 30 October 2026'', A3 ''Largest order'', B3 =Orders!C2, C3 =Orders!D2. Before: ''Bluebird Cafe'' 640,
+    the order dated 2026-10-30. After: ''Maple School'' 3420.'
+  why: A date in the sheet's title does not name the row read; only the formula's own labels can.
+  after: position/date_in_title_a.xlsx
+  before: position/date_in_title_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Weekly'?!B3
+  source: position
+- id: position-channel-word-in-title
+  label: warning|clean
+  edit: 'Products (Product | Channel Online/Retail | Units) is sorted by Units, highest first. Dashboard A1 ''Online and
+    retail sales, Q3'', A3 ''Best seller'', B3 =Products!A2: ''Aroma diffuser'' (Online) becomes ''Linen napkins'' (Retail,
+    610).'
+  why: A channel named in a title above does not name the row read.
+  after: position/channel_word_in_title_a.xlsx
+  before: position/channel_word_in_title_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Dashboard'?!B3
+  source: position
+- id: position-zh-category-word
+  label: warning|clean
+  edit: '数据 (产品 | 类别 电子产品/服装/家居/食品 | 销量) is sorted by 销量, highest first. 看板 A3 ''销量冠军产品'', B3 =数据!A2: 无线鼠标 (电子产品) becomes
+    纯棉T恤 (服装, 1460).'
+  why: 产品 in the label is the column's header word, not the old row's category 电子产品.
+  after: position/zh_category_word_a.xlsx
+  before: position/zh_category_word_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?看板'?!B3
+  source: position
+- id: position-standings-stat-columns
+  label: warning|clean
+  edit: Results (Team | Pts | W | D | L | GD; Pts = 3W + D) was sorted by Pts, descending. The Standings sheet (Pos |
+    Team | Pts | W | D | L | GD) holds typed Pos 1..5 and =Results!A{r}..F{r}, unchanged.
+  why: Each line of a league table mirrored by position reads its place, whatever column of the line.
+  after: position/standings_stat_columns_a.xlsx
+  before: position/standings_stat_columns_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Standings'?!D2
+  source: position
+- id: position-store-strip-by-total
+  label: warning|clean
+  edit: Daily (Store | Nov 1..Nov 30 | Month total) was sorted by Month total, descending. Summary row 1 has A1 'Top store',
+    then B1 =Daily!A2 and a strip C1..AG1 =Daily!B2..AF2, unchanged.
+  why: '''Top store'' reads the first row of a table ordered by its month total, across a strip of 31 formulas.'
+  after: position/store_strip_by_total_a.xlsx
+  before: position/store_strip_by_total_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Summary'?!B1
+  source: position
+- id: position-year-in-report-title
+  label: warning|clean
+  edit: Vehicles (Plate | Model | Year | Mileage (km)) was sorted by mileage, descending. On the Review sheet, A1 is the
+    title 'Fleet review 2026' and A3 'Highest mileage' sits beside B3 =Vehicles!A2 and C3 =Vehicles!D2, unchanged. Row
+    2 was KX-201 (model year 2026, 18,400 km) and is now KX-097 (188,020 km, the highest).
+  why: The year in a report's title does not name the row read.
+  after: position/year_in_report_title_a.xlsx
+  before: position/year_in_report_title_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?Review'?!B3
+  source: position
+- id: position-zh-header-word-not-name
+  label: warning|clean
+  edit: '销售 (门店 | 销量: 旗舰门店, 南京路店, 徐家汇店, 五角场店, 陆家嘴店) was sorted by 销量, descending. 看板!A1 ''最高销量门店'' sits beside B1 =销售!A2
+    and C1 =销售!B2, unchanged. Row 2 was 旗舰门店 and is now 陆家嘴店 (the highest 销量).'
+  why: 门店 is the column header, not part of the old row's name.
+  after: position/zh_header_word_not_name_a.xlsx
+  before: position/zh_header_word_not_name_b.xlsx
+  forbid: \[error\] reference-meaning-changed at '?看板'?!B1
+  source: position
+- id: position-renamed-sorted-sheet
+  label: error
+  edit: 'The store sheet ''Sheet2'' (Store | Sales) was renamed to ''Feb'' and sorted by Sales, descending. ''Jan'' is
+    unchanged. F1 on that sheet, labelled E1 ''Northgate change vs Jan'', holds the unchanged formula =B2-Jan!B2. Its
+    own-sheet reference has no sheet prefix, so the text matches in both files. Before: B2 is Northgate (41200) minus
+    Jan Northgate. After: B2 is Airport (61040) minus Jan Northgate.'
+  why: The audit once raised KeyError here; the formula now pairs two stores' months, an error.
+  after: position/renamed_sorted_sheet_a.xlsx
+  before: position/renamed_sorted_sheet_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Feb'?!F1
+  source: position
+- id: position-top-loading-phrase
+  label: error
+  edit: 'Stock (Code | On hand) was sorted by On hand, descending. Catalogue (Description | Code | On hand) keeps a fixed
+    description per row: A2 ''Top-loading parts washer, 40 L'' sits beside B2 =Stock!A2 and C2 =Stock!B2, unchanged. Row
+    2 was PW-100 (the washer) and is now TC-310 (a tool chest), so the washer''s description now shows another product''s
+    code and stock.'
+  why: '''Top-loading'' describes a product, not a first place.'
+  after: position/top_loading_phrase_a.xlsx
+  before: position/top_loading_phrase_b.xlsx
+  require: \[error\] reference-meaning-changed at '?Catalogue'?!B2
+  source: position
+- id: position-moq-field-limit
+  label: error
+  edit: Quotes was sorted by MOQ, descending. Calc!B4 is 'Minimum order qty' =Quotes!C5. Before the sort it read Hanoi
+    Metalworks (2000). After the sort it reads Pune Precision (500, the lowest). The unit price line B3 keeps its error.
+  why: '''Minimum order qty'' is the column ''MOQ'' in other words, a field; the audit does not know such names and warns
+    (SKILL.md).'
+  after: position/moq_field_limit_a.xlsx
+  before: position/moq_field_limit_b.xlsx
+  known_limit: true
+  now: require-unmet
+  require: \[error\] reference-meaning-changed at Calc!B4
+  source: position
+- id: position-card-title-far-limit
+  label: error
+  edit: A car card has the title 'Falcon GT' in A1 (not merged), then Price, Range, Seats, Warranty, Colour and, in row
+    7, 'Top speed' =Cars!D2. Cars' column is 'Max speed (km/h)'. Cars was sorted by Price, descending. The card now shows
+    Atlas XL's top speed. The Price line B2 keeps its error.
+  why: The card's title names the car, more than three texts above the line; the audit reads only the nearest three and
+    warns (SKILL.md).
+  after: position/card_title_far_limit_a.xlsx
+  before: position/card_title_far_limit_b.xlsx
+  known_limit: true
+  now: require-unmet
+  require: \[error\] reference-meaning-changed at Card!B7
+  source: position
+- id: position-dmy-ambiguous-limit
+  label: warning|clean
+  edit: 'Events (Event | Date as ''DD/MM/YYYY'' text, 03-12 November | Where) is sorted by date. Agenda A3 ''First event'',
+    B3 =Events!A2: ''Board meeting'' (10/11/2026) becomes ''Client workshop'' (03/11/2026).'
+  why: Dates as 'DD/MM/YYYY' text with no day over 12 could be either order, so the audit cannot check 'First event' and
+    keeps the error (SKILL.md).
+  after: position/dmy_ambiguous_limit_a.xlsx
+  before: position/dmy_ambiguous_limit_b.xlsx
+  known_limit: true
+  now: error
+  source: position

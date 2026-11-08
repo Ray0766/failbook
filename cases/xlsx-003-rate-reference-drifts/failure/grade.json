@@ -1,0 +1,57 @@
+{
+  "case": "xlsx-003",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "vat-correct",
+      "kind": "value",
+      "title": "VAT = Net x rate on every line",
+      "status": "fail",
+      "detail": "11 of 12 values are wrong, e.g. VAT of 'Headset' (row 5) is 0.00, expected 744.5872 (Net 3,918.88 x 19%; difference -744.5872); VAT of 'Label Printer' (Invoice!E6) evaluates to #VALUE!; VAT of 'Stapler' (row 7) is 362.53, expected 68.8807 (Net 362.53 x 19%; difference +293.6493). Exact amounts and amounts rounded to whole cents are both accepted."
+    },
+    {
+      "id": "gross-correct",
+      "kind": "value",
+      "title": "Gross = Net + VAT on every line",
+      "status": "fail",
+      "detail": "11 of 12 values are wrong, e.g. Gross of 'Headset' (row 5) is 3,918.88, expected 4,663.4672 (Net 3,918.88 + VAT 744.5872; difference -744.5872); Gross of 'Label Printer' (Invoice!F6) evaluates to #VALUE!; Gross of 'Stapler' (row 7) is 725.06, expected 431.4107 (Net 362.53 + VAT 68.8807; difference +293.6493). Exact amounts and amounts rounded to whole cents are both accepted."
+    },
+    {
+      "id": "vat-follows-rate",
+      "kind": "live",
+      "title": "Changing the rate in B1 updates VAT and Gross on every line and the totals",
+      "status": "fail",
+      "detail": "with B1 changed to 24% in a copy of the file, 24 of 27 values are wrong, e.g. VAT of 'Headset' (row 5) is 0.00, expected 940.5312 (Net 3,918.88 x 24%; difference -940.5312), the same as before the change; Gross of 'Headset' (row 5) is 3,918.88, expected 4,859.4112 (Net 3,918.88 + VAT 940.5312; difference -940.5312), the same as before the change; VAT of 'Label Printer' (Invoice!E6) evaluates to #VALUE!. Exact amounts and amounts rounded to whole cents are both accepted."
+    },
+    {
+      "id": "vat-gross-follow-net",
+      "kind": "live",
+      "title": "When Qty and Unit Price change, VAT and Gross on every line and in the Total row follow the Nets",
+      "status": "fail",
+      "detail": "in a copy of the file where every line's Qty was raised by a different amount and every Unit Price by 1.00 (rate unchanged), 14 of 26 VAT and Gross figures (the lines and the Total row) did not follow the Nets: VAT of 'Headset' (row 5) is 0.00, expected 841.0806 (its Net in that copy 4,426.74 x 19%), the same as before the change; VAT of 'Label Printer' (Invoice!E6) evaluates to #VALUE!; Gross of 'Label Printer' (Invoice!F6) evaluates to #VALUE! (and 11 more). Exact amounts and amounts rounded to whole cents are both accepted."
+    },
+    {
+      "id": "totals-correct",
+      "kind": "value",
+      "title": "The Total row shows the correct Net, VAT and Gross totals",
+      "status": "fail",
+      "detail": "2 of 3 values are wrong, e.g. Total VAT (Invoice!E16) evaluates to #VALUE!; Total Gross (Invoice!F16) evaluates to #VALUE!. Exact amounts and amounts rounded to whole cents are both accepted."
+    },
+    {
+      "id": "net-still-calculated",
+      "kind": "preserve",
+      "title": "Each line's Net still follows its Qty and Unit Price, and Total Net still follows the lines",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "invoice-unchanged",
+      "kind": "preserve",
+      "title": "Line items, quantities, prices and the rate are unchanged",
+      "status": "pass",
+      "detail": ""
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "case": "xlsx-015",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "corrections-applied",
+      "kind": "content",
+      "title": "The three corrections are applied in Q3 Data",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "summary-dept-totals",
+      "kind": "value",
+      "title": "Each department's Q3 total on Summary reflects the corrections",
+      "status": "fail",
+      "detail": "Summary total of Engineering is 117,810, expected 115,520"
+    },
+    {
+      "id": "summary-grand-total",
+      "kind": "value",
+      "title": "The Summary grand total reflects the corrections",
+      "status": "fail",
+      "detail": "Summary grand total is 690,630, expected 686,420"
+    },
+    {
+      "id": "summary-layout-kept",
+      "kind": "preserve",
+      "title": "Summary keeps its headers, its departments in the same order and Total, with nothing added around the table",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "other-data-unchanged",
+      "kind": "preserve",
+      "title": "Rows that were not corrected are unchanged",
+      "status": "pass",
+      "detail": ""
+    }
+  ]
+}

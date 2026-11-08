@@ -1,0 +1,64 @@
+{
+  "case": "xlsx-001",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "new-orders-added",
+      "kind": "content",
+      "title": "Each new order appears once, with the given date, customer, qty and price",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "new-rows-formatted",
+      "kind": "structure",
+      "title": "The new orders' Date, Unit Price and Amount have the number formats of the original order rows",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "existing-orders-unchanged",
+      "kind": "preserve",
+      "title": "The original orders are unchanged and in their original order",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "amounts-correct",
+      "kind": "value",
+      "title": "Amount equals Qty x Unit Price on every order row",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "amounts-are-live",
+      "kind": "live",
+      "title": "Every order's Amount follows its Qty and Unit Price (new rows and original rows)",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "totals-include-all-orders",
+      "kind": "value",
+      "title": "The Total row sums Qty and Amount over all orders, old and new",
+      "status": "fail",
+      "detail": "Total Qty is 198, expected 269 (difference -71)"
+    },
+    {
+      "id": "totals-are-live",
+      "kind": "live",
+      "title": "Changing the Qty and Unit Price of the orders updates Total Qty and Total Amount",
+      "status": "fail",
+      "detail": "in a copy of the file where each order's Qty was raised by a different amount (+91 in all) and every Unit Price by 1.00, Total Qty changed by +55, expected +91 (difference -36)"
+    },
+    {
+      "id": "total-row-last",
+      "kind": "content",
+      "title": "The Total row is directly below the last order",
+      "status": "pass",
+      "detail": ""
+    }
+  ]
+}

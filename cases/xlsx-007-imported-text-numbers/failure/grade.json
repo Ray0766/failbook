@@ -1,0 +1,57 @@
+{
+  "case": "xlsx-007",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "rows-appended",
+      "kind": "content",
+      "title": "The new expenses are appended after the existing ones, in order",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "amounts-are-numbers",
+      "kind": "content",
+      "title": "New amounts are stored as numbers with the right value",
+      "status": "fail",
+      "detail": "amounts are wrong: row 17: '1,766.34' is text; row 18: '79.75' is text; row 19: '72.94' is text"
+    },
+    {
+      "id": "dates-are-dates",
+      "kind": "content",
+      "title": "New dates are stored as real dates with the right value",
+      "status": "fail",
+      "detail": "dates are wrong: row 17: '2024-03-02' is not a date; row 18: '2024-03-03' is not a date; row 19: '2024-03-07' is not a date"
+    },
+    {
+      "id": "new-rows-formatted",
+      "kind": "structure",
+      "title": "The new dates and amounts have the number formats of the existing rows",
+      "status": "fail",
+      "detail": "6 of 6 new rows are not formatted like the existing rows: row 17 (Train ticket #1) has Date 'General', Amount 'General'; row 18 (Client lunch #2) has Date 'General', Amount 'General'; row 19 (Paper and pens #3) has Date 'General', Amount 'General' (and 3 more). In expenses.xlsx as given, the existing rows have Date 'yyyy\\-mm\\-dd', Amount '#,##0.00' (formats count as the same when they differ only in letter case, quotes or backslash escapes, a text section that is only '@', a zero section equal to the first, a negative section of '-' and a first section of digits such as #,##0.00;-#,##0.00 (it shows -0.00 instead of 0.00 only for a negative number that rounds to zero, and the task's amounts are all positive), or a locale tag such as [$-409] on a date of digits; under such a tag an unquoted '/' counts as the date separator LibreOffice 24.2 shows for it: [$-41D]yyyy/mm/dd shows 2024-03-02, [$-409]yyyy/mm/dd 2024/03/02 and [$-407]yyyy/mm/dd 2024.03.02)."
+    },
+    {
+      "id": "summary-includes-new",
+      "kind": "value",
+      "title": "Every Summary total (category, month, grand total) includes the new expenses",
+      "status": "fail",
+      "detail": "7 of 9 Summary totals are wrong: 'Travel' is 854.66, expected 2,621.00 (difference -1,766.34), short by exactly the new expenses it should include; 'Meals' is 3,018.00, expected 3,681.62 (difference -663.62), short by exactly the new expenses it should include; 'Office' is 1,811.80, expected 1,884.74 (difference -72.94), short by exactly the new expenses it should include (and 4 more)"
+    },
+    {
+      "id": "summary-still-calculated",
+      "kind": "preserve",
+      "title": "Every Summary total still follows changes of the expenses (category, month, grand total)",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "existing-unchanged",
+      "kind": "preserve",
+      "title": "The existing expenses are unchanged",
+      "status": "pass",
+      "detail": ""
+    }
+  ]
+}

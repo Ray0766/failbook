@@ -1,0 +1,36 @@
+{
+  "case": "xlsx-010",
+  "case_version": 1,
+  "seed": 0,
+  "verdict": "fail",
+  "rules": [
+    {
+      "id": "grand-total-row",
+      "kind": "content",
+      "title": "A 'Grand Total' row sits directly below the last subtotal",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "id": "grand-total-values",
+      "kind": "value",
+      "title": "Grand Total equals the sum over all reps (subtotals not counted twice)",
+      "status": "fail",
+      "detail": "Grand Total Q1 is 805,400, expected 402,700 (exactly double: the subtotals are counted too)"
+    },
+    {
+      "id": "grand-total-live",
+      "kind": "live",
+      "title": "Adding 100 to one rep's figure in each quarter adds exactly 100 to each quarter's Grand Total and 400 to Year",
+      "status": "fail",
+      "detail": "adding 100 to one rep's Q1 (row 10) changed Grand Total Q1 by 200, expected +100"
+    },
+    {
+      "id": "sales-unchanged",
+      "kind": "preserve",
+      "title": "Rep rows and subtotal rows are unchanged",
+      "status": "pass",
+      "detail": ""
+    }
+  ]
+}
